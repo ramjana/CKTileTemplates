@@ -275,14 +275,14 @@ struct Im2Col
             make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{}),
             make_tuple(Sequence<0>{}, Sequence<1, 2>{}, Sequence<3, 4>{}, Sequence<5>{}));
 
-        const auto a_src =
+        const auto src =
             transform_tensor(a_n_y_ho_x_wo_c,
                              make_tuple(ps(make_merge_transform(make_tuple(N, Ho, Wo))),
                                         ps(make_merge_transform(make_tuple(Y, X, C)))),
                              make_tuple(Sequence<0, 2, 4>{}, Sequence<1, 3, 5>{}),
                              make_tuple(Sequence<0>{}, Sequence<1>{}));
 
-        auto a_dst = make_naive_tensor<AddressSpaceEnum::Global, true>(
+        auto dst = make_naive_tensor<AddressSpaceEnum::Global, true>(
             make_tuple(a_gemmm_gemmk_lengths[0], a_gemmm_gemmk_lengths[1]),
             make_tuple(a_gemmm_gemmk_strides[0], a_gemmm_gemmk_strides[1]),
             p_a_mtx);
@@ -294,40 +294,38 @@ struct Im2Col
 
         const auto num_tile_m = ps.read_first_lane(num_gemmm / kMPerTile);
 
-#if 0 // debug
-        const auto block2tile = make_cluster_descriptor(make_tuple(num_tile_m));
-#else
         const auto block2tile = ps(make_cluster_descriptor(make_tuple(num_tile_m)));
-#endif
 
         const auto id_tile = block2tile.CalculateBottomIndex(make_tuple(id_block));
 
         const auto id_tile_m = ps.read_first_lane(id_tile[I0]);
 
 #if 0
-        // data-based syntax: per-data solution strategy
-        auto window_a_src = make_window(a_src,
-                                        make_tuple(1, MPerTile, KPerTile),
-                                        make_tuple(0, id_tile_m * MPerTile, id_tile_k * KPerTile),
-                                        a_src_window_map_strategy);
+        auto window_src = make_window(src,
+                                      make_tuple(kMPerTile, kKPerTile),
+                                      make_tuple(id_tile_m * kMPerTile, 0),
+                                      src_window_map_strategy);
 
-        auto window_a_dst = make_window(a_dst,
-                                        make_tuple(1, MPerTile, KPerTile),
-                                        make_tuple(0, id_tile_m * MPerTile, id_tile_k * KPerTile),
-                                        a_dst_window_map_strategy);
+        auto window_dst = make_window(dst,
+                                      make_tuple(kMPerTile, kKPerTile),
+                                      make_tuple(id_tile_m * kMPerTile, 0),
+                                      dst_window_map_strategy);
 
-        for(ck::index_t id_gemmg = 0; id_gemmg < num_gemmg; id_gemmg++)
+        ck::index_t id_gemmk = 0;
+
+        do
         {
-            copy(window_a_src, window_a_dst, a_copy_strategy);
+            const auto src_vgpr_block = load(window_src, src_window_load_strategy);
 
-            window_a_src += make_tuple(1, 0, 0);
-            window_a_dst += make_tuple(1, 0, 0);
-        }
+            store(src_vgpr_block, window_dst, dst_window_store_strategy);
+
+            move_window(window_src, make_tuple(0, kKPerTile));
+            move_window(window_dst, make_tuple(0, kKPerTile));
+        } while(id_gemmk < num_gemmk - kKPerTile);
 #else
-        // operator-based syntax
-        auto copier = ps.make_copier(a_src,
+        auto copier = ps.make_copier(src,
                                      make_tuple(id_tile_m * kMPerTile, 0),
-                                     a_dst,
+                                     dst,
                                      make_tuple(id_tile_m * kMPerTile, 0),
                                      make_tuple(kMPerTile, kKPerTile),
                                      copier_strategy);
