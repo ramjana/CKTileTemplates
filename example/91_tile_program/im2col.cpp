@@ -275,7 +275,7 @@ struct Im2Col
             make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{}),
             make_tuple(Sequence<0>{}, Sequence<1, 2>{}, Sequence<3, 4>{}, Sequence<5>{}));
 
-        const auto src =
+        const auto src_gemmm_gemmk =
             transform_tensor(a_n_y_ho_x_wo_c,
                              make_tuple(ps(make_merge_transform(make_tuple(N, Ho, Wo))),
                                         ps(make_merge_transform(make_tuple(Y, X, C)))),
@@ -329,6 +329,8 @@ struct Im2Col
                                      make_tuple(id_tile_m * kMPerTile, 0),
                                      make_tuple(kMPerTile, kKPerTile),
                                      copier_strategy);
+
+        blockiwise_copy = ThreadGripTe<xxxx>;
 
         ck::index_t id_gemmk = 0;
 

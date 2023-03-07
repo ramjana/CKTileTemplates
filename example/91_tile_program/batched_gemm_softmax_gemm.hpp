@@ -1,3 +1,17 @@
+// input:
+//   A
+//   B0
+//   D00, D01, ...
+//   B1
+//   D10, D11, ...
+// output:
+//   E1
+// C0 = A * B0
+// E0 = elementwise_op(C0, D00, D01, ...)
+// F0 = softmax(E0)
+// C1 = F0 * B1
+// E1 = elementwise_op(C1, D10, D11, ...)c
+
 struct BatchedGemmSoftmaxGemm
 {
     __host__ __device__ void
@@ -67,7 +81,7 @@ struct BatchedGemmSoftmaxGemm
         auto window_b0_dram = make_window(
             b0_dram_global, {kNPerTile, kKPerTile}, {0, 0}, b0_dram_window_map_strategy);
 
-        // ideally, D window distribution need to the same as C
+        // d should same distribution as c for best performance
         auto window_d00_dram = make_window(d00_dram_global,
                                            {kMPerTile, kNPerTile},
                                            {id_tile_m * kMPerTile, 0},
@@ -94,22 +108,49 @@ struct BatchedGemmSoftmaxGemm
                 window_b0_dram += {0, 0, kKPerBlock};
             }
 
-            // this shou
-            const auto c_distribution = get_distribution(c0_vgpr_block);
+            // e should same distribution as c for best performance
+            auto e0_vgpr_block =
+                make_distributed_tensor({kMPerTile, kNPerTile}, e_vgpr_block_strategy);
 
-            auto window_d_dram = make_window(d_dram_global
+            // CDE pointwise
+            elementwise_op(c0_vgpr_block, d00_vgpr_block, e0_vgpr_block, cde_element_op);
 
-            // this will produce 
+            // local softmax, this is a distributed tensor
+            auto e0_max_1d = reduce(e0_vgpre_block, reduce_dims_xxxx, max{});
+
+            auto e0_max_2d = transform_tensor(e0_max_1d, make_broadcast_transform(xxx));
+
+            auto e0_sum_1d =
+                reduce(e0_vgpre_block, e0_max_2d, reduce_dims_xxxx, [&](auto x, auto y) {
+                    return x > y ? x : y;
+                });
+
+            auto e0_sum_2d = transform_tensor(e0_sum_1d, make_broadcast_transform(xxx));
+
+            // f0 is the A matrix for 2nd GEMM
+            auto f0 = position_aware_elementwise_op(
+                e0_vgpr_block, e0_max_2d, e0_sum_2d, [&](auto idx, auto x, auto max, auto sum) {
+                    auto m = idx[0] + id_tile_m * kMPerTile;
+                    auto n = idx[1] + iN;
+
+                    return m > n ? 0 : math::exp(x - max) / sum;
+                });
+
+            // 2nd GEMM
+            auto b1_vgpr_block = load(window_b1_dram, b1_dram_load_strategy);
 
             store(b1_vgpr_block, b1_lds_block, b1_lds_store_strategy);
 
             block_sync_lds();
 
-            block_gemm1.dot_product_accumulate(c1_vgpr_block, e0_vgpr_block, b1_lds_block);
+            block_gemm1.dot_product_accumulate(c1_vgpr_block, f0_vgpr_block, b1_lds_block);
 
             block_sync_lds();
 
             window_b1_dram += {0, kNPerBlock, 0};
         }
+
+        // CDE pointwise
+        elementwise_op(c1_vgpr_block, d10_vgpr_block, e1_vgpr_block, cde1_element_op);
     }
 };
