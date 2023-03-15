@@ -506,10 +506,15 @@ __host__ __device__ constexpr auto make_tensor_coordinate_step(const TensorDesc&
         TensorDesc{}, idx_diff_visible, typename uniform_sequence_gen<ntransform, 0>::type{});
 }
 
-template <typename TensorDesc, typename TensorCoord, typename TensorCoordStep>
-__host__ __device__ constexpr void move_tensor_coordinate(const TensorDesc& tensor_desc,
-                                                          TensorCoord& coord,
-                                                          const TensorCoordStep& coord_step)
+template <typename TensorDesc,
+          typename TensorCoord,
+          index_t NTransform,
+          index_t NDimVisible,
+          typename UpdateLowerIndexHack>
+__host__ __device__ constexpr void move_tensor_coordinate(
+    const TensorDesc& tensor_desc,
+    TensorCoord& coord,
+    const TensorCoordinateStep<NTransform, NDimVisible, UpdateLowerIndexHack>& coord_step)
 {
     constexpr index_t ndim_hidden = TensorDesc::GetNumOfHiddenDimension();
     constexpr index_t ntransform  = TensorDesc::GetNumOfTransform();
@@ -555,6 +560,13 @@ __host__ __device__ constexpr void move_tensor_coordinate(const TensorDesc& tens
             set_container_subset(idx_hidden, dims_low, idx_low);
         }
     });
+}
+
+template <typename TensorDesc, typename TensorCoord, typename Index>
+__host__ __device__ constexpr void
+move_tensor_coordinate(const TensorDesc& tensor_desc, TensorCoord& coord, const Index& coord_step)
+{
+    move_tensor_coordinate(tensor_desc, coord, make_tensor_coordinate_step(coord_step));
 }
 
 template <typename TensorDesc, typename TensorCoord>

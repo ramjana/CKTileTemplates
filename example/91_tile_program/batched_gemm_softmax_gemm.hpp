@@ -75,7 +75,7 @@ struct BatchedGemmSoftmaxGemm
         // A/B copy
         auto window_a_dram = make_window(a_dram_global,
                                          {kMPerTile, kKPerTile},
-                                         {id_tile_m * MPerTile, 0},
+                                         {id_tile_m * kMPerTile, 0},
                                          a_dram_window_map_strategy);
 
         auto window_b0_dram = make_window(

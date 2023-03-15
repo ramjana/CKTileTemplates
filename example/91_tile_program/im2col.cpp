@@ -282,7 +282,7 @@ struct Im2Col
                              make_tuple(Sequence<0, 2, 4>{}, Sequence<1, 3, 5>{}),
                              make_tuple(Sequence<0>{}, Sequence<1>{}));
 
-        auto dst = make_naive_tensor<AddressSpaceEnum::Global, true>(
+        auto dst_gemmm_gemmk = make_naive_tensor<AddressSpaceEnum::Global, true>(
             make_tuple(a_gemmm_gemmk_lengths[0], a_gemmm_gemmk_lengths[1]),
             make_tuple(a_gemmm_gemmk_strides[0], a_gemmm_gemmk_strides[1]),
             p_a_mtx);
@@ -296,43 +296,44 @@ struct Im2Col
 
         const auto block2tile = ps(make_cluster_descriptor(make_tuple(num_tile_m)));
 
-        const auto id_tile = block2tile.CalculateBottomIndex(make_tuple(id_block));
+        const auto i_gemmm_gemmk = block2tile.CalculateBottomIndex(make_tuple(id_block));
 
-        const auto id_tile_m = ps.read_first_lane(id_tile[I0]);
+        const auto iGemmM = ps.read_first_lane(i_gemmm_gemmk[I0]) * kMPerTile;
 
 #if 0
-        auto window_src = make_window(src,
+        auto window_src = make_window(src_gemmm_gemmk,
                                       make_tuple(kMPerTile, kKPerTile),
-                                      make_tuple(id_tile_m * kMPerTile, 0),
+                                      make_tuple(iGemmM, 0),
                                       src_window_map_strategy);
 
-        auto window_dst = make_window(dst,
+        auto window_dst = make_window(dst_gemmm_gemmk,
                                       make_tuple(kMPerTile, kKPerTile),
-                                      make_tuple(id_tile_m * kMPerTile, 0),
+                                      make_tuple(iGemmM, 0),
                                       dst_window_map_strategy);
 
-        ck::index_t id_gemmk = 0;
+        ck::index_t iGemmK = 0;
 
         do
         {
+            // this is distributed tensor
             const auto src_vgpr_block = load(window_src, src_window_load_strategy);
 
             store(src_vgpr_block, window_dst, dst_window_store_strategy);
 
             move_window(window_src, make_tuple(0, kKPerTile));
             move_window(window_dst, make_tuple(0, kKPerTile));
-        } while(id_gemmk < num_gemmk - kKPerTile);
+
+            iGemmK += kKPerTile;
+        } while(iGemmK < numGemmk - kKPerTile);
 #else
-        auto copier = ps.make_copier(src,
-                                     make_tuple(id_tile_m * kMPerTile, 0),
-                                     dst,
-                                     make_tuple(id_tile_m * kMPerTile, 0),
+        auto copier = ps.make_copier(src_gemmm_gemmk,
+                                     make_tuple(iGemmM, 0),
+                                     dst_gemmm_gemmk,
+                                     make_tuple(iGemmM, 0),
                                      make_tuple(kMPerTile, kKPerTile),
                                      copier_strategy);
 
-        blockiwise_copy = ThreadGripTe<xxxx>;
-
-        ck::index_t id_gemmk = 0;
+        ck::index_t iGemmK = 0;
 
         do
         {
@@ -341,8 +342,8 @@ struct Im2Col
             copier.move_src_window(make_tuple(0, kKPerTile));
             copier.move_dst_window(make_tuple(0, kKPerTile));
 
-            id_gemmk += kKPerTile;
-        } while(id_gemmk < num_gemmk - kKPerTile);
+            iGemmK += kKPerTile;
+        } while(iGemmK < num_gemmk - kKPerTile);
 #endif
     }
 };
