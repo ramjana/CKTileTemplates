@@ -57,7 +57,9 @@ struct TensorDescriptor
     {
         const auto lengths = generate_tuple(
             [&](auto idim_visible) {
-                constexpr auto tmp = GetTransformAndItsUpperDimension(idim_visible);
+                constexpr index_t idim_hidden = VisibleDimensionIds::At(idim_visible);
+
+                constexpr auto tmp = GetTransformAndItsUpperDimension(Number<idim_hidden>{});
 
                 constexpr index_t itran   = tmp[Number<0>{}];
                 constexpr index_t idim_up = tmp[Number<1>{}];
@@ -77,12 +79,12 @@ struct TensorDescriptor
         return container_reduce(lengths, math::multiplies{}, Number<1>{});
     }
 
-    template <index_t IDim>
-    __host__ __device__ static constexpr auto GetTransformAndItsUpperDimension(Number<IDim>)
+    template <index_t IDimHidden>
+    __host__ __device__ static constexpr auto GetTransformAndItsUpperDimension(Number<IDimHidden>)
     {
-        constexpr auto idim_visible = Number<IDim>{};
-
-        constexpr index_t idim_hidden = VisibleDimensionIds::At(idim_visible);
+        // FIXME: length of IDimHidden ==0 is not known, since info about lower dim length are not
+        // saved in transformation
+        static_assert(IDimHidden > 0, "wrong! not implemented");
 
         index_t itran_found   = 0;
         index_t idim_up_found = 0;
@@ -92,7 +94,7 @@ struct TensorDescriptor
             constexpr auto up_dim_ids = UpperDimensionIdss{}[itran];
 
             static_for<0, up_dim_ids.Size(), 1>{}([&](auto idim_up) {
-                if constexpr(up_dim_ids[idim_up] == idim_hidden)
+                if constexpr(up_dim_ids[idim_up] == IDimHidden)
                 {
                     itran_found   = itran;
                     idim_up_found = idim_up;
@@ -150,7 +152,9 @@ struct TensorDescriptor
     {
         static_assert(IDim >= 0 && IDim < ndim_visible_, "wrong! out of range");
 
-        constexpr auto tmp = GetTransformAndItsUpperDimension(Number<IDim>{});
+        constexpr index_t idim_hidden = VisibleDimensionIds::At(Number<IDim>{});
+
+        constexpr auto tmp = GetTransformAndItsUpperDimension(Number<idim_hidden>{});
 
         constexpr index_t itran   = tmp[Number<0>{}];
         constexpr index_t idim_up = tmp[Number<1>{}];
