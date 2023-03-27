@@ -288,7 +288,7 @@ struct Im2Col
             p_a_mtx);
 
         const auto num_gemmm = a_gemmm_gemmk_lengths[0];
-        const auto num_gemmk = a_gemmm_gemmk_lengths[1];
+        const auto numGemmK  = a_gemmm_gemmk_lengths[1];
 
         const auto id_block = ps.get_block_1d_id();
 
@@ -343,7 +343,7 @@ struct Im2Col
             copier.move_dst_window(make_tuple(0, kKPerTile));
 
             iGemmK += kKPerTile;
-        } while(iGemmK < num_gemmk - kKPerTile);
+        } while(iGemmK < numGemmK - kKPerTile);
 #endif
     }
 };
