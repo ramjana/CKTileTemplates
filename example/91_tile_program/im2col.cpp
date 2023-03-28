@@ -5,7 +5,7 @@
 
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/cluster_descriptor.hpp"
-#include "ck/tensor/tensor.hpp"
+#include "ck/tensor/tensor_view.hpp"
 
 #include "ck/tensor_operation/gpu/block/thread_group_tensor_slice_transfer_v4r1.hpp"
 #include "ck/tensor_operation/gpu/element/unary_element_wise_operation.hpp"
@@ -48,7 +48,18 @@ struct Copier
 
     using Index = MultiIndex<nDim>;
 
-    __host__ __device__ constexpr Copier() : block_copy_{}, src_tensor_{}, dst_tensor_{} {}
+    // FIXME: Dummy host constructor
+    __host__ constexpr Copier(const SrcTensor& src_tensor,
+                              const Index& src_block_slice_origin,
+                              const SrcElementwiseOperation& src_element_op,
+                              DstTensor& dst_tensor,
+                              const Index& dst_block_slice_origin,
+                              const DstElementwiseOperation& dst_element_op)
+        : block_copy_{},
+          src_tensor_{src_tensor.buf_, src_tensor.desc_},
+          dst_tensor_{dst_tensor.buf_, dst_tensor.desc_}
+    {
+    }
 
     __device__ constexpr Copier(const SrcTensor& src_tensor,
                                 const Index& src_block_slice_origin,
@@ -62,8 +73,8 @@ struct Copier
                       dst_tensor.desc_,
                       dst_block_slice_origin,
                       dst_element_op},
-          src_tensor_{src_tensor.buf_.p_data_, src_tensor.desc_},
-          dst_tensor_{dst_tensor.buf_.p_data_, dst_tensor.desc_}
+          src_tensor_{src_tensor.buf_, src_tensor.desc_},
+          dst_tensor_{dst_tensor.buf_, dst_tensor.desc_}
     {
     }
 
@@ -154,7 +165,12 @@ struct MyProgramServer : public ProgramServer
                       1,
                       1,
                       true,
-                      true>{};
+                      true>{src_tensor,
+                            src_window_origin,
+                            tensor_operation::element_wise::PassThrough{},
+                            dst_tensor,
+                            dst_window_origin,
+                            tensor_operation::element_wise::PassThrough{}};
     }
 
     template <typename SrcTensor, typename DstTensor, typename Index, typename Strategy>
@@ -253,10 +269,13 @@ struct Im2Col
         const index_t InRightPadH = input_right_pads[0];
         const index_t InRightPadW = input_right_pads[1];
 
-        const auto a_n_hi_wi_c = make_naive_tensor_packed<AddressSpaceEnum::Global, true>(
-            make_tuple(N, Hi, Wi, C), p_a_img);
+        // FIXME: elementspace size is wrong!
+        const auto a_img_buf =
+            make_dynamic_buffer<AddressSpaceEnum::Global, const float, index_t>(p_a_img, 1 << 30);
 
-        const auto a_n_hip_wip_c = transform_tensor(
+        const auto a_n_hi_wi_c = make_naive_tensor_view_packed(a_img_buf, make_tuple(N, Hi, Wi, C));
+
+        const auto a_n_hip_wip_c = transform_tensor_view(
             a_n_hi_wi_c,
             make_tuple(make_pass_through_transform(N),
                        make_pad_transform(Hi, InLeftPadH, InRightPadH),
@@ -265,7 +284,7 @@ struct Im2Col
             make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{}));
 
-        const auto a_n_y_ho_x_wo_c = transform_tensor(
+        const auto a_n_y_ho_x_wo_c = transform_tensor_view(
             a_n_hip_wip_c,
             make_tuple(
                 make_pass_through_transform(N),
@@ -276,16 +295,20 @@ struct Im2Col
             make_tuple(Sequence<0>{}, Sequence<1, 2>{}, Sequence<3, 4>{}, Sequence<5>{}));
 
         const auto src_gemmm_gemmk =
-            transform_tensor(a_n_y_ho_x_wo_c,
-                             make_tuple(ps(make_merge_transform(make_tuple(N, Ho, Wo))),
-                                        ps(make_merge_transform(make_tuple(Y, X, C)))),
-                             make_tuple(Sequence<0, 2, 4>{}, Sequence<1, 3, 5>{}),
-                             make_tuple(Sequence<0>{}, Sequence<1>{}));
+            transform_tensor_view(a_n_y_ho_x_wo_c,
+                                  make_tuple(ps(make_merge_transform(make_tuple(N, Ho, Wo))),
+                                             ps(make_merge_transform(make_tuple(Y, X, C)))),
+                                  make_tuple(Sequence<0, 2, 4>{}, Sequence<1, 3, 5>{}),
+                                  make_tuple(Sequence<0>{}, Sequence<1>{}));
 
-        auto dst_gemmm_gemmk = make_naive_tensor<AddressSpaceEnum::Global, true>(
-            make_tuple(a_gemmm_gemmk_lengths[0], a_gemmm_gemmk_lengths[1]),
-            make_tuple(a_gemmm_gemmk_strides[0], a_gemmm_gemmk_strides[1]),
-            p_a_mtx);
+        // FIXME: elementspace size is wrong!
+        auto a_mtx_buf =
+            make_dynamic_buffer<AddressSpaceEnum::Global, float, index_t>(p_a_mtx, 1 << 30);
+
+        auto dst_gemmm_gemmk =
+            make_naive_tensor_view(a_mtx_buf,
+                                   make_tuple(a_gemmm_gemmk_lengths[0], a_gemmm_gemmk_lengths[1]),
+                                   make_tuple(a_gemmm_gemmk_strides[0], a_gemmm_gemmk_strides[1]));
 
         const auto num_gemmm = a_gemmm_gemmk_lengths[0];
         const auto numGemmK  = a_gemmm_gemmk_lengths[1];
