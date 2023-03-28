@@ -199,13 +199,6 @@ struct ThreadwiseTensorSliceTransfer_v3r1
     __device__ void
     TransferDataFromSrcThreadScratchToDstThreadScratch(Number<ThreadScratchId> thread_scratch_id)
     {
-#if !CK_EXPERIMENTAL_USE_IN_REGISTER_SUB_DWORD_TRANSPOSE
-        static_ford<SliceLengths>{}([&](auto idx) {
-            // convert from SrcData to DstData here
-            dst_thread_scratch_(idx) =
-                type_convert<DstData>(src_thread_scratch_tuple_[thread_scratch_id][idx]);
-        });
-#else
         // sub-dword transpose between src_thread_scratch_ and dst_thread_scratch_
         // TODO make this logic more generic for more sub-dword datatype
         if constexpr(SrcVectorDim != DstVectorDim &&
@@ -284,7 +277,6 @@ struct ThreadwiseTensorSliceTransfer_v3r1
                     type_convert<DstData>(src_thread_scratch_tuple_[thread_scratch_id][idx]);
             });
         }
-#endif
     }
 
     template <typename DstBuffer, index_t ThreadScratchId = 0>

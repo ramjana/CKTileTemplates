@@ -126,9 +126,6 @@
 #define CK_EXPERIMENTAL_USE_BUFFER_ATOMIC_ADD_OOB_CHECK_OFFSET_TRICK 1
 #define CK_EXPERIMENTAL_USE_BUFFER_ATOMIC_MAX_OOB_CHECK_OFFSET_TRICK 1
 
-// experimental feature: in-regsiter sub-dword transpose
-#define CK_EXPERIMENTAL_USE_IN_REGISTER_SUB_DWORD_TRANSPOSE 1
-
 // experimental feature: merge transformation use magic number division
 #define CK_EXPERIMENTAL_MERGE_USE_MAGIC_DIVISION 1
 
