@@ -16,8 +16,8 @@ struct ThreadPrivateBuffer
 
     static constexpr index_t kMaxBufferSize_ = 1024;
 
-    // 
-    DataType data_[MaxBufferSize_];
+    //
+    DataType data_[kMaxBufferSize_];
 };
 
 } // namespace ck

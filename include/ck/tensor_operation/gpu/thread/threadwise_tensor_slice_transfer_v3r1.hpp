@@ -7,6 +7,8 @@
 #include "ck/tensor_description/tensor_descriptor.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_operation/gpu/thread/threadwise_tensor_slice_transfer.hpp"
+#include "ck/tensor/thread_private_tensor.hpp"
+// FIXME: remove
 #include "ck/tensor/static_tensor.hpp"
 
 namespace ck {
@@ -171,9 +173,15 @@ struct ThreadwiseTensorSliceTransfer_v3r1
             });
 
             // copy data from src_vector_container into src_thread_scratch_
+#if 1 // debug
             src_thread_scratch_tuple_(thread_scratch_id)
                 .template SetAsType<src_vector_t>(
                     src_data_idx, src_vector_container.template AsType<src_vector_t>()[I0]);
+#else
+            src_thread_scratch_tuple_(thread_scratch_id)
+                .template Set<src_vector_t>(
+                    src_data_idx, true, src_vector_container.template AsType<src_vector_t>()[I0]);
+#endif
 
             // move src coordinate
             if constexpr(iAccess.value != num_access - 1)
@@ -514,11 +522,15 @@ struct ThreadwiseTensorSliceTransfer_v3r1
     static constexpr auto src_thread_scratch_desc_ = decltype(GetSrcThreadScratchDescriptor()){};
     static constexpr auto dst_thread_scratch_desc_ = decltype(GetDstThreadScratchDescriptor()){};
 
+#if 1 // debug
     using SrcThreadScratch = StaticTensorTupleOfVectorBuffer<AddressSpaceEnum::Vgpr,
                                                              SrcData,
                                                              SrcScalarPerVector,
                                                              decltype(src_thread_scratch_desc_),
                                                              true>;
+#else
+    using SrcThreadScratch = ThreadPrivateTensor<SrcData, decltype(dst_thread_scratch_desc_)>;
+#endif
 
     using DstThreadScratch = StaticTensorTupleOfVectorBuffer<AddressSpaceEnum::Vgpr,
                                                              DstData,

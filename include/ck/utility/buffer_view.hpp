@@ -19,41 +19,40 @@ namespace ck {
 // FIXME: InvalidElementUseNumericalZeroValue should be properties of index transform
 template <AddressSpaceEnum BufferAddressSpace,
           typename T,
-          typename ElementSpaceSize,
+          typename BufferSize,
           bool InvalidElementUseNumericalZeroValue>
 struct BufferView
 {
     using type = T;
 
     T* p_data_ = nullptr;
-    ElementSpaceSize element_space_size_;
+    BufferSize buffer_size_;
     remove_cvref_t<T> invalid_element_value_ = T{0};
 
-    __host__ __device__ constexpr BufferView()
-        : p_data_{}, element_space_size_{}, invalid_element_value_{}
+    __host__ __device__ constexpr BufferView() : p_data_{}, buffer_size_{}, invalid_element_value_{}
     {
     }
 
-    __host__ __device__ constexpr BufferView(T* p_data, ElementSpaceSize element_space_size)
-        : p_data_{p_data}, element_space_size_{element_space_size}, invalid_element_value_{0}
+    __host__ __device__ constexpr BufferView(T* p_data, BufferSize buffer_size)
+        : p_data_{p_data}, buffer_size_{buffer_size}, invalid_element_value_{0}
     {
     }
 
-    __host__ __device__ constexpr BufferView(T* p_data,
-                                             ElementSpaceSize element_space_size,
-                                             T invalid_element_value)
-        : p_data_{p_data},
-          element_space_size_{element_space_size},
-          invalid_element_value_{invalid_element_value}
+    __host__
+        __device__ constexpr BufferView(T* p_data, BufferSize buffer_size, T invalid_element_value)
+        : p_data_{p_data}, buffer_size_{buffer_size}, invalid_element_value_{invalid_element_value}
     {
     }
 
     __device__ static constexpr AddressSpaceEnum GetAddressSpace() { return BufferAddressSpace; }
 
+    // i is offset of T
     __device__ constexpr const T& operator[](index_t i) const { return p_data_[i]; }
 
+    // i is offset of T
     __device__ constexpr T& operator()(index_t i) { return p_data_[i]; }
 
+    // i is offset of T, not X. i should be aligned to X
     template <typename X,
               typename enable_if<is_same<typename scalar_type<remove_cvref_t<X>>::type,
                                          typename scalar_type<remove_cvref_t<T>>::type>::value,
@@ -81,13 +80,13 @@ struct BufferView
             if constexpr(InvalidElementUseNumericalZeroValue)
             {
                 return amd_buffer_load_invalid_element_return_zero<remove_cvref_t<T>, t_per_x>(
-                    p_data_, i, is_valid_element, element_space_size_);
+                    p_data_, i, is_valid_element, buffer_size_);
             }
             else
             {
                 return amd_buffer_load_invalid_element_return_customized_value<remove_cvref_t<T>,
                                                                                t_per_x>(
-                    p_data_, i, is_valid_element, element_space_size_, invalid_element_value_);
+                    p_data_, i, is_valid_element, buffer_size_, invalid_element_value_);
             }
         }
         else
@@ -118,6 +117,7 @@ struct BufferView
         }
     }
 
+    // i is offset of T, not X. i should be aligned to X
     template <InMemoryDataOperationEnum Op,
               typename X,
               typename enable_if<is_same<typename scalar_type<remove_cvref_t<X>>::type,
@@ -146,6 +146,7 @@ struct BufferView
         }
     }
 
+    // i is offset of T, not X. i should be aligned to X
     template <typename X,
               typename enable_if<is_same<typename scalar_type<remove_cvref_t<X>>::type,
                                          typename scalar_type<remove_cvref_t<T>>::type>::value,
@@ -177,7 +178,7 @@ struct BufferView
             constexpr index_t t_per_x = scalar_per_x_vector / scalar_per_t_vector;
 
             amd_buffer_store<remove_cvref_t<T>, t_per_x>(
-                x, p_data_, i, is_valid_element, element_space_size_);
+                x, p_data_, i, is_valid_element, buffer_size_);
         }
         else if constexpr(GetAddressSpace() == AddressSpaceEnum::Lds &&
                           is_same<typename scalar_type<remove_cvref_t<T>>::type, int8_t>::value &&
@@ -327,7 +328,7 @@ struct BufferView
             constexpr index_t t_per_x = scalar_per_x_vector / scalar_per_t_vector;
 
             amd_buffer_atomic_add<remove_cvref_t<T>, t_per_x>(
-                x, p_data_, i, is_valid_element, element_space_size_);
+                x, p_data_, i, is_valid_element, buffer_size_);
         }
         else
         {
@@ -366,7 +367,7 @@ struct BufferView
             constexpr index_t t_per_x = scalar_per_x_vector / scalar_per_t_vector;
 
             amd_buffer_atomic_max<remove_cvref_t<T>, t_per_x>(
-                x, p_data_, i, is_valid_element, element_space_size_);
+                x, p_data_, i, is_valid_element, buffer_size_);
         }
         else if(is_valid_element)
         {
@@ -381,23 +382,23 @@ struct BufferView
     __device__ static constexpr bool IsDynamicBuffer() { return true; }
 };
 
-template <AddressSpaceEnum BufferAddressSpace, typename T, typename ElementSpaceSize>
-__host__ __device__ constexpr auto make_buffer_view(T* p, ElementSpaceSize element_space_size)
+template <AddressSpaceEnum BufferAddressSpace, typename T, typename BufferSize>
+__host__ __device__ constexpr auto make_buffer_view(T* p, BufferSize buffer_size)
 {
-    return BufferView<BufferAddressSpace, T, ElementSpaceSize, true>{p, element_space_size};
+    return BufferView<BufferAddressSpace, T, BufferSize, true>{p, buffer_size};
 }
 
 template <
     AddressSpaceEnum BufferAddressSpace,
     typename T,
-    typename ElementSpaceSize,
+    typename BufferSize,
     typename X,
     typename enable_if<is_same<remove_cvref_t<T>, remove_cvref_t<X>>::value, bool>::type = false>
 __host__ __device__ constexpr auto
-make_buffer_view(T* p, ElementSpaceSize element_space_size, X invalid_element_value)
+make_buffer_view(T* p, BufferSize buffer_size, X invalid_element_value)
 {
-    return BufferView<BufferAddressSpace, T, ElementSpaceSize, false>{
-        p, element_space_size, invalid_element_value};
+    return BufferView<BufferAddressSpace, T, BufferSize, false>{
+        p, buffer_size, invalid_element_value};
 }
 
 } // namespace ck
