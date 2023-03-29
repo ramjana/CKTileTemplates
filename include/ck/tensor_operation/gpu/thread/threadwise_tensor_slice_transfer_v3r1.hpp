@@ -422,9 +422,6 @@ struct ThreadwiseTensorSliceTransfer_v3r1
 
     __device__ static constexpr auto GetSrcThreadScratchDescriptor()
     {
-        constexpr auto src_scalar_per_access = generate_sequence(
-            detail::lambda_scalar_per_access<SrcVectorDim, SrcScalarPerVector>{}, Number<nDim>{});
-
         constexpr auto src_access_lengths = SliceLengths{} / src_scalar_per_access;
 
         constexpr auto src_access_lengths_and_vector_length = container_push_back(
@@ -472,9 +469,6 @@ struct ThreadwiseTensorSliceTransfer_v3r1
     __device__ static constexpr auto GetDstThreadScratchDescriptor()
     {
         // 1st stage of transforms
-        constexpr auto dst_scalar_per_access = generate_sequence(
-            detail::lambda_scalar_per_access<DstVectorDim, DstScalarPerVector>{}, Number<nDim>{});
-
         constexpr auto dst_access_lengths = SliceLengths{} / dst_scalar_per_access;
 
         constexpr auto dst_access_lengths_and_vector_length = container_push_back(
