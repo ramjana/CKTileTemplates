@@ -9,7 +9,7 @@
 
 namespace ck {
 
-// Address Space: Generic
+// Address Space: Vgpr
 // T may be scalar or vector
 // X may be scalar or vector
 // T and X have same scalar type
@@ -17,7 +17,7 @@ namespace ck {
 // FIXME: InvalidElementUseNumericalZeroValue and invalid_element_value_ should be a property of
 //        transforms of TensorView/Tensor
 template <typename T, typename BufferSizeType, bool InvalidElementUseNumericalZeroValue>
-struct BufferView<AddressSpaceEnum::Generic, T, BufferSizeType, InvalidElementUseNumericalZeroValue>
+struct BufferView<AddressSpaceEnum::Vgpr, T, BufferSizeType, InvalidElementUseNumericalZeroValue>
 {
     using type = T;
 
@@ -43,7 +43,7 @@ struct BufferView<AddressSpaceEnum::Generic, T, BufferSizeType, InvalidElementUs
 
     __device__ static constexpr AddressSpaceEnum GetAddressSpace()
     {
-        return AddressSpaceEnum::Generic;
+        return AddressSpaceEnum::Vgpr;
     }
 
     // i is offset of T

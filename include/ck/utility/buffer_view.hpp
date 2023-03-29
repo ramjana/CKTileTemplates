@@ -8,6 +8,7 @@
 #include "ck/utility/buffer_view_impl_generic.hpp"
 #include "ck/utility/buffer_view_impl_global.hpp"
 #include "ck/utility/buffer_view_impl_lds.hpp"
+#include "ck/utility/buffer_view_impl_vgpr.hpp"
 
 namespace ck {
 
