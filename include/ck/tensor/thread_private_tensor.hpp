@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "ck/utility/thread_private_buffer.hpp"
 #include "ck/utility/buffer_view.hpp"
 
 namespace ck {
@@ -17,20 +16,22 @@ struct ThreadPrivateTensor
 
     __host__ __device__ constexpr ThreadPrivateTensor()
         // FIXME: remove static_cast
-        : desc_{}, buf_view_{buf_.p_data_, static_cast<index_t>(desc_.GetElementSpaceSize())}
+        : desc_{}, buf_view_{p_data_, static_cast<index_t>(desc_.GetElementSpaceSize())}
     {
     }
 
     __host__ __device__ constexpr ThreadPrivateTensor(const TensorDescriptor_& desc)
         // FIXME: remove static_cast
-        : desc_{desc}, buf_view_{buf_.p_data_, static_cast<index_t>(desc_.GetElementSpaceSize())}
+        : desc_{desc}, buf_view_{p_data_, static_cast<index_t>(desc_.GetElementSpaceSize())}
     {
     }
 
     // member
     TensorDescriptor_ desc_;
 
-    ThreadPrivateBuffer<DataType_> buf_;
+    //
+    static constexpr index_t kMaxBufferSize_ = 32;
+    DataType_ p_data_[kMaxBufferSize_];
 
     // FIXME: remove assumption that type of BufferSize should be index_t
     BufferView<AddressSpaceEnum::Vgpr, DataType_, index_t, true> buf_view_;
