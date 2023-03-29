@@ -16,7 +16,9 @@ namespace ck {
 // X may be scalar or vector
 // T and X have same scalar type
 // X contains multiple T
-// FIXME: InvalidElementUseNumericalZeroValue should be properties of index transform
+// TODO: implemente separate BufferView for different BufferAddressSpace
+// FIXME: InvalidElementUseNumericalZeroValue and invalid_element_value_ should be a property of
+//        transforms of TensorView/Tensor
 template <AddressSpaceEnum BufferAddressSpace,
           typename T,
           typename BufferSize,
@@ -47,9 +49,11 @@ struct BufferView
     __device__ static constexpr AddressSpaceEnum GetAddressSpace() { return BufferAddressSpace; }
 
     // i is offset of T
+    // FIXME: doesn't do is_valid check
     __device__ constexpr const T& operator[](index_t i) const { return p_data_[i]; }
 
     // i is offset of T
+    // FIXME: doesn't do is_valid check
     __device__ constexpr T& operator()(index_t i) { return p_data_[i]; }
 
     // i is offset of T, not X. i should be aligned to X
