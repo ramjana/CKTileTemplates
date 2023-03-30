@@ -94,7 +94,7 @@ struct ThreadwiseTensorSliceTransfer_v6r1
             using dst_vector_t    = typename dst_vector_type::type;
 
             const bool is_src_valid =
-                coordinate_has_valid_offset_assuming_visible_index_is_valid(src_desc, src_coord_);
+                coordinate_has_valid_offset_assuming_top_index_is_valid(src_desc, src_coord_);
 
             // copy data from src_buf into src_vector_container
             auto src_vector_container = src_vector_type{
@@ -114,7 +114,7 @@ struct ThreadwiseTensorSliceTransfer_v6r1
             });
 
             const bool is_dst_valid =
-                coordinate_has_valid_offset_assuming_visible_index_is_valid(dst_desc, dst_coord_);
+                coordinate_has_valid_offset_assuming_top_index_is_valid(dst_desc, dst_coord_);
 
             // copy data from dst_vector into dst_buf
             dst_buf.template Update<DstInMemOp, dst_vector_t>(

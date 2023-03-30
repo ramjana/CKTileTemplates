@@ -138,9 +138,8 @@ struct ThreadwiseTensorSliceTransfer_v7
             static_for<0, nSrc, 1>{}([&](auto i) {
                 using src_vector_t = typename remove_cvref_t<decltype(src_vectors[i])>::type;
 
-                const bool is_src_valid =
-                    coordinate_has_valid_offset_assuming_visible_index_is_valid(src_descs[i],
-                                                                                src_coords_[i]);
+                const bool is_src_valid = coordinate_has_valid_offset_assuming_top_index_is_valid(
+                    src_descs[i], src_coords_[i]);
 
                 src_vectors(i).template AsType<src_vector_t>()(I0) =
                     src_bufs[i].template Get<src_vector_t>(src_coords_[i].GetOffset(),
@@ -184,9 +183,8 @@ struct ThreadwiseTensorSliceTransfer_v7
             static_for<0, nDst, 1>{}([&](auto i) {
                 using dst_vector_t = typename remove_cvref_t<decltype(dst_vectors[i])>::type;
 
-                const bool is_dst_valid =
-                    coordinate_has_valid_offset_assuming_visible_index_is_valid(dst_descs[i],
-                                                                                dst_coords_[i]);
+                const bool is_dst_valid = coordinate_has_valid_offset_assuming_top_index_is_valid(
+                    dst_descs[i], dst_coords_[i]);
 
                 constexpr InMemoryDataOperationEnum DstInMemOp =
                     static_cast<InMemoryDataOperationEnum>(DstInMemOps::At(i.value));

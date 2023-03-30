@@ -154,7 +154,7 @@ struct ThreadwiseTensorSliceTransfer_v3r1
             constexpr auto src_data_idx = SrcSpaceFillingCurve::GetIndexTupleOfNumber(iAccess);
 
             const bool is_src_valid =
-                coordinate_has_valid_offset_assuming_visible_index_is_valid(src_desc, src_coord_);
+                coordinate_has_valid_offset_assuming_top_index_is_valid(src_desc, src_coord_);
 
             using src_vector_type = vector_type_maker_t<SrcData, SrcScalarPerVector>;
             using src_vector_t    = typename src_vector_type::type;
@@ -312,7 +312,7 @@ struct ThreadwiseTensorSliceTransfer_v3r1
             constexpr auto dst_data_idx = DstSpaceFillingCurve::GetIndexTupleOfNumber(iAccess);
 
             const bool is_dst_valid =
-                coordinate_has_valid_offset_assuming_visible_index_is_valid(dst_desc, dst_coord_);
+                coordinate_has_valid_offset_assuming_top_index_is_valid(dst_desc, dst_coord_);
 
             using dst_vector_type = vector_type_maker_t<DstData, DstScalarPerVector>;
             using dst_vector_t    = typename dst_vector_type::type;

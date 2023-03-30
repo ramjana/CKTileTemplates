@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2022, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2018-2023, Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
 
 #include "ck/utility/common_header.hpp"
-#include "ck/tensor_description/tensor_descriptor.hpp"
-#include "ck/tensor_description/tensor_descriptor_helper.hpp"
 
 namespace ck {
 
@@ -159,11 +157,11 @@ struct TensorAdaptor
 
     __host__ __device__ constexpr auto GetElementSize() const { return element_size_; }
 
-#if 0
-    template <index_t IDim>
+#if 1
+    template <index_t IDimHidden>
     __host__ __device__ constexpr auto GetHiddenDimensionLength(Number<IDimHidden>) const
     {
-        static_assert(IDim >= 0 && IDim < ndim_hidden_, "wrong! out of range");
+        static_assert(IDimHidden >= 0 && IDimHidden < ndim_hidden_, "wrong! out of range");
 
         constexpr auto tmp = GetTransformAndItsUpperDimension(Number<IDimHidden>{});
 
@@ -180,10 +178,10 @@ struct TensorAdaptor
     template <index_t I>
     __host__ __device__ constexpr index_t GetTopDimensionLength(Number<I> idim) const
     {
-        // TODO: not implemented
+        return GetHiddenDimensionLength(TopDimensionHiddenIds::At[idim]);
     }
 
-    template <index_t IDim>
+    template <index_t IDimTop>
     __host__ __device__ constexpr auto GetTopDimensionLength(Number<IDimTop>) const
     {
         static_assert(IDimTop >= 0 && IDimTop < ndim_top_, "wrong! out of range");
@@ -204,7 +202,6 @@ struct TensorAdaptor
 
     __host__ __device__ constexpr auto GetTopDimensionLengths() const
     {
-        // FIXME: use Tuple of reference instead
         return generate_sequence_v2([&](auto i) { return GetTopDimensionLength(i); },
                                     Number<ndim_top_>{});
     }
