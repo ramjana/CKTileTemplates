@@ -70,8 +70,6 @@ struct ThreadwiseTensorSliceTransfer_v1r3
 
     using DstCoord = decltype(make_tensor_coordinate(DstDesc{}, Index{}));
 
-    using DstCoordStep = decltype(make_tensor_coordinate_step(DstDesc{}, Index{}));
-
     __device__ constexpr ThreadwiseTensorSliceTransfer_v1r3(const DstDesc& dst_desc,
                                                             const Index& dst_slice_origin_idx,
                                                             const ElementwiseOperation& element_op)
@@ -159,18 +157,14 @@ struct ThreadwiseTensorSliceTransfer_v1r3
             {
                 constexpr auto forward_step = SpaceFillingCurve::GetForwardStep(idx_1d);
 
-                move_tensor_coordinate(
-                    dst_desc, dst_coord_, make_tensor_coordinate_step(dst_desc, forward_step));
+                move_tensor_coordinate(dst_desc, dst_coord_, forward_step);
             }
         });
 
         // move dst coordinate back to slice origin (or not)
         if constexpr(DstResetCoordinateAfterRun)
         {
-            const auto dst_reset_step =
-                make_tensor_coordinate_step(dst_desc, GetDstCoordinateResetStep());
-
-            move_tensor_coordinate(dst_desc, dst_coord_, dst_reset_step);
+            move_tensor_coordinate(dst_desc, dst_coord_, GetDstCoordinateResetStep());
         }
     }
 
@@ -249,8 +243,6 @@ struct ThreadwiseTensorSliceTransfer_v2
     using Index = MultiIndex<nDim>;
 
     using SrcCoord = decltype(make_tensor_coordinate(SrcDesc{}, Index{}));
-
-    using SrcCoordStep = decltype(make_tensor_coordinate_step(SrcDesc{}, Index{}));
 
     __device__ constexpr ThreadwiseTensorSliceTransfer_v2(const SrcDesc& src_desc,
                                                           const Index& src_slice_origin_idx)
@@ -449,9 +441,6 @@ struct ThreadwiseTensorSliceTransfer_v3
 
     using SrcCoord = decltype(make_tensor_coordinate(SrcDesc{}, Index{}));
     using DstCoord = decltype(make_tensor_coordinate(DstDesc{}, Index{}));
-
-    using SrcCoordStep = decltype(make_tensor_coordinate_step(SrcDesc{}, Index{}));
-    using DstCoordStep = decltype(make_tensor_coordinate_step(DstDesc{}, Index{}));
 
     __device__ constexpr ThreadwiseTensorSliceTransfer_v3(const SrcDesc& src_desc,
                                                           const Index& src_slice_origin,
@@ -1033,8 +1022,6 @@ struct ThreadwiseTensorSliceTransfer_v4
 
     using SrcCoord = decltype(make_tensor_coordinate(SrcDesc{}, Index{}));
 
-    using SrcCoordStep = decltype(make_tensor_coordinate_step(SrcDesc{}, Index{}));
-
     __device__ constexpr ThreadwiseTensorSliceTransfer_v4(const Index& src_ref_idx)
         : src_ref_coord_(make_tensor_coordinate(SrcDesc{}, src_ref_idx))
     {
@@ -1130,12 +1117,9 @@ struct ThreadwiseTensorSliceTransfer_v4
             constexpr auto src_ref_to_data_disp_idx =
                 src_ref_to_origin_disp_idx + data_to_origin_disp_idx;
 
-            constexpr auto src_ref_to_data_disp_coord_step =
-                make_tensor_coordinate_step(src_desc, src_ref_to_data_disp_idx);
-
             auto src_data_coord = src_ref_coord_;
 
-            move_tensor_coordinate(src_desc, src_data_coord, src_ref_to_data_disp_coord_step);
+            move_tensor_coordinate(src_desc, src_data_coord, src_ref_to_data_disp_idx);
 
             vector_type_maker_t<SrcData, SrcScalarPerVector> src_tmp_vector;
 

@@ -84,9 +84,6 @@ struct ThreadwiseTensorSliceTransfer_v3r1
     using SrcCoord = decltype(make_tensor_coordinate(SrcDesc{}, Index{}));
     using DstCoord = decltype(make_tensor_coordinate(DstDesc{}, Index{}));
 
-    using SrcCoordStep = decltype(make_tensor_coordinate_step(SrcDesc{}, Index{}));
-    using DstCoordStep = decltype(make_tensor_coordinate_step(DstDesc{}, Index{}));
-
     static constexpr auto I0 = Number<0>{};
 
     // scalar per access on each dim
@@ -188,16 +185,14 @@ struct ThreadwiseTensorSliceTransfer_v3r1
             {
                 constexpr auto step = SrcSpaceFillingCurve::GetForwardStep(iAccess);
 
-                move_tensor_coordinate(
-                    src_desc, src_coord_, make_tensor_coordinate_step(src_desc, step));
+                move_tensor_coordinate(src_desc, src_coord_, step);
             }
         });
 
         // move src coordinate back to slice origin (or not)
         if constexpr(SrcResetCoordinateAfterRun)
         {
-            const auto src_reset_step =
-                make_tensor_coordinate_step(src_desc, GetSrcCoordinateResetStep());
+            const auto src_reset_step = GetSrcCoordinateResetStep();
 
             move_tensor_coordinate(src_desc, src_coord_, src_reset_step);
         }
@@ -341,18 +336,14 @@ struct ThreadwiseTensorSliceTransfer_v3r1
             {
                 constexpr auto step = DstSpaceFillingCurve::GetForwardStep(iAccess);
 
-                move_tensor_coordinate(
-                    dst_desc, dst_coord_, make_tensor_coordinate_step(dst_desc, step));
+                move_tensor_coordinate(dst_desc, dst_coord_, step);
             }
         });
 
         // move dst coordinate back to slice origin (or not)
         if constexpr(DstResetCoordinateAfterRun)
         {
-            const auto dst_reset_step =
-                make_tensor_coordinate_step(dst_desc, GetDstCoordinateResetStep());
-
-            move_tensor_coordinate(dst_desc, dst_coord_, dst_reset_step);
+            move_tensor_coordinate(dst_desc, dst_coord_, GetDstCoordinateResetStep());
         }
     }
 
@@ -399,10 +390,7 @@ struct ThreadwiseTensorSliceTransfer_v3r1
             SrcResetCoordinateAfterRun ? src_slice_origin_step_idx
                                        : src_slice_origin_step_idx + GetSrcCoordinateResetStep();
 
-        // is it OK to construct a new step every time?
-        const auto adjusted_step = make_tensor_coordinate_step(src_desc, adjusted_step_idx);
-
-        move_tensor_coordinate(src_desc, src_coord_, adjusted_step);
+        move_tensor_coordinate(src_desc, src_coord_, adjusted_step_idx);
     }
 
     // dst_slice_origin_step_idx need to be known at compile-time, for performance reason
@@ -414,10 +402,7 @@ struct ThreadwiseTensorSliceTransfer_v3r1
             DstResetCoordinateAfterRun ? dst_slice_origin_step_idx
                                        : dst_slice_origin_step_idx + GetDstCoordinateResetStep();
 
-        // is it OK to construct a new step every time?
-        const auto adjusted_step = make_tensor_coordinate_step(dst_desc, adjusted_step_idx);
-
-        move_tensor_coordinate(dst_desc, dst_coord_, adjusted_step);
+        move_tensor_coordinate(dst_desc, dst_coord_, adjusted_step_idx);
     }
 
     __device__ static constexpr auto GetSrcThreadScratchDescriptor()
