@@ -209,47 +209,14 @@ __host__ __device__ constexpr bool
 coordinate_has_valid_offset_assuming_top_index_is_valid(const TensorDesc& tensor_desc,
                                                         const TensorCoord& coord)
 {
-    bool valid = true;
-
-    constexpr index_t ntransform = TensorDesc::GetNumOfTransform();
-
-    const auto& idx_hidden = coord.GetHiddenIndex();
-
-    static_for<ntransform - 1, -1, -1>{}([&tensor_desc, &idx_hidden, &valid](auto itran) {
-        const auto tran = tensor_desc.GetTransforms().At(itran);
-
-        // check validity, only if current transformation does not always has a valid mapping
-        if constexpr(!decltype(tran)::IsValidUpperIndexAlwaysMappedToValidLowerIndex())
-        {
-            const auto idx_up = get_container_subset(
-                idx_hidden, TensorDesc::GetUpperDimensionHiddenIdss().At(itran));
-
-            // Comment: using valid = valid && .. will result in weird control flow in ISA
-            valid &= tran.IsValidUpperIndexMappedToValidLowerIndex(idx_up);
-        }
-    });
-
-    return valid;
+    return adaptor_coordinate_is_valid_assuming_top_index_is_valid(tensor_desc, coord);
 }
 
 template <typename TensorDesc, typename TensorCoord>
 __host__ __device__ constexpr bool coordinate_has_valid_offset(const TensorDesc& tensor_desc,
                                                                const TensorCoord& coord)
 {
-    // check top index
-    const auto& idx_top = coord.GetTopIndex();
-
-    bool is_top_index_valid = true;
-
-    static_for<0, TensorDesc::GetNumOfDimension(), 1>{}(
-        [&is_top_index_valid, &idx_top, &tensor_desc](auto i) {
-            is_top_index_valid =
-                is_top_index_valid && (idx_top[i] >= 0 && idx_top[i] < tensor_desc.GetLength(i));
-        });
-
-    // check other hidden index
-    return is_top_index_valid &&
-           coordinate_has_valid_offset_assuming_top_index_is_valid(tensor_desc, coord);
+    return adaptor_coordinate_is_valid(tensor_desc, coord);
 }
 
 } // namespace ck

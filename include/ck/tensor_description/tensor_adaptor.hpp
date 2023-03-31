@@ -349,7 +349,7 @@ __host__ __device__ constexpr auto make_single_stage_tensor_adaptor(const Transf
 
 // TODO: How to fix this? It uses an struct instead of lambda because lambda
 // doesn't have constructor, and to put it outside the scope where it is used
-// (transform_tensor_descriptor) because template cannot be defined inside a function
+// (transform_tensor_adaptor) because template cannot be defined inside a function
 // template
 template <typename NewTransforms>
 struct lambda_get_up_dim_num
@@ -767,4 +767,51 @@ move_tensor_adaptor_coordinate(const Adaptor& adaptor, AdaptorCoord& coord, cons
     });
 }
 
+template <typename Adaptor, typename AdaptorCoord>
+__host__ __device__ constexpr bool
+adaptor_coordinate_is_valid_assuming_top_index_is_valid(const Adaptor& adaptor,
+                                                        const AdaptorCoord& coord)
+{
+    bool valid = true;
+
+    constexpr index_t ntransform = Adaptor::GetNumOfTransform();
+
+    const auto& idx_hidden = coord.GetHiddenIndex();
+
+    static_for<ntransform - 1, -1, -1>{}([&adaptor, &idx_hidden, &valid](auto itran) {
+        const auto tran = adaptor.GetTransforms().At(itran);
+
+        // check validity, only if current transformation does not always has a valid mapping
+        if constexpr(!decltype(tran)::IsValidUpperIndexAlwaysMappedToValidLowerIndex())
+        {
+            const auto idx_up =
+                get_container_subset(idx_hidden, Adaptor::GetUpperDimensionHiddenIdss().At(itran));
+
+            // Comment: using valid = valid && .. will result in weird control flow in ISA
+            valid &= tran.IsValidUpperIndexMappedToValidLowerIndex(idx_up);
+        }
+    });
+
+    return valid;
+}
+
+template <typename Adaptor, typename AdpatorCoord>
+__host__ __device__ constexpr bool adaptor_coordinate_is_valid(const Adaptor& adaptor,
+                                                               const AdpatorCoord& coord)
+{
+    // check top index
+    const auto& idx_top = coord.GetTopIndex();
+
+    bool is_top_index_valid = true;
+
+    static_for<0, Adaptor::GetNumOfDimension(), 1>{}(
+        [&is_top_index_valid, &idx_top, &adaptor](auto i) {
+            is_top_index_valid =
+                is_top_index_valid && (idx_top[i] >= 0 && idx_top[i] < adaptor.GetLength(i));
+        });
+
+    // check other hidden index
+    return is_top_index_valid &&
+           adaptor_coordinate_is_valid_assuming_top_index_is_valid(adaptor, coord);
+}
 } // namespace ck
