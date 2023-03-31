@@ -33,14 +33,14 @@ struct TensorAdaptor
         return UpperDimensionHiddenIdss{};
     }
 
-    __host__ __device__ static constexpr auto GetTopDimensionHiddenIds()
-    {
-        return TopDimensionHiddenIds{};
-    }
-
     __host__ __device__ static constexpr auto GetBottomDimensionHiddenIds()
     {
         return BottomDimensionHiddenIds{};
+    }
+
+    __host__ __device__ static constexpr auto GetTopDimensionHiddenIds()
+    {
+        return TopDimensionHiddenIds{};
     }
 
     __host__ __device__ static constexpr auto InitializeElementSize(const Transforms& transforms)
@@ -340,28 +340,116 @@ __host__ __device__ constexpr auto make_single_stage_tensor_adaptor(const Transf
     constexpr auto top_dim_hidden_ids =
         typename arithmetic_sequence_gen<0, ndim_new_top, 1>::type{} + Number<ndim_old_top>{};
 
-    return TensorAdaptor<remove_cv_t<Transforms>,
-                         remove_cv_t<decltype(low_dim_hidden_idss)>,
-                         remove_cv_t<decltype(up_dim_hidden_idss)>,
-                         remove_cv_t<decltype(bottom_dim_hidden_ids)>,
-                         remove_cv_t<decltype(top_dim_hidden_ids)>>{transforms};
+    return TensorAdaptor<remove_cvref_t<Transforms>,
+                         remove_cvref_t<decltype(low_dim_hidden_idss)>,
+                         remove_cvref_t<decltype(up_dim_hidden_idss)>,
+                         remove_cvref_t<decltype(bottom_dim_hidden_ids)>,
+                         remove_cvref_t<decltype(top_dim_hidden_ids)>>{transforms};
 }
 
-#if 0
+// TODO: How to fix this? It uses an struct instead of lambda because lambda
+// doesn't have constructor, and to put it outside the scope where it is used
+// (transform_tensor_descriptor) because template cannot be defined inside a function
+// template
+template <typename NewTransforms>
+struct lambda_get_up_dim_num
+{
+    template <typename I>
+    __host__ __device__ constexpr auto operator()(I) const
+    {
+        using Tran = remove_reference_t<decltype(NewTransforms{}.At(I{}))>;
+        return Number<Tran::GetNumOfUpperDimension()>{};
+    }
+};
+
 template <typename OldTensorAdaptor,
           typename NewTransforms,
           typename NewLowerDimensionOldTopIdss,
           typename NewUpperDimensionNewTopIdss>
 __host__ __device__ constexpr auto
-transform_tensor_adaptor(const OldTensorDescriptor& old_tensor_desc,
+transform_tensor_adaptor(const OldTensorAdaptor& old_tensor_adaptor,
                          const NewTransforms& new_transforms,
                          NewLowerDimensionOldTopIdss,
                          NewUpperDimensionNewTopIdss)
 {
-    // TODO to be implemented
-    static_assert(false, "not implemented");
+    // sanity check
+    {
+        static_assert(NewTransforms::Size() == NewLowerDimensionOldTopIdss::Size() &&
+                          NewTransforms::Size() == NewUpperDimensionNewTopIdss::Size(),
+                      "wrong! inconsitent number of transform");
+
+        constexpr auto all_old_top_ids = unpack([](auto... xs) { return merge_sequences(xs...); },
+                                                NewLowerDimensionOldTopIdss{});
+
+        constexpr auto all_new_top_ids = unpack([](auto... xs) { return merge_sequences(xs...); },
+                                                NewUpperDimensionNewTopIdss{});
+
+        static_assert(is_valid_sequence_map<decltype(all_old_top_ids)>::value &&
+                          is_valid_sequence_map<decltype(all_new_top_ids)>::value,
+                      "wrong!");
+    }
+
+    // lower dimension's hidden idss
+    // convert lower dimension top idss (tuple of sequences) to hidden idss (tuple of
+    // sequences)
+    constexpr auto low_dim_hidden_idss = transform_tuples(
+        // convert lower dimension top ids (a sequence) to hidden ids (a sequence)
+        [](auto low_dim_top_ids) constexpr {
+            return transform_sequences(
+                // convert lower dimension top id to hidden id
+                [](auto low_dim_top_id) constexpr {
+                    return OldTensorAdaptor::GetTopDimensionHiddenIds()[low_dim_top_id];
+                },
+                low_dim_top_ids);
+        },
+        NewLowerDimensionOldTopIdss{});
+
+    constexpr index_t num_new_transform = NewTransforms::Size();
+
+    // upper dimension's hidden idss
+    constexpr index_t old_hidden_dim_number = OldTensorAdaptor::GetNumOfHiddenDimension();
+
+    constexpr auto up_dim_numbers =
+        generate_sequence(lambda_get_up_dim_num<NewTransforms>{}, Number<num_new_transform>{});
+
+    constexpr auto up_dim_numbers_scan = merge_sequences(
+        Sequence<0>{}, inclusive_scan_sequence(up_dim_numbers, math::plus<index_t>{}, Number<0>{}));
+
+    constexpr auto up_dim_hidden_idss = generate_tuple(
+        [ old_hidden_dim_number, up_dim_numbers_scan ](auto i) constexpr {
+            return
+                typename arithmetic_sequence_gen<old_hidden_dim_number + up_dim_numbers_scan[i],
+                                                 old_hidden_dim_number + up_dim_numbers_scan[i + 1],
+                                                 1>::type{};
+        },
+        Number<num_new_transform>{});
+
+    // new top dimension's hidden ids
+    constexpr auto unordered_new_top_dim_hidden_ids = unpack(
+        [](auto... xs) constexpr { return merge_sequences(xs...); }, up_dim_hidden_idss);
+
+    constexpr auto new_top_dim_unordered2ordered = unpack(
+        [](auto... xs) constexpr { return merge_sequences(xs...); }, NewUpperDimensionNewTopIdss{});
+
+    constexpr auto new_top_dim_hidden_ids =
+        unordered_new_top_dim_hidden_ids.ReorderGivenOld2New(new_top_dim_unordered2ordered);
+
+    // put everything together
+    const auto all_transforms =
+        container_concat(old_tensor_adaptor.GetTransforms(), new_transforms);
+
+    constexpr auto all_low_dim_hidden_idss =
+        container_concat(OldTensorAdaptor::GetLowerDimensionHiddenIdss(), low_dim_hidden_idss);
+
+    constexpr auto all_up_dim_hidden_idss =
+        container_concat(OldTensorAdaptor::GetUpperDimensionHiddenIdss(), up_dim_hidden_idss);
+
+    return TensorAdaptor<remove_cvref_t<decltype(all_transforms)>,
+                         remove_cvref_t<decltype(all_low_dim_hidden_idss)>,
+                         remove_cvref_t<decltype(all_up_dim_hidden_idss)>,
+                         remove_cvref_t<decltype(OldTensorAdaptor::GetBottomDimensionHiddenIds())>,
+                         remove_cvref_t<decltype(new_top_dim_hidden_ids)>>{all_transforms};
 }
-#endif
 
 template <typename TensorAdaptor0, typename TensorAdaptor1>
 __host__ __device__ constexpr auto chain_tensor_adaptors(const TensorAdaptor0& adaptor0,
@@ -537,11 +625,11 @@ __host__ __device__ constexpr auto chain_tensor_adaptors(const TensorAdaptor0& a
         TensorAdaptor1::GetTopDimensionHiddenIds() + Number<adaptor1_hidden_id_shift>{};
 
     // put everything together
-    return TensorAdaptor<remove_cv_t<decltype(all_transforms)>,
-                         remove_cv_t<decltype(all_low_dim_hidden_idss)>,
-                         remove_cv_t<decltype(all_up_dim_hidden_idss)>,
-                         remove_cv_t<decltype(bottom_dim_hidden_ids)>,
-                         remove_cv_t<decltype(top_dim_hidden_ids)>>{all_transforms};
+    return TensorAdaptor<remove_cvref_t<decltype(all_transforms)>,
+                         remove_cvref_t<decltype(all_low_dim_hidden_idss)>,
+                         remove_cvref_t<decltype(all_up_dim_hidden_idss)>,
+                         remove_cvref_t<decltype(bottom_dim_hidden_ids)>,
+                         remove_cvref_t<decltype(top_dim_hidden_ids)>>{all_transforms};
 }
 
 template <typename X, typename... Xs, typename enable_if<sizeof...(Xs) >= 2, bool>::type = false>
