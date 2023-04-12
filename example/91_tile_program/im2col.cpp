@@ -8,6 +8,7 @@
 #include "ck/tensor/tensor_view.hpp"
 
 #include "ck/tensor_operation/gpu/block/thread_group_tensor_slice_transfer_v4r1.hpp"
+#include "ck/tensor_operation/gpu/thread/threadwise_tensor_slice_transfer_v3r1.hpp"
 #include "ck/tensor_operation/gpu/element/unary_element_wise_operation.hpp"
 
 #include "ck/tensor_operation/operator_transform/transform_conv_fwd_to_gemm.hpp"
@@ -50,11 +51,11 @@ struct Copier
 
     // FIXME: Dummy host constructor
     __host__ constexpr Copier(const SrcTensor& src_tensor,
-                              const Index& src_block_slice_origin,
-                              const SrcElementwiseOperation& src_element_op,
+                              const Index& /* src_block_slice_origin */,
+                              const SrcElementwiseOperation& /* src_element_op */,
                               DstTensor& dst_tensor,
-                              const Index& dst_block_slice_origin,
-                              const DstElementwiseOperation& dst_element_op)
+                              const Index& /* dst_block_slice_origin */,
+                              const DstElementwiseOperation& /* dst_element_op */)
         : block_copy_{},
           src_tensor_{src_tensor.buf_, src_tensor.desc_},
           dst_tensor_{dst_tensor.buf_, dst_tensor.desc_}
@@ -142,8 +143,8 @@ struct MyProgramServer : public ProgramServer
                               const Index& src_window_origin,
                               DstTensor& dst_tensor,
                               const Index& dst_window_origin,
-                              const Index& window_lengths,
-                              const Strategy& strategy)
+                              const Index& /* window_lengths */,
+                              const Strategy& /* strategy */)
     {
         using namespace ck;
 
@@ -178,8 +179,8 @@ struct MyProgramServer : public ProgramServer
                                 const Index& src_window_origin,
                                 DstTensor& dst_tensor,
                                 const Index& dst_window_origin,
-                                const Index& window_lengths,
-                                const Strategy& strategy)
+                                const Index& /* window_lengths */,
+                                const Strategy& /* strategy */)
     {
         using namespace ck;
 
@@ -223,11 +224,11 @@ struct Im2Col
     __host__ __device__ void
     operator()(Server& ps,
                const std::array<ck::index_t, NDimSpatial + 3>& a_g_n_c_wis_lengths,
-               const std::array<ck::index_t, NDimSpatial + 3>& a_g_n_c_wis_strides,
+               const std::array<ck::index_t, NDimSpatial + 3>& /* a_g_n_c_wis_strides */,
                const std::array<ck::index_t, NDimSpatial + 3>& b_g_k_c_xs_lengths,
-               const std::array<ck::index_t, NDimSpatial + 3>& b_g_k_c_xs_strides,
+               const std::array<ck::index_t, NDimSpatial + 3>& /* b_g_k_c_xs_strides */,
                const std::array<ck::index_t, NDimSpatial + 3>& c_g_n_k_wos_lengths,
-               const std::array<ck::index_t, NDimSpatial + 3>& c_g_n_k_wos_strides,
+               const std::array<ck::index_t, NDimSpatial + 3>& /* c_g_n_k_wos_strides */,
                const std::array<ck::index_t, NDimSpatial>& conv_filter_strides,
                const std::array<ck::index_t, NDimSpatial>& conv_filter_dilations,
                const std::array<ck::index_t, NDimSpatial>& input_left_pads,
@@ -294,12 +295,21 @@ struct Im2Col
             make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{}),
             make_tuple(Sequence<0>{}, Sequence<1, 2>{}, Sequence<3, 4>{}, Sequence<5>{}));
 
+#if 0
         const auto src_gemmm_gemmk =
             transform_tensor_view(a_n_y_ho_x_wo_c,
                                   make_tuple(ps(make_merge_transform(make_tuple(N, Ho, Wo))),
                                              ps(make_merge_transform(make_tuple(Y, X, C)))),
                                   make_tuple(Sequence<0, 2, 4>{}, Sequence<1, 3, 5>{}),
                                   make_tuple(Sequence<0>{}, Sequence<1>{}));
+#else
+        const auto src_gemmm_gemmk =
+            transform_tensor_view(a_n_y_ho_x_wo_c,
+                                  make_tuple(make_merge_transform(make_tuple(N, Ho, Wo)),
+                                             make_merge_transform(make_tuple(Y, X, C))),
+                                  make_tuple(Sequence<0, 2, 4>{}, Sequence<1, 3, 5>{}),
+                                  make_tuple(Sequence<0>{}, Sequence<1>{}));
+#endif
 
         // FIXME: elementspace size is wrong!
         auto a_mtx_buf =
@@ -324,15 +334,15 @@ struct Im2Col
         const auto iGemmM = ps.read_first_lane(i_gemmm_gemmk[I0]) * kMPerTile;
 
 #if 0
-        auto window_src = make_window(src_gemmm_gemmk,
-                                      make_tuple(kMPerTile, kKPerTile),
-                                      make_tuple(iGemmM, 0),
-                                      src_window_map_strategy);
+        auto window_src = make_tensor_block_window(src_gemmm_gemmk,
+                                                   Sequence<kMPerTile, kKPerTile>{},
+                                                   make_tuple(iGemmM, 0),
+                                                   src_window_map_strategy);
 
-        auto window_dst = make_window(dst_gemmm_gemmk,
-                                      make_tuple(kMPerTile, kKPerTile),
-                                      make_tuple(iGemmM, 0),
-                                      dst_window_map_strategy);
+        auto window_dst = make_tensor_block_window(dst_gemmm_gemmk,
+                                                   Sequence<kMPerTile, kKPerTile>{},
+                                                   make_tuple(iGemmM, 0),
+                                                   dst_window_map_strategy);
 
         ck::index_t iGemmK = 0;
 

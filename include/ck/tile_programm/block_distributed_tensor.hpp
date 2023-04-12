@@ -32,7 +32,7 @@ struct BlockDistributedTensor
     using ThreadTensorDesc = TensorDescriptor<xxx>;
     TensorTensorDesc thread_tensor_desc_;
 
-    Tensor<AddressSpaceEnum::Vgpr, true, T, ThreadTensorDesc> thread_tensor_;
+    TensorView<AddressSpaceEnum::Vgpr, true, T, ThreadTensorDesc> thread_tensor_;
 
     //
     T data_[MaxThreadTensorElementSize];

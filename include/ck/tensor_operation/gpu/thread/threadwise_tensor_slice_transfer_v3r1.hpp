@@ -9,6 +9,7 @@
 #include "ck/tensor_description/tensor_coordinate.hpp"
 #include "ck/tensor/thread_private_tensor.hpp"
 // FIXME: remove
+#include "ck/tensor_operation/gpu/thread/threadwise_tensor_slice_transfer.hpp"
 #include "ck/tensor/static_tensor.hpp"
 
 namespace ck {

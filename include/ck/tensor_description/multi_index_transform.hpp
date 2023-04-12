@@ -1000,22 +1000,12 @@ struct Merge_v1_carry_check
 };
 
 template <typename LowLengths>
-struct lambda_merge_generate_MagicDivision_calculate_magic_multiplier
+struct lambda_merge_generate_MagicDivision_calculate_magic_divisor
 {
     template <index_t I>
     __host__ __device__ constexpr auto operator()(Number<I> i) const
     {
-        return MagicDivision::CalculateMagicMultiplier(LowLengths{}[i]);
-    }
-};
-
-template <typename LowLengths>
-struct lambda_merge_generate_MagicDivision_calculate_magic_shift
-{
-    template <index_t I>
-    __host__ __device__ constexpr auto operator()(Number<I> i) const
-    {
-        return MagicDivision::CalculateMagicShift(LowLengths{}[i]);
+        return MagicDivision::CalculateMagicNumbers(LowLengths{}[i]);
     }
 };
 
@@ -1042,30 +1032,25 @@ struct Merge_v2_magic_division
     using UpLengths =
         decltype(make_tuple(container_reduce(LowLengths{}, math::multiplies{}, Number<1>{})));
 
-    using LowLengthsMagicDivisorMultipiler = decltype(
-        generate_tuple(lambda_merge_generate_MagicDivision_calculate_magic_multiplier<LowLengths>{},
-                       Number<NDimLow>{}));
-
-    using LowLengthsMagicDivisorShift = decltype(
-        generate_tuple(lambda_merge_generate_MagicDivision_calculate_magic_shift<LowLengths>{},
+    using LowLengthsMagicDivisor = decltype(
+        generate_tuple(lambda_merge_generate_MagicDivision_calculate_magic_divisor<LowLengths>{},
                        Number<NDimLow>{}));
 
     LowLengths low_lengths_;
-    LowLengthsMagicDivisorMultipiler low_lengths_magic_divisor_multiplier_;
-    LowLengthsMagicDivisorShift low_lengths_magic_divisor_shift_;
+    LowLengthsMagicDivisor low_lengths_magic_divisor_;
     UpLengths up_lengths_;
+
+    static constexpr auto I0 = Number<0>{};
+    static constexpr auto I1 = Number<1>{};
 
     __host__ __device__ constexpr Merge_v2_magic_division() = default;
 
     __host__ __device__ constexpr Merge_v2_magic_division(const LowLengths& low_lengths)
         : low_lengths_{low_lengths},
-          low_lengths_magic_divisor_multiplier_{generate_tuple(
-              [&](auto i) { return MagicDivision::CalculateMagicMultiplier(low_lengths[i]); },
+          low_lengths_magic_divisor_{generate_tuple(
+              [&](auto i) { return MagicDivision::CalculateMagicNumbers(low_lengths[i]); },
               Number<NDimLow>{})},
-          low_lengths_magic_divisor_shift_{generate_tuple(
-              [&](auto i) { return MagicDivision::CalculateMagicShift(low_lengths[i]); },
-              Number<NDimLow>{})},
-          up_lengths_{make_tuple(container_reduce(low_lengths, math::multiplies{}, Number<1>{}))}
+          up_lengths_{make_tuple(container_reduce(low_lengths, math::multiplies{}, I1))}
     {
         static_assert(LowerIndex::Size() == NDimLow, "wrong!");
     }
@@ -1083,15 +1068,14 @@ struct Merge_v2_magic_division
         static_assert(LowIdx::Size() == NDimLow && UpIdx::Size() == 1,
                       "wrong! inconsistent # of dimension");
 
-        index_t tmp = idx_up[Number<0>{}];
+        index_t tmp = idx_up[I0];
 
         static_for<NDimLow - 1, 0, -1>{}([&, this](auto i) {
-            index_t tmp2 =
-                MagicDivision::DoMagicDivision(tmp,
-                                               this->low_lengths_magic_divisor_multiplier_[i],
-                                               this->low_lengths_magic_divisor_shift_[i]);
-            idx_low(i) = tmp - tmp2 * this->low_lengths_[i];
-            tmp        = tmp2;
+            index_t tmp2 = MagicDivision::DoMagicDivision(tmp,
+                                                          this->low_lengths_magic_divisor_[i][I0],
+                                                          this->low_lengths_magic_divisor_[i][I1]);
+            idx_low(i)   = tmp - tmp2 * this->low_lengths_[i];
+            tmp          = tmp2;
         });
 
         idx_low(Number<0>{}) = tmp;
@@ -1115,10 +1099,9 @@ struct Merge_v2_magic_division
         index_t tmp = idx_up_new[Number<0>{}];
 
         static_for<NDimLow - 1, 0, -1>{}([&, this](auto i) {
-            index_t tmp2 =
-                MagicDivision::DoMagicDivision(tmp,
-                                               this->low_lengths_magic_divisor_multiplier_[i],
-                                               this->low_lengths_magic_divisor_shift_[i]);
+            index_t tmp2 = MagicDivision::DoMagicDivision(tmp,
+                                                          this->low_lengths_magic_divisor_[i][I0],
+                                                          this->low_lengths_magic_divisor_[i][I1]);
 
             index_t idx_low_old = idx_low[i];
 
@@ -1143,8 +1126,7 @@ struct Merge_v2_magic_division
     __host__ __device__ static constexpr bool IsKnownAtCompileTime()
     {
         return is_known_at_compile_time<LowLengths>::value &&
-               is_known_at_compile_time<LowLengthsMagicDivisorMultipiler>::value &&
-               is_known_at_compile_time<LowLengthsMagicDivisorShift>::value &&
+               is_known_at_compile_time<LowLengthsMagicDivisor>::value &&
                is_known_at_compile_time<UpLengths>::value;
     }
 
@@ -1161,169 +1143,6 @@ struct Merge_v2_magic_division
         printf("Merge_v2_magic_division, ");
         printf("low_lengths_ ");
         print_multi_index(low_lengths_);
-        printf("low_lengths_magic_divisor_multiplier_ ");
-        print_multi_index(low_lengths_magic_divisor_multiplier_);
-        printf("low_lengths_magic_divisor_shift_ ");
-        print_multi_index(low_lengths_magic_divisor_shift_);
-        printf("up_lengths_ ");
-        print_multi_index(up_lengths_);
-        printf("}");
-    }
-};
-
-// Implementation of "Merge" transformation primitive that uses magic-number-division to do lowering
-// of both multi-index and delta of multi-index
-// Caution:
-//   1. The magic number division implementation being used would produce correct result if the
-//   dividended is uint32_t and its value is with in 31-bit value range of uint32_t.
-//   2. The magic number division for int32_t dividened has not been implemented, the int32_t
-//   dividend would be bit-wise interpreted as uint32_t and magic number division implementation for
-//   uint32_t is then used.
-//   3. For Merge primitive, upper-index is the dividend.
-//   4. When upper-index is uint32_t, its value need to be within 31-bit range.
-//   5. When upper-index is int32_t type (when index_t is int32_t), its value need to be
-//   non-negative.
-template <typename LowLengths>
-struct Merge_v2r2_magic_division
-{
-    static constexpr index_t NDimLow = LowLengths::Size();
-
-    using LowerIndex = MultiIndex<NDimLow>;
-    using UpperIndex = MultiIndex<1>;
-
-    using LowLengthsScan =
-        decltype(container_reverse_exclusive_scan(LowLengths{}, math::multiplies{}, Number<1>{}));
-
-    using UpLengths =
-        decltype(make_tuple(container_reduce(LowLengths{}, math::multiplies{}, Number<1>{})));
-
-    using LowLengthsScanMagicDivisorMultipiler = decltype(generate_tuple(
-        lambda_merge_generate_MagicDivision_calculate_magic_multiplier<LowLengthsScan>{},
-        Number<NDimLow>{}));
-
-    using LowLengthsScanMagicDivisorShift = decltype(
-        generate_tuple(lambda_merge_generate_MagicDivision_calculate_magic_shift<LowLengthsScan>{},
-                       Number<NDimLow>{}));
-
-    LowLengths low_lengths_;
-    LowLengthsScan low_lengths_scan_;
-    LowLengthsScanMagicDivisorMultipiler low_lengths_scan_magic_divisor_multiplier_;
-    LowLengthsScanMagicDivisorShift low_lengths_scan_magic_divisor_shift_;
-    UpLengths up_lengths_;
-
-    __host__ __device__ constexpr Merge_v2r2_magic_division() = default;
-
-    __host__ __device__ constexpr Merge_v2r2_magic_division(const LowLengths& low_lengths)
-        : low_lengths_{low_lengths},
-          low_lengths_scan_{
-              container_reverse_exclusive_scan(low_lengths, math::multiplies{}, Number<1>{})},
-          low_lengths_scan_magic_divisor_multiplier_{generate_tuple(
-              [&](auto i) { return MagicDivision::CalculateMagicMultiplier(low_lengths_scan_[i]); },
-              Number<NDimLow>{})},
-          low_lengths_scan_magic_divisor_shift_{generate_tuple(
-              [&](auto i) { return MagicDivision::CalculateMagicShift(low_lengths_scan_[i]); },
-              Number<NDimLow>{})},
-          up_lengths_{make_tuple(container_reduce(low_lengths, math::multiplies{}, Number<1>{}))}
-    {
-        static_assert(LowerIndex::Size() == NDimLow, "wrong!");
-    }
-
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return NDimLow; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
-
-    __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
-
-    template <typename LowIdx, typename UpIdx>
-    __host__ __device__ constexpr void CalculateLowerIndex(LowIdx& idx_low,
-                                                           const UpIdx& idx_up) const
-    {
-        static_assert(LowIdx::Size() == NDimLow && UpIdx::Size() == 1,
-                      "wrong! inconsistent # of dimension");
-
-        index_t tmp = idx_up[Number<0>{}];
-
-        static_for<0, NDimLow - 1, 1>{}([&, this](auto i) {
-            idx_low(i) =
-                MagicDivision::DoMagicDivision(tmp,
-                                               this->low_lengths_scan_magic_divisor_multiplier_[i],
-                                               this->low_lengths_scan_magic_divisor_shift_[i]);
-
-            tmp -= idx_low[i] * this->low_lengths_scan_[i];
-        });
-
-        idx_low(Number<NDimLow - 1>{}) = tmp;
-    }
-
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
-    __host__ __device__ void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
-                                              const UpIdxDiff&,
-                                              LowIdx& idx_low,
-                                              const UpIdx& idx_up_new,
-                                              Number<Hack>) const
-    {
-        static_assert(LowIdxDiff::Size() == NDimLow && UpIdxDiff::Size() == 1 &&
-                          LowIdx::Size() == NDimLow && UpIdx::Size() == 1,
-                      "wrong! inconsistent # of dimension");
-
-        index_t tmp = idx_up_new[Number<0>{}];
-
-        static_for<0, NDimLow - 1, 1>{}([&, this](auto i) {
-            index_t idx_low_old = idx_low[i];
-
-            idx_low(i) =
-                MagicDivision::DoMagicDivision(tmp,
-                                               this->low_lengths_scan_magic_divisor_multiplier_[i],
-                                               this->low_lengths_scan_magic_divisor_shift_[i]);
-
-            idx_diff_low(i) = idx_low[i] - idx_low_old;
-
-            tmp -= idx_low[i] * this->low_lengths_scan_[i];
-        });
-
-        idx_diff_low(Number<NDimLow - 1>{}) = tmp - idx_low[Number<NDimLow - 1>{}];
-
-        idx_low(Number<NDimLow - 1>{}) = tmp;
-    }
-
-    __host__ __device__ static constexpr bool IsLinearTransform() { return false; }
-
-    __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
-    {
-        return true;
-    }
-
-    __host__ __device__ static constexpr bool IsKnownAtCompileTime()
-    {
-        return is_known_at_compile_time<LowLengths>::value &&
-               is_known_at_compile_time<LowLengthsScanMagicDivisorMultipiler>::value &&
-               is_known_at_compile_time<LowLengthsScanMagicDivisorShift>::value &&
-               is_known_at_compile_time<UpLengths>::value;
-    }
-
-    template <typename UpIdx>
-    __host__ __device__ static constexpr bool
-    IsValidUpperIndexMappedToValidLowerIndex(const UpIdx& /* idx_up */)
-    {
-        return true;
-    }
-
-    __host__ __device__ void Print() const
-    {
-        printf("{");
-        printf("Merge_v2r2_magic_division, ");
-        printf("low_lengths_ ");
-        print_multi_index(low_lengths_);
-        printf("low_lengths_scan ");
-        print_multi_index(low_lengths_scan_);
-        printf("low_lengths_scan_magic_divisor_multiplier_ ");
-        print_multi_index(low_lengths_scan_magic_divisor_multiplier_);
-        printf("low_lengths_scan_magic_divisor_shift_ ");
-        print_multi_index(low_lengths_scan_magic_divisor_shift_);
         printf("up_lengths_ ");
         print_multi_index(up_lengths_);
         printf("}");

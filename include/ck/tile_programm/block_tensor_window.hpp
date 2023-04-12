@@ -6,9 +6,10 @@
 #include "ck/utility/common_header.hpp"
 
 namespace ck {
+namespace tile_program {
 namespace block {
 
-template <typename Tensor>
+template <typename TensorView>
 struct TensorBlockWindow
 {
     using WindowAdaptor = TensorAdaptor<xxx>;
@@ -61,22 +62,30 @@ struct TensorBlockWindow
 
     // this is the tensor
     // e.g. [m, k] to [offset]
-    Tensor tensor_;
+    BottomTensorView tensor_;
 
     // e.g. [wid, lid, m3, k2, k3] to [m, k]
     WindowAdaptorCoord window_adaptor_thread_coord_;
 
     // e.g. [m, k] to [offset]
-    TensorCoord tensor_thread_coord_;
+    BottomTensorCoord tensor_thread_coord_;
 };
 
 template <index_t BlockSize, typename xxx, index_t Lengths..., typename Strategy>
-__device__ constexpr auto make_tensor_block_window(const Tensor<xxx>& tensor,
-                                                   const Sequence<Lengths...>&,
+__device__ constexpr auto make_tensor_block_window(const BlockTileProgram& btp,
+                                                   const TensorView<xxx>& tensor,
+                                                   const Sequence<Lengths...>& window_lengths,
                                                    const MultiIndex<xxx>& origin,
-                                                   const Strategy& strategy)
+                                                   const Strategy& block_distribution_strategy)
 {
-    // adapator
+    // FIXME: not implemented
+    // block distribution
+    const auto block_distribution =
+        get_block_tensor_distribution(btp, window_lengths, block_distribution_strategy);
+
+    // adaptor
+    const auto adptor_ms_ks_to_m_k = make_single_stage_tensor_adaptor(transforms, up
+
     constexpr auto window_adaptor_wid_lid_xs = xxxx;
 
     const auto widnow_adaptor_xs =
@@ -102,4 +111,5 @@ __device__ void move_tensor_block_window(TensorBlockWindow<xxx>& window,
 }
 
 } // namespace block
+} // namespace tile_program
 } // namespace ck
