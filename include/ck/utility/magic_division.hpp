@@ -182,6 +182,6 @@ struct MagicDivision16BitRange
     }
 };
 
-using MagicDivision = MagicDivision16BitRange;
+using MagicDivision = MagicDivision32BitRange;
 
 } // namespace ck
