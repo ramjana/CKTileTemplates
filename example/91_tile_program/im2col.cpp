@@ -1,3 +1,10 @@
+#include <string_view>
+#include <tuple>
+#include <array>
+#include <utility>
+#include <type_traits>
+#include <cstring>
+
 #include "tile_program.hpp"
 
 #include "ck/utility/common_header.hpp"
@@ -6,6 +13,8 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/cluster_descriptor.hpp"
 #include "ck/tensor/tensor_view.hpp"
+
+#include "ck/tile_program/meta_data_buffer.hpp"
 
 #include "ck/tensor_operation/gpu/block/thread_group_tensor_slice_transfer_v4r1.hpp"
 #include "ck/tensor_operation/gpu/thread/threadwise_tensor_slice_transfer_v3r1.hpp"
@@ -327,7 +336,11 @@ struct Im2Col
 
         const auto num_tile_m = ps.read_first_lane(num_gemmm / kMPerTile);
 
+#if 0
         const auto block2tile = ps(make_cluster_descriptor(make_tuple(num_tile_m)));
+#else
+        const auto block2tile = make_cluster_descriptor(make_tuple(num_tile_m));
+#endif
 
         const auto i_gemmm_gemmk = block2tile.CalculateBottomIndex(make_tuple(id_block));
 
@@ -359,7 +372,7 @@ struct Im2Col
             iGemmK += kKPerTile;
         } while(iGemmK < numGemmk - kKPerTile);
 #else
-        auto copier = ps.make_copier(src_gemmm_gemmk,
+        auto copier           = ps.make_copier(src_gemmm_gemmk,
                                      make_tuple(iGemmM, 0),
                                      dst_gemmm_gemmk,
                                      make_tuple(iGemmM, 0),
@@ -378,6 +391,39 @@ struct Im2Col
             iGemmK += kKPerTile;
         } while(iGemmK < numGemmK - kKPerTile);
 #endif
+    }
+};
+
+template <ck::index_t NDimSpatial,
+          typename ALayout,
+          typename T,
+          // tuning parameter
+          ck::index_t kMPerTile,
+          ck::index_t kKPerTile>
+struct Dummy
+{
+    template <typename Server, typename CopierStrategy>
+    __host__ __device__ void
+    operator()(Server& /* ps */,
+               const std::array<ck::index_t, NDimSpatial + 3>& /* a_g_n_c_wis_lengths */,
+               const std::array<ck::index_t, NDimSpatial + 3>& /* a_g_n_c_wis_strides */,
+               const std::array<ck::index_t, NDimSpatial + 3>& /* b_g_k_c_xs_lengths */,
+               const std::array<ck::index_t, NDimSpatial + 3>& /* b_g_k_c_xs_strides */,
+               const std::array<ck::index_t, NDimSpatial + 3>& /* c_g_n_k_wos_lengths */,
+               const std::array<ck::index_t, NDimSpatial + 3>& /* c_g_n_k_wos_strides */,
+               const std::array<ck::index_t, NDimSpatial>& /* conv_filter_strides */,
+               const std::array<ck::index_t, NDimSpatial>& /* conv_filter_dilations */,
+               const std::array<ck::index_t, NDimSpatial>& /* input_left_pads, */,
+               const std::array<ck::index_t, NDimSpatial>& /* input_right_pads */,
+               //
+               const std::array<ck::index_t, 2> /* a_gemmm_gemmk_lengths */,
+               const std::array<ck::index_t, 2> /* a_gemmm_gemmk_strides */,
+               //
+               const T* /* p_a_img */,
+               T* /* p_a_mtx */,
+               // strategy
+               const CopierStrategy& /* copier_strategy */)
+    {
     }
 };
 
@@ -452,7 +498,7 @@ int main()
     DeviceMem in_mtx(sizeof(DataType) * G * N * Ho * Wo * C * Y * X);
 
     launch(MyProgramServer<256>{},
-           Im2Col<2, ck::tensor_layout::convolution::GNHWC, float, 128, 16>{},
+           Dummy<2, ck::tensor_layout::convolution::GNHWC, float, 128, 16>{},
            1,
            1,
            in_lengths,
