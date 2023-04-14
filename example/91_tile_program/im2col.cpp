@@ -394,39 +394,6 @@ struct Im2Col
     }
 };
 
-template <ck::index_t NDimSpatial,
-          typename ALayout,
-          typename T,
-          // tuning parameter
-          ck::index_t kMPerTile,
-          ck::index_t kKPerTile>
-struct Dummy
-{
-    template <typename Server, typename CopierStrategy>
-    __host__ __device__ void
-    operator()(Server& /* ps */,
-               const std::array<ck::index_t, NDimSpatial + 3>& /* a_g_n_c_wis_lengths */,
-               const std::array<ck::index_t, NDimSpatial + 3>& /* a_g_n_c_wis_strides */,
-               const std::array<ck::index_t, NDimSpatial + 3>& /* b_g_k_c_xs_lengths */,
-               const std::array<ck::index_t, NDimSpatial + 3>& /* b_g_k_c_xs_strides */,
-               const std::array<ck::index_t, NDimSpatial + 3>& /* c_g_n_k_wos_lengths */,
-               const std::array<ck::index_t, NDimSpatial + 3>& /* c_g_n_k_wos_strides */,
-               const std::array<ck::index_t, NDimSpatial>& /* conv_filter_strides */,
-               const std::array<ck::index_t, NDimSpatial>& /* conv_filter_dilations */,
-               const std::array<ck::index_t, NDimSpatial>& /* input_left_pads, */,
-               const std::array<ck::index_t, NDimSpatial>& /* input_right_pads */,
-               //
-               const std::array<ck::index_t, 2> /* a_gemmm_gemmk_lengths */,
-               const std::array<ck::index_t, 2> /* a_gemmm_gemmk_strides */,
-               //
-               const T* /* p_a_img */,
-               T* /* p_a_mtx */,
-               // strategy
-               const CopierStrategy& /* copier_strategy */)
-    {
-    }
-};
-
 int main()
 {
     using DataType = float;
