@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2018-2023, Advanced Micro Devices, Inc. All rights reserved.
+
+#pragma once
+
+namespace ck {
+
+template <index_t MaxSize>
+struct MetaDataBuffer
+{
+    __host__ __device__ constexpr MetaDataBuffer() : buffer_{}, size_{0} {}
+
+    template <typename X, typename... Xs>
+    __host__ __device__ constexpr MetaDataBuffer(const X& x, const Xs&... xs) : buffer_{}, size_{0}
+    {
+        Push(x, xs...);
+    }
+
+    template <typename T>
+    __host__ __device__ constexpr void Push(const T& data)
+    {
+        constexpr index_t size = sizeof(data);
+
+        auto tmp = __builtin_bit_cast(ck::Array<std::byte, size>, data);
+
+        for(int i = 0; i < size; i++)
+        {
+            buffer_[size_] = tmp[i];
+
+            size_++;
+        }
+    }
+
+    template <typename X, typename... Xs>
+    __host__ __device__ constexpr void Push(const X& x, const Xs&... xs)
+    {
+        Push(x);
+        Push(xs...);
+    }
+
+    template <typename T>
+    __host__ __device__ constexpr T Pop(index_t& pos) const
+    {
+        constexpr index_t size = sizeof(T);
+
+        ck::Array<std::byte, size> tmp;
+
+        for(int i = 0; i < size; i++)
+        {
+            tmp[i] = buffer_[pos];
+
+            pos++;
+        }
+
+        auto data = __builtin_bit_cast(T, tmp);
+
+        return data;
+    }
+
+    //
+    ck::Array<std::byte, MaxSize> buffer_;
+    index_t size_ = 0;
+};
+
+} // namespace ck

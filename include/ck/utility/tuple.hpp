@@ -138,6 +138,22 @@ struct Tuple : detail::TupleImpl<typename arithmetic_sequence_gen<0, sizeof...(X
 
     // read access
     template <index_t I>
+    __host__ __device__ constexpr const auto& At() const
+    {
+        static_assert(I < base::Size(), "wrong! out of range");
+        return base::GetElementDataByKey(detail::TupleElementKey<I>{});
+    }
+
+    // write access
+    template <index_t I>
+    __host__ __device__ constexpr auto& At()
+    {
+        static_assert(I < base::Size(), "wrong! out of range");
+        return base::GetElementDataByKey(detail::TupleElementKey<I>{});
+    }
+
+    // read access
+    template <index_t I>
     __host__ __device__ constexpr const auto& At(Number<I>) const
     {
         static_assert(I < base::Size(), "wrong! out of range");

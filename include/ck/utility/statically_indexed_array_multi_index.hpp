@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2018-2022, Advanced Micro Devices, Inc. All rights reserved.
 
-#ifndef CK_STATICALLY_INDEXED_ARRAY_MULTI_INDEX_HPP
-#define CK_STATICALLY_INDEXED_ARRAY_MULTI_INDEX_HPP
+#pragma once
 
 #include "common_header.hpp"
 
@@ -147,16 +146,4 @@ __host__ __device__ constexpr auto max(const Tuple<Xs...>& x, const Y& y)
 
 } // namespace mathext
 
-template <typename... Xs>
-__host__ __device__ void print_multi_index(const Tuple<Xs...>& x)
-{
-    printf("{");
-    printf("MultiIndex, ");
-    printf("size %d,", index_t{sizeof...(Xs)});
-    static_for<0, sizeof...(Xs), 1>{}(
-        [&](auto i) { printf("%d ", static_cast<index_t>(x.At(i))); });
-    printf("}");
-}
-
 } // namespace ck
-#endif

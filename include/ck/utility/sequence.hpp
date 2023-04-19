@@ -62,9 +62,17 @@ struct Sequence
     }
 
     template <index_t I>
+    __host__ __device__ static constexpr auto At()
+    {
+        static_assert(I < mSize, "wrong! I too large");
+
+        return Number<At(I)>{};
+    }
+
+    template <index_t I>
     __host__ __device__ static constexpr auto Get(Number<I>)
     {
-        return At(Number<I>{});
+        return At(I);
     }
 
     template <typename I>

@@ -176,13 +176,19 @@ struct TensorAdaptor
         return GetHiddenDimensionLength(TopDimensionHiddenIds::At(idim_top));
     }
 
+    template <index_t IDimTop>
+    __host__ __device__ constexpr auto GetTopDimensionLength() const
+    {
+        return GetHiddenDimensionLength(TopDimensionHiddenIds::template At<IDimTop>());
+    }
+
+#if 0 // debug
     __host__ __device__ constexpr auto GetTopDimensionLengths() const
     {
         return generate_sequence_v2([&](auto i) { return GetTopDimensionLength(i); },
                                     Number<ndim_top_>{});
     }
 
-#if 0 // debug
     template <index_t I>
     __host__ __device__ constexpr index_t GetBottomDimensionLength(Number<I> idim) const
     {
@@ -238,8 +244,8 @@ struct TensorAdaptor
     {
         printf("{");
         printf("TensorAdaptor, ");
+        printf("transforms: ");
         static_for<0, ntransform_, 1>{}([&](auto i) {
-            printf("transforms: ");
             transforms_[i].Print();
             printf("LowerDimensionHiddenIds:");
             LowerDimensionHiddenIdss{}.At(i).Print();
@@ -251,7 +257,6 @@ struct TensorAdaptor
         BottomDimensionHiddenIds::Print();
         printf("TopDimensionHiddenIds:");
         TopDimensionHiddenIds::Print();
-
         printf("}");
     }
 

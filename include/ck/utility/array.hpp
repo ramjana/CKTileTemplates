@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2018-2022, Advanced Micro Devices, Inc. All rights reserved.
 
-#ifndef CK_ARRAY_HPP
-#define CK_ARRAY_HPP
+#pragma once
+
+#include <initializer_list>
 
 #include "functional2.hpp"
 #include "sequence.hpp"
@@ -17,22 +18,53 @@ struct Array
 
     TData mData[NSize];
 
+    __host__ __device__ constexpr Array() : mData{} {}
+
+    __host__ __device__ constexpr Array(std::initializer_list<TData> ilist)
+    {
+        constexpr index_t list_size = std::initializer_list<TData>{}.size();
+
+        static_assert(list_size <= NSize, "out of bound");
+
+        index_t i = 0;
+        for(const TData& val : ilist)
+        {
+            mData[i] = val;
+            ++i;
+        }
+
+        for(; i < NSize; ++i)
+        {
+            mData[i] = TData();
+        }
+    }
+
     __host__ __device__ static constexpr index_t Size() { return NSize; }
 
     __host__ __device__ constexpr const TData& At(index_t i) const { return mData[i]; }
 
     __host__ __device__ constexpr TData& At(index_t i) { return mData[i]; }
 
-    __host__ __device__ constexpr const TData& operator[](index_t i) const { return At(i); }
+    __host__ __device__ constexpr const TData& operator[](index_t i) const { return mData[i]; }
 
-    __host__ __device__ constexpr TData& operator()(index_t i) { return At(i); }
+    __host__ __device__ constexpr TData& operator[](index_t i) { return mData[i]; }
+
+    // TODO: remove
+    __host__ __device__ constexpr TData& operator()(index_t i) { return mData[i]; }
 
     template <typename T>
     __host__ __device__ constexpr auto operator=(const T& a)
     {
         static_assert(T::Size() == Size(), "wrong! size not the same");
 
+#if 0
         static_for<0, Size(), 1>{}([&](auto i) { operator()(i) = a[i]; });
+#else
+        for(index_t i = 0; i < NSize; ++i)
+        {
+            mData[i] = a[i];
+        }
+#endif
 
         return *this;
     }
@@ -63,4 +95,3 @@ __host__ __device__ constexpr auto make_array()
 }
 
 } // namespace ck
-#endif
