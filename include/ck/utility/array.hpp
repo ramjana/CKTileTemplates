@@ -41,6 +41,18 @@ struct Array
 
     __host__ __device__ static constexpr index_t Size() { return NSize; }
 
+    template <index_t I>
+    __host__ __device__ constexpr const TData& At() const
+    {
+        return mData[I];
+    }
+
+    template <index_t I>
+    __host__ __device__ constexpr TData& At()
+    {
+        return mData[I];
+    }
+
     __host__ __device__ constexpr const TData& At(index_t i) const { return mData[i]; }
 
     __host__ __device__ constexpr TData& At(index_t i) { return mData[i]; }
@@ -92,6 +104,12 @@ template <typename X>
 __host__ __device__ constexpr auto make_array()
 {
     return Array<X, 0>{};
+}
+
+template <typename T, index_t N, typename X>
+__host__ __device__ constexpr auto to_array(const X& x)
+{
+    return unpack([](auto... ys) { return Array<T, N>({ys...}); }, x);
 }
 
 } // namespace ck

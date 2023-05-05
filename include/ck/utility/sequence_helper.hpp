@@ -35,3 +35,37 @@ __host__ __device__ constexpr auto to_sequence(Tuple<Number<Is>...>)
 }
 
 } // namespace ck
+
+// Macro function
+// convert constexpr Array to Sequence
+#define TO_SEQUENCE(arr, n)                                                \
+    [&arr, &n] {                                                           \
+        static_assert(arr.Size() >= n, "wrong! out of bound");             \
+                                                                           \
+        static_assert(n < 6, "not implemented");                           \
+                                                                           \
+        if constexpr(n == 0)                                               \
+        {                                                                  \
+            return ck::Sequence<>();                                       \
+        }                                                                  \
+        else if constexpr(n == 1)                                          \
+        {                                                                  \
+            return ck::Sequence<arr[0]>();                                 \
+        }                                                                  \
+        else if constexpr(n == 2)                                          \
+        {                                                                  \
+            return ck::Sequence<arr[0], arr[1]>();                         \
+        }                                                                  \
+        else if constexpr(n == 3)                                          \
+        {                                                                  \
+            return ck::Sequence<arr[0], arr[1], arr[2]>();                 \
+        }                                                                  \
+        else if constexpr(n == 4)                                          \
+        {                                                                  \
+            return ck::Sequence<arr[0], arr[1], arr[2], arr[3]>();         \
+        }                                                                  \
+        else if constexpr(n == 5)                                          \
+        {                                                                  \
+            return ck::Sequence<arr[0], arr[1], arr[2], arr[3], arr[4]>(); \
+        }                                                                  \
+    }()

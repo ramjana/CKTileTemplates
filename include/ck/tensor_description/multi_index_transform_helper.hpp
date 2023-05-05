@@ -8,6 +8,16 @@
 
 namespace ck {
 
+enum struct IndexTransformEnum
+{
+    PassThrough,
+    Pad,
+    Embed,
+    Merge,
+    UnMerge,
+    Undefined,
+};
+
 template <typename LowLength>
 __host__ __device__ constexpr auto make_pass_through_transform(const LowLength& low_length)
 {

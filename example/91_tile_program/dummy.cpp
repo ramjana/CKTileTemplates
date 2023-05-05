@@ -10,109 +10,14 @@
 
 #include "tile_program.hpp"
 #include "ck/tile_program/meta_data_buffer.hpp"
-
-#if 1
-// convert constexpr array to sequence
-#define TO_SEQUENCE(arr, n)                                                \
-    [&arr, &n] {                                                           \
-        static_assert(arr.Size() >= n, "wrong! out of bound");             \
-                                                                           \
-        static_assert(n < 6, "not implemented");                           \
-                                                                           \
-        if constexpr(n == 0)                                               \
-        {                                                                  \
-            return ck::Sequence<>();                                       \
-        }                                                                  \
-        else if constexpr(n == 1)                                          \
-        {                                                                  \
-            return ck::Sequence<arr[0]>();                                 \
-        }                                                                  \
-        else if constexpr(n == 2)                                          \
-        {                                                                  \
-            return ck::Sequence<arr[0], arr[1]>();                         \
-        }                                                                  \
-        else if constexpr(n == 3)                                          \
-        {                                                                  \
-            return ck::Sequence<arr[0], arr[1], arr[2]>();                 \
-        }                                                                  \
-        else if constexpr(n == 4)                                          \
-        {                                                                  \
-            return ck::Sequence<arr[0], arr[1], arr[2], arr[3]>();         \
-        }                                                                  \
-        else if constexpr(n == 5)                                          \
-        {                                                                  \
-            return ck::Sequence<arr[0], arr[1], arr[2], arr[3], arr[4]>(); \
-        }                                                                  \
-    }()
-#endif
+#include "ck/tile_program/block_tensor_distribution.hpp"
 
 #if 0
-#define CONVERT_ENCODED_TRANSFORMS_TO_TRANSFORMS(encoded_transforms, num_transform)               \
-    [&encoded_transforms, &num_transform]() {                                                     \
-        return generate_tuple(                                                                    \
-            [&encoded_transforms](auto i) {                                                       \
-                constexpr auto name        = encoded_transforms[i].template At<0>();              \
-                constexpr auto meta_data   = encoded_transforms[i].template At<1>();              \
-                constexpr auto num_low_dim = encoded_transforms[i].template At<2>();              \
-                constexpr auto low_dims    = encoded_transforms[i].template At<3>();              \
-                constexpr auto num_up_dim  = encoded_transforms[i].template At<4>();              \
-                constexpr auto up_dims     = encoded_transforms[i].template At<5>();              \
-                                                                                                  \
-                constexpr auto low_dim_ids = TO_SEQUENCE(low_dims, num_low_dim);                  \
-                constexpr auto up_dim_ids  = TO_SEQUENCE(up_dims, num_up_dim);                    \
-                                                                                                  \
-                constexpr auto tran = [&name, &meta_data]() {                                     \
-                    if constexpr(name == IndexTransformEnum::PassThrough)                         \
-                    {                                                                             \
-                        index_t pos  = 0;                                                         \
-                        auto low_len = meta_data.template Pop<index_t>(pos);                      \
-                                                                                                  \
-                        return make_pass_through_transform(low_len);                              \
-                    }                                                                             \
-                    else if constexpr(name == IndexTransformEnum::Pad)                            \
-                    {                                                                             \
-                        index_t pos    = 0;                                                       \
-                        auto low_len   = meta_data.template Pop<index_t>(pos);                    \
-                        auto left_pad  = meta_data.template Pop<index_t>(pos);                    \
-                        auto right_pad = meta_data.template Pop<index_t>(pos);                    \
-                                                                                                  \
-                        return make_pad_transform(low_len, left_pad, right_pad);                  \
-                    }                                                                             \
-                    else if constexpr(name == IndexTransformEnum::Merge)                          \
-                    {                                                                             \
-                        index_t pos   = 0;                                                        \
-                        auto low_lens = meta_data.template Pop<Array<index_t, num_low_dim>>(pos); \
-                                                                                                  \
-                        return make_merge_transform(low_lens);                                    \
-                    }                                                                             \
-                }();                                                                              \
-                                                                                                  \
-                return make_tuple(tran, low_dim_ids, up_dim_ids);                                 \
-            },                                                                                    \
-            Number<num_transform>{});                                                             \
-    }()
-#endif
-
-enum IndexTransformEnum
-{
-    PassThrough,
-    Pad,
-    Embed,
-    Merge,
-    UnMerge,
-    Undefined,
-};
-
 __global__ void foo(int* p)
 {
     using namespace ck;
 
-    // constexpr auto I0 = Number<0>{};
-    // constexpr auto I1 = Number<1>{};
-    // constexpr auto I2 = Number<2>{};
-    // constexpr auto I3 = Number<3>{};
-
-    constexpr auto encode = []() {
+    constexpr auto encoded_adaptor = []() {
         constexpr index_t kMaxNumTransforms = 10;
         constexpr index_t kMaxMetaDataSize  = 128;
         constexpr index_t kMaxNumDims       = 10;
@@ -120,7 +25,7 @@ __global__ void foo(int* p)
         using Name     = IndexTransformEnum;
         using MetaData = MetaDataBuffer<kMaxMetaDataSize>;
         using NumDim   = index_t;
-        using Ids      = ck::Array<index_t, kMaxNumDims>;
+        using Ids      = Array<index_t, kMaxNumDims>;
 
         index_t N = 128;
         index_t C = 192;
@@ -141,8 +46,7 @@ __global__ void foo(int* p)
         index_t Ho = 17;
         index_t Wo = 17;
 
-        auto trans =
-            ck::Array<Tuple<Name, MetaData, NumDim, Ids, NumDim, Ids>, kMaxNumTransforms>{};
+        auto trans = Array<Tuple<Name, MetaData, NumDim, Ids, NumDim, Ids>, kMaxNumTransforms>{};
 
         index_t num_tran = 0;
 
@@ -199,124 +103,10 @@ __global__ void foo(int* p)
         auto top_dim_ids = Ids{10, 11};
 
         return make_tuple(
-            num_tran, trans, num_bottom_dim, bottom_dim_ids, num_top_dim, top_dim_ids);
+            trans, num_tran, bottom_dim_ids, num_bottom_dim, top_dim_ids, num_top_dim);
     }();
 
-    constexpr index_t num_transform    = encode.template At<0>();
-    constexpr auto encoded_transforms  = encode.template At<1>();
-    constexpr index_t num_bottom_dim   = encode.template At<2>();
-    constexpr auto encoded_bottom_dims = encode.template At<3>();
-    constexpr index_t num_top_dim      = encode.template At<4>();
-    constexpr auto encoded_top_dims    = encode.template At<5>();
-
-#if 0
-    constexpr auto transforms =
-        CONVERT_ENCODED_TRANSFORMS_TO_TRANSFORMS(encoded_transforms, num_transform);
-
-    //      transforms.foo();
-
-    if constexpr(encoded_transforms[0][I0] == IndexTransformEnum::PassThrough)
-    {
-        p[0] = transforms[I0][I0].GetUpperLengths()[I0];
-    }
-
-    if constexpr(encoded_transforms[1][I0] == IndexTransformEnum::Pad)
-    {
-        p[1] = transforms[I1][I0].GetUpperLengths()[I0];
-    }
-
-    if constexpr(encoded_transforms[2][I0] == IndexTransformEnum::Merge)
-    {
-        p[2] = transforms[I2][I0].GetUpperLengths()[I0];
-    }
-
-#endif
-
-    constexpr auto adaptor = [&encoded_transforms,
-                              &num_transform,
-                              &encoded_bottom_dims,
-                              &num_bottom_dim,
-                              &encoded_top_dims,
-                              &num_top_dim]() {
-        constexpr auto trans = [&num_transform,
-                                &encoded_transforms,
-                                &encoded_bottom_dims,
-                                &num_bottom_dim,
-                                &encoded_top_dims,
-                                &num_top_dim]() {
-            return generate_tuple(
-                [&encoded_transforms](auto i) constexpr {
-                    constexpr auto name        = encoded_transforms[i].template At<0>();
-                    constexpr auto meta_data   = encoded_transforms[i].template At<1>();
-                    constexpr auto num_low_dim = encoded_transforms[i].template At<2>();
-                    constexpr auto num_up_dim  = encoded_transforms[i].template At<4>();
-
-                    if constexpr(name == IndexTransformEnum::PassThrough)
-                    {
-                        index_t pos  = 0;
-                        auto low_len = meta_data.template Pop<index_t>(pos);
-
-                        return make_pass_through_transform(low_len);
-                    }
-                    else if constexpr(name == IndexTransformEnum::Pad)
-                    {
-                        index_t pos    = 0;
-                        auto low_len   = meta_data.template Pop<index_t>(pos);
-                        auto left_pad  = meta_data.template Pop<index_t>(pos);
-                        auto right_pad = meta_data.template Pop<index_t>(pos);
-
-                        return make_pad_transform(low_len, left_pad, right_pad);
-                    }
-                    else if constexpr(name == IndexTransformEnum::Embed)
-                    {
-                        index_t pos       = 0;
-                        auto up_lens      = meta_data.template Pop<Array<index_t, num_up_dim>>(pos);
-                        auto coefficients = meta_data.template Pop<Array<index_t, num_up_dim>>(pos);
-
-                        return make_embed_transform(up_lens, coefficients);
-                    }
-                    else if constexpr(name == IndexTransformEnum::Merge)
-                    {
-                        index_t pos   = 0;
-                        auto low_lens = meta_data.template Pop<Array<index_t, num_low_dim>>(pos);
-
-                        return make_merge_transform(low_lens);
-                    }
-                },
-                Number<num_transform>{});
-        }();
-
-        constexpr auto low_dim_idss = [&num_transform, &encoded_transforms]() {
-            return generate_tuple(
-                [&encoded_transforms](auto i) {
-                    constexpr auto num_low_dim = encoded_transforms[i].template At<2>();
-                    constexpr auto low_dims    = encoded_transforms[i].template At<3>();
-
-                    return TO_SEQUENCE(low_dims, num_low_dim);
-                },
-                Number<num_transform>());
-        }();
-
-        constexpr auto up_dim_idss = [&num_transform, &encoded_transforms]() {
-            return generate_tuple(
-                [&encoded_transforms](auto i) {
-                    constexpr auto num_up_dim = encoded_transforms[i].template At<4>();
-                    constexpr auto up_dims    = encoded_transforms[i].template At<5>();
-
-                    return TO_SEQUENCE(up_dims, num_up_dim);
-                },
-                Number<num_transform>());
-        }();
-
-        constexpr auto bottom_dim_ids = TO_SEQUENCE(encoded_bottom_dims, num_bottom_dim);
-        constexpr auto top_dim_ids    = TO_SEQUENCE(encoded_top_dims, num_top_dim);
-
-        return TensorAdaptor<remove_cvref_t<decltype(trans)>,
-                             remove_cvref_t<decltype(low_dim_idss)>,
-                             remove_cvref_t<decltype(up_dim_idss)>,
-                             remove_cvref_t<decltype(bottom_dim_ids)>,
-                             remove_cvref_t<decltype(top_dim_ids)>>{trans};
-    }();
+    constexpr auto adaptor = CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_adaptor);
 
 #if 0
     adaptor.foo();
@@ -328,6 +118,22 @@ __global__ void foo(int* p)
     p[5] = adaptor.template GetTopDimensionLength<1>();
     p[6] = adaptor.GetElementSize();
 }
+#else
+__global__ void foo(int* /*p*/)
+{
+    using namespace ck;
+
+    ck::tile_program::block::make_block_distribution(
+        make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+        Sequence<0>{},
+        Sequence<1>{},
+        Sequence<0, 1>{},
+        Sequence<2, 0>{},
+        Sequence<0, 1>{},
+        Sequence<2, 1>{},
+        Sequence<0, 1>{});
+}
+#endif
 
 int main()
 {

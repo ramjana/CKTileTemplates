@@ -346,7 +346,7 @@ struct Im2Col
 
         const auto iGemmM = ps.read_first_lane(i_gemmm_gemmk[I0]) * kMPerTile;
 
-#if 0
+#if 1
         auto window_src = make_tensor_block_window(src_gemmm_gemmk,
                                                    Sequence<kMPerTile, kKPerTile>{},
                                                    make_tuple(iGemmM, 0),
@@ -362,9 +362,9 @@ struct Im2Col
         do
         {
             // this is distributed tensor
-            const auto src_vgpr_block = load(window_src, src_window_load_strategy);
+            const auto src_vgpr_block = load(window_src);
 
-            store(src_vgpr_block, window_dst, dst_window_store_strategy);
+            store(src_vgpr_block, window_dst);
 
             move_window(window_src, make_tuple(0, kKPerTile));
             move_window(window_dst, make_tuple(0, kKPerTile));
