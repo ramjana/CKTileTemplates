@@ -208,10 +208,11 @@ container_reverse_inclusive_scan(const Array<TData, NSize>& x, Reduce f, TData i
     return y;
 }
 
-template <typename TData, index_t NSize, typename Reduce>
+template <typename TData, index_t NSize, typename Reduce, typename Init>
 __host__ __device__ constexpr auto
-container_reverse_exclusive_scan(const Array<TData, NSize>& x, Reduce f, TData init)
+container_reverse_exclusive_scan(const Array<TData, NSize>& x, Reduce f, Init init)
 {
+#if 0
     Array<TData, NSize> y;
 
     TData r = init;
@@ -224,6 +225,21 @@ container_reverse_exclusive_scan(const Array<TData, NSize>& x, Reduce f, TData i
     y(Number<0>{}) = r;
 
     return y;
+#else
+    Array<TData, NSize> y;
+
+    TData r = init;
+
+    for(index_t i = NSize - 1; i > 0; --i)
+    {
+        y(i) = r;
+        r    = f(r, x[i]);
+    }
+
+    y(0) = r;
+
+    return y;
+#endif
 }
 
 template <index_t... Is, typename Reduce, index_t Init>

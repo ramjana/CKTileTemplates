@@ -125,9 +125,6 @@
 // pointer of scalar
 #define CK_EXPERIMENTAL_USE_MEMCPY_FOR_VECTOR_ACCESS 0
 
-// experimental feature: use __builtin_memcpy instead of union to do bit_cast
-#define CK_EXPERIMENTAL_USE_MEMCPY_FOR_BIT_CAST 1
-
 // experimental feature: optimize for inter-wave scheduling policy
 #define CK_EXPERIMENTAL_INTER_WAVE_SCHEDULING 1
 #define CK_EXPERIMENTAL_INTER_WAVE_SCHEDULING_MAC_CLUSTERS 1

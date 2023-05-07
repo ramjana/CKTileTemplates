@@ -7,6 +7,6 @@
 #ifndef NDEBUG
 #define STATIC_ASSERT(...) static_assert(__VA_ARGS__)
 #else
-#define STATIC_ASSERT(...) // static_assert(true, "")
-#endif                     // NDEBUG
-#endif                     // STATIC_ASSERT
+#define STATIC_ASSERT(...)
+#endif
+#endif

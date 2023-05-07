@@ -10,12 +10,12 @@ namespace ck {
 
 enum struct IndexTransformEnum
 {
+    Undefined,
     PassThrough,
     Pad,
     Embed,
     Merge,
     UnMerge,
-    Undefined,
 };
 
 template <typename LowLength>

@@ -21,7 +21,7 @@ struct MetaDataBuffer
     {
         constexpr index_t size = sizeof(data);
 
-        auto tmp = __builtin_bit_cast(ck::Array<std::byte, size>, data);
+        auto tmp = bit_cast<Array<std::byte, size>>(data);
 
         for(int i = 0; i < size; i++)
         {
@@ -43,7 +43,7 @@ struct MetaDataBuffer
     {
         constexpr index_t size = sizeof(T);
 
-        ck::Array<std::byte, size> tmp;
+        Array<std::byte, size> tmp;
 
         for(int i = 0; i < size; i++)
         {
@@ -52,13 +52,13 @@ struct MetaDataBuffer
             pos++;
         }
 
-        auto data = __builtin_bit_cast(T, tmp);
+        auto data = bit_cast<T>(tmp);
 
         return data;
     }
 
     //
-    ck::Array<std::byte, MaxSize> buffer_;
+    Array<std::byte, MaxSize> buffer_;
     index_t size_ = 0;
 };
 

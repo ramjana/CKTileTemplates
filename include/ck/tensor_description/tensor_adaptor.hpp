@@ -643,6 +643,13 @@ __host__ __device__ constexpr auto chain_tensor_adaptors(const X& x, const Xs&..
                     constexpr auto num_low_dim = encoded_transforms[i].template At<2>();          \
                     constexpr auto num_up_dim  = encoded_transforms[i].template At<4>();          \
                                                                                                   \
+                    STATIC_ASSERT(name == IndexTransformEnum::PassThrough ||                      \
+                                      name == IndexTransformEnum::Pad ||                          \
+                                      name == IndexTransformEnum::Embed ||                        \
+                                      name == IndexTransformEnum::Merge ||                        \
+                                      name == IndexTransformEnum::UnMerge,                        \
+                                  "");                                                            \
+                                                                                                  \
                     if constexpr(name == IndexTransformEnum::PassThrough)                         \
                     {                                                                             \
                         index_t pos  = 0;                                                         \
@@ -674,6 +681,13 @@ __host__ __device__ constexpr auto chain_tensor_adaptors(const X& x, const Xs&..
                         auto low_lens = meta_data.template Pop<Array<index_t, num_low_dim>>(pos); \
                                                                                                   \
                         return make_merge_transform(low_lens);                                    \
+                    }                                                                             \
+                    else if constexpr(name == IndexTransformEnum::UnMerge)                        \
+                    {                                                                             \
+                        index_t pos  = 0;                                                         \
+                        auto up_lens = meta_data.template Pop<Array<index_t, num_up_dim>>(pos);   \
+                                                                                                  \
+                        return make_unmerge_transform(up_lens);                                   \
                     }                                                                             \
                 },                                                                                \
                 Number<num_transform>{});                                                         \
@@ -709,4 +723,4 @@ __host__ __device__ constexpr auto chain_tensor_adaptors(const X& x, const Xs&..
                              remove_cvref_t<decltype(up_dim_idss)>,                               \
                              remove_cvref_t<decltype(bottom_dim_ids)>,                            \
                              remove_cvref_t<decltype(top_dim_ids)>>{trans};                       \
-    }()
+    }()\

@@ -109,7 +109,13 @@ __host__ __device__ constexpr auto make_array()
 template <typename T, index_t N, typename X>
 __host__ __device__ constexpr auto to_array(const X& x)
 {
-    return unpack([](auto... ys) { return Array<T, N>({ys...}); }, x);
+    STATIC_ASSERT(N <= X::Size(), "");
+
+    Array<T, N> arr;
+
+    static_for<0, N, 1>{}([&x, &arr](auto i) { arr(i) = x[i]; });
+
+    return arr;
 }
 
 } // namespace ck
