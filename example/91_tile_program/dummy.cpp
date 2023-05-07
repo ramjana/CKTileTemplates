@@ -123,8 +123,7 @@ __global__ void foo(int* /*p*/)
 {
     using namespace ck;
 
-#if 1
-    ck::tile_program::block::make_block_distribution(
+    constexpr auto hbm_block_dstr = ck::tile_program::block::make_block_distribution(
         make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
         Sequence<0>{},
         Sequence<1>{},
@@ -133,7 +132,19 @@ __global__ void foo(int* /*p*/)
         Sequence<0, 1>{},
         Sequence<0, 1>{},
         Sequence<0, 1>{});
-#endif
+
+    constexpr auto lds_block_dstr = ck::tile_program::block::make_block_distribution(
+        make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+        Sequence<0>{},
+        Sequence<1>{},
+        Sequence<0, 1>{},
+        Sequence<2, 0>{},
+        Sequence<0, 1>{},
+        Sequence<0, 1>{},
+        Sequence<0, 1>{});
+
+    hbm_block_dstr.Print();
+    lds_block_dstr.Print();
 }
 #endif
 

@@ -15,17 +15,25 @@ namespace block {
 template <typename WidLidYs2XsAdaptor, typename Ys2DidAdaptor>
 struct BlockTensorDistribution
 {
-    WidLidYs2XsAdaptor wid_lid_ys_to_xs;
-    Ys2DidAdaptor ys_to_did;
+    WidLidYs2XsAdaptor wid_lid_ys_to_xs_;
+    Ys2DidAdaptor ys_to_did_;
+
+    __host__ __device__ void Print() const
+    {
+        printf("{");
+        printf("BlockTensorDistribution, ");
+        wid_lid_ys_to_xs_.Print();
+        ys_to_did_.Print();
+        printf("}");
+    }
 };
 
 namespace detail {
 
-// template <index_t NDimMax>
+template <index_t NDimMax>
 __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t iend)
 {
-    // FIXME
-    Array<index_t, 10> arr{0};
+    Array<index_t, NDimMax> arr{0};
 
     for(index_t i = 0; i < iend - ibegin; ++i)
     {
@@ -37,7 +45,6 @@ __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t
 
 } // namespace detail
 
-#if 1
 template <typename... XsUnMergeUpLengthss,
           index_t... DimsWid2XsMajor,
           index_t... DimsWid2XsMinor,
@@ -104,13 +111,13 @@ __device__ constexpr auto make_block_distribution(
 
                 constexpr index_t ndim_x_minor = x_minor_lengths.Size();
 
-                trans[num_tran++] = {
-                    IndexTransformEnum::UnMerge,
-                    MetaData{to_array<index_t, ndim_x_minor>(x_minor_lengths)},
-                    NumDim{1},
-                    Dims{idim_x_major},
-                    NumDim{ndim_x_minor},
-                    detail::make_sequential_index(hidden_dim_cnt, hidden_dim_cnt + ndim_x_minor)};
+                trans[num_tran++] = {IndexTransformEnum::UnMerge,
+                                     MetaData{to_array<index_t, ndim_x_minor>(x_minor_lengths)},
+                                     NumDim{1},
+                                     Dims{idim_x_major},
+                                     NumDim{ndim_x_minor},
+                                     detail::make_sequential_index<kMaxNumDim>(
+                                         hidden_dim_cnt, hidden_dim_cnt + ndim_x_minor)};
 
                 for(index_t i = 0; i < ndim_x_minor; ++i)
                 {
@@ -178,7 +185,7 @@ __device__ constexpr auto make_block_distribution(
         // bottom dims [x0, x1, x2, ...]
         constexpr index_t ndim_bottom = ndim_x_major;
 
-        constexpr auto bottom_dim_ids = detail::make_sequential_index(0, ndim_bottom);
+        constexpr auto bottom_dim_ids = detail::make_sequential_index<kMaxNumDim>(0, ndim_bottom);
 
         // top dims [wid, lid, y0, y1, ...]
         constexpr auto dims_ys_to_xs_major = Sequence<DimsYs2XsMajor...>{};
@@ -233,16 +240,10 @@ __device__ constexpr auto make_block_distribution(
     constexpr auto ys_to_did_adaptor =
         CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ys_to_did_adaptor);
 
-#if 1
-    wid_lid_ys_to_xs_adaptor.Print();
-    ys_to_did_adaptor.Print();
-#endif
-
     return BlockTensorDistribution<remove_cvref_t<decltype(wid_lid_ys_to_xs_adaptor)>,
                                    remove_cvref_t<decltype(ys_to_did_adaptor)>>{
         wid_lid_ys_to_xs_adaptor, ys_to_did_adaptor};
 }
-#endif
 
 } // namespace block
 } // namespace tile_program
