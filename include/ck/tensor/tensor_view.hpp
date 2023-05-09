@@ -5,24 +5,31 @@
 
 namespace ck {
 
-template <typename Buffer, typename TensorDesc>
+template <typename Buffer_, typename TensorDesc_>
 struct TensorView
 {
-    using BufferType       = Buffer;
-    using DataType         = typename remove_reference_t<Buffer>::type;
-    using TensorDescriptor = remove_cvref_t<TensorDesc>;
+    using Buffer     = remove_reference_t<Buffer_>;
+    using DataType   = typename Buffer::type;
+    using TensorDesc = remove_cvref_t<TensorDesc_>;
 
     __host__ __device__ constexpr TensorView() = delete;
 
-    __host__ __device__ constexpr TensorView(Buffer& buffer, TensorDescriptor desc)
+    __host__ __device__ constexpr TensorView(Buffer& buffer, TensorDesc desc)
         : buf_{buffer}, desc_{desc}
     {
+    }
+
+    __host__ __device__ constexpr auto& GetTensorDescriptor() const { return desc_; }
+
+    __host__ __device__ static constexpr index_t GetNumOfDimension()
+    {
+        return TensorDesc::GetNumOfTopDimension();
     }
 
     // member
     Buffer& buf_;
 
-    TensorDescriptor desc_;
+    TensorDesc desc_;
 };
 
 template <typename Buffer, typename TensorDesc>
@@ -67,7 +74,7 @@ __host__ __device__ constexpr auto transform_tensor_view(const OldTensorView& ol
                                                       NewLowerDimensionOldVisibleIdss{},
                                                       NewUpperDimensionNewVisibleIdss{});
 
-    return TensorView<typename OldTensorView::BufferType, remove_cvref_t<decltype(new_desc)>>{
+    return TensorView<typename OldTensorView::Buffer, remove_cvref_t<decltype(new_desc)>>{
         old_tensor_view.buf_, new_desc};
 }
 

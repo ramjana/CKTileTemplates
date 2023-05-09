@@ -5,16 +5,12 @@
 #include <type_traits>
 #include <cstring>
 
-#include "tile_program.hpp"
-
 #include "ck/utility/common_header.hpp"
 #include "ck/utility/thread_group.hpp"
 
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/cluster_descriptor.hpp"
 #include "ck/tensor/tensor_view.hpp"
-
-#include "ck/tile_program/meta_data_buffer.hpp"
 
 #include "ck/tensor_operation/gpu/block/thread_group_tensor_slice_transfer_v4r1.hpp"
 #include "ck/tensor_operation/gpu/thread/threadwise_tensor_slice_transfer_v3r1.hpp"
@@ -27,6 +23,11 @@
 #include "ck/host_utility/device_prop.hpp"
 
 #include "ck/library/utility/device_memory.hpp"
+
+#include "tile_program.hpp"
+#include "ck/tile_program/meta_data_buffer.hpp"
+#include "ck/tile_program/block_tensor_distribution.hpp"
+#include "ck/tile_program/block_tensor_window.hpp"
 
 namespace ck {
 
@@ -329,12 +330,12 @@ struct Im2Col
                                    make_tuple(a_gemmm_gemmk_lengths[0], a_gemmm_gemmk_lengths[1]),
                                    make_tuple(a_gemmm_gemmk_strides[0], a_gemmm_gemmk_strides[1]));
 
-        const auto num_gemmm = a_gemmm_gemmk_lengths[0];
-        const auto numGemmK  = a_gemmm_gemmk_lengths[1];
+        const auto numGemmM = a_gemmm_gemmk_lengths[0];
+        const auto numGemmK = a_gemmm_gemmk_lengths[1];
 
         const auto id_block = ps.get_block_1d_id();
 
-        const auto num_tile_m = ps.read_first_lane(num_gemmm / kMPerTile);
+        const auto num_tile_m = ps.read_first_lane(numGemmM / kMPerTile);
 
 #if 0
         const auto block2tile = ps(make_cluster_descriptor(make_tuple(num_tile_m)));
@@ -346,13 +347,13 @@ struct Im2Col
 
         const auto iGemmM = ps.read_first_lane(i_gemmm_gemmk[I0]) * kMPerTile;
 
-#if 1
-        auto window_src = make_tensor_block_window(src_gemmm_gemmk,
+#if 0
+        auto window_src = make_block_tensor_window(src_gemmm_gemmk,
                                                    Sequence<kMPerTile, kKPerTile>{},
                                                    make_tuple(iGemmM, 0),
                                                    src_window_map_strategy);
 
-        auto window_dst = make_tensor_block_window(dst_gemmm_gemmk,
+        auto window_dst = make_block_tensor_window(dst_gemmm_gemmk,
                                                    Sequence<kMPerTile, kKPerTile>{},
                                                    make_tuple(iGemmM, 0),
                                                    dst_window_map_strategy);
@@ -371,8 +372,33 @@ struct Im2Col
 
             iGemmK += kKPerTile;
         } while(iGemmK < numGemmk - kKPerTile);
-#else
-        auto copier           = ps.make_copier(src_gemmm_gemmk,
+#elif 1
+        (void)copier_strategy;
+        (void)dst_gemmm_gemmk;
+
+        constexpr auto src_block_dstr = ck::tile_program::block::make_block_tensor_distribution(
+            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+            Sequence<0>{},
+            Sequence<1>{},
+            Sequence<0, 1>{},
+            Sequence<2, 0>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{});
+
+        auto window_src =
+            make_block_tensor_window(src_gemmm_gemmk, make_tuple(iGemmM, 0), src_block_dstr);
+
+        ck::index_t iGemmK = 0;
+
+        do
+        {
+            move_block_tensor_window(window_src, MultiIndex<2>{0, kKPerTile});
+
+            iGemmK += kKPerTile;
+        } while(iGemmK < numGemmK - kKPerTile);
+#elif 0
+        auto copier = ps.make_copier(src_gemmm_gemmk,
                                      make_tuple(iGemmM, 0),
                                      dst_gemmm_gemmk,
                                      make_tuple(iGemmM, 0),
@@ -465,7 +491,7 @@ int main()
     DeviceMem in_mtx(sizeof(DataType) * G * N * Ho * Wo * C * Y * X);
 
     launch(MyProgramServer<256>{},
-           Dummy<2, ck::tensor_layout::convolution::GNHWC, float, 128, 16>{},
+           Im2Col<2, ck::tensor_layout::convolution::GNHWC, float, 128, 32>{},
            1,
            1,
            in_lengths,

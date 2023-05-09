@@ -123,7 +123,7 @@ __global__ void foo(int* /*p*/)
 {
     using namespace ck;
 
-    constexpr auto hbm_block_dstr = ck::tile_program::block::make_block_distribution(
+    constexpr auto hbm_block_dstr = ck::tile_program::block::make_block_tensor_distribution(
         make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
         Sequence<0>{},
         Sequence<1>{},
@@ -133,7 +133,7 @@ __global__ void foo(int* /*p*/)
         Sequence<0, 1>{},
         Sequence<0, 1>{});
 
-    constexpr auto lds_block_dstr = ck::tile_program::block::make_block_distribution(
+    constexpr auto lds_block_dstr = ck::tile_program::block::make_block_tensor_distribution(
         make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
         Sequence<0>{},
         Sequence<1>{},

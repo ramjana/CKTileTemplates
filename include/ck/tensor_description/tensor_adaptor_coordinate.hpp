@@ -82,13 +82,22 @@ __host__ __device__ constexpr auto make_tensor_adaptor_coordinate(const Adaptor&
                                    remove_cvref_t<decltype(top_dim_ids)>>{idx_hidden};
 }
 
-template <bool JudgeDoTransforms = true, typename Adaptor, typename AdaptorCoord, typename TopIndex>
-__host__ __device__ constexpr void
-move_tensor_adaptor_coordinate(const Adaptor& adaptor, AdaptorCoord& coord, const TopIndex& step)
+template <bool JudgeDoTransforms = true,
+          typename Adaptor,
+          typename AdaptorCoord,
+          typename TopIndex,
+          typename BottomIndex>
+__host__ __device__ constexpr void move_tensor_adaptor_coordinate(const Adaptor& adaptor,
+                                                                  AdaptorCoord& coord,
+                                                                  const TopIndex& idx_diff_top,
+                                                                  BottomIndex& idx_diff_bottom)
 {
     constexpr index_t ndim_hidden = Adaptor::GetNumOfHiddenDimension();
     constexpr index_t ndim_top    = Adaptor::GetNumOfTopDimension();
-    constexpr index_t ntransform  = Adaptor::GetNumOfTransform();
+    //  constexpr index_t ndim_bottom = Adaptor::GetNumOfBottomDimension();
+    constexpr index_t ntransform = Adaptor::GetNumOfTransform();
+
+    //  STATIC_ASSERT(TopIndex::Size() == ndim_top && BottomIndex::Size() == ndim_bottom, "");
 
     // judge whether calculation of lower diff is needed for each transform
     // use index_t for boolean type
@@ -101,7 +110,8 @@ move_tensor_adaptor_coordinate(const Adaptor& adaptor, AdaptorCoord& coord, cons
         // decide do_transform by checkout non-zero index diff components
         MultiIndex<ndim_top> non_zero_diff_pick_top;
 
-        static_for<0, ndim_top, 1>{}([&](auto i) { non_zero_diff_pick_top(i) = (step[i] != 0); });
+        static_for<0, ndim_top, 1>{}(
+            [&](auto i) { non_zero_diff_pick_top(i) = (idx_diff_top[i] != 0); });
 
         set_container_subset(
             is_non_zero_diff, Adaptor::GetTopDimensionHiddenIds(), non_zero_diff_pick_top);
@@ -138,7 +148,7 @@ move_tensor_adaptor_coordinate(const Adaptor& adaptor, AdaptorCoord& coord, cons
     auto idx_diff_hidden = make_zero_multi_index<ndim_hidden>();
 
     // initialize top index diff
-    set_container_subset(idx_diff_hidden, Adaptor::GetTopDimensionHiddenIds(), step);
+    set_container_subset(idx_diff_hidden, Adaptor::GetTopDimensionHiddenIds(), idx_diff_top);
 
     // this is what needs to be updated
     auto& idx_hidden = coord.GetHiddenIndex();
@@ -147,7 +157,7 @@ move_tensor_adaptor_coordinate(const Adaptor& adaptor, AdaptorCoord& coord, cons
     auto idx_hidden_pick_top =
         get_container_subset(idx_hidden, Adaptor::GetTopDimensionHiddenIds());
 
-    idx_hidden_pick_top += step;
+    idx_hidden_pick_top += idx_diff_top;
 
     set_container_subset(idx_hidden, Adaptor::GetTopDimensionHiddenIds(), idx_hidden_pick_top);
 
@@ -171,6 +181,21 @@ move_tensor_adaptor_coordinate(const Adaptor& adaptor, AdaptorCoord& coord, cons
             set_container_subset(idx_hidden, dims_low, idx_low);
         }
     });
+
+    // set bottom index diff
+    idx_diff_bottom = get_container_subset(idx_diff_hidden, Adaptor::GetBottomDimensionHiddenIds());
+}
+
+template <bool JudgeDoTransforms = true, typename Adaptor, typename AdaptorCoord, typename TopIndex>
+__host__ __device__ constexpr void move_tensor_adaptor_coordinate(const Adaptor& adaptor,
+                                                                  AdaptorCoord& coord,
+                                                                  const TopIndex& idx_diff_top)
+{
+    constexpr index_t ndim_bottom = Adaptor::GetNumOfBottomDimension();
+
+    MultiIndex<ndim_bottom> tmp;
+
+    move_tensor_adaptor_coordinate<JudgeDoTransforms>(adaptor, coord, idx_diff_top, tmp);
 }
 
 template <typename Adaptor, typename AdaptorCoord>
