@@ -375,6 +375,7 @@ struct Im2Col
 #elif 1
         (void)copier_strategy;
         (void)dst_gemmm_gemmk;
+        (void)numGemmK;
 
         constexpr auto src_block_dstr = ck::tile_program::block::make_block_tensor_distribution(
             make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
@@ -387,16 +388,16 @@ struct Im2Col
             Sequence<0, 1>{});
 
         auto window_src =
-            make_block_tensor_window(src_gemmm_gemmk, make_tuple(iGemmM, 0), src_block_dstr);
+            make_block_tensor_window(src_gemmm_gemmk, {iGemmM, 0}, src_block_dstr);
 
-        ck::index_t iGemmK = 0;
+      //index_t iGemmK = 0;
 
-        do
-        {
-            move_block_tensor_window(window_src, MultiIndex<2>{0, kKPerTile});
+      //do
+      //{
+      //    move_block_tensor_window(window_src, {0, kKPerTile});
 
-            iGemmK += kKPerTile;
-        } while(iGemmK < numGemmK - kKPerTile);
+      //    iGemmK += kKPerTile;
+      //} while(iGemmK < numGemmK - kKPerTile);
 #elif 0
         auto copier = ps.make_copier(src_gemmm_gemmk,
                                      make_tuple(iGemmM, 0),
@@ -405,7 +406,7 @@ struct Im2Col
                                      make_tuple(kMPerTile, kKPerTile),
                                      copier_strategy);
 
-        ck::index_t iGemmK = 0;
+        index_t iGemmK = 0;
 
         do
         {

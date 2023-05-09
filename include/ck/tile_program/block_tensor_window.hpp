@@ -23,29 +23,39 @@ struct BlockTensorWindow
     static constexpr index_t NDimWindowAdaptorTop = WindowAdaptor::GetNumOfTopDimension();
     static constexpr index_t NDimBottomTensor     = BottomTensorDesc::GetNumOfDimension();
 
-    using WindowAdaptorCoord = decltype(
-        make_tensor_adaptor_coordinate(WindowAdaptor{}, MultiIndex<NDimWindowAdaptorTop>{}));
+    using AdaptorTopIndex   = Array<index_t, NDimWindowAdaptorTop>;
+    using BottomTensorIndex = Array<index_t, NDimBottomTensor>;
+
+    using WindowAdaptorCoord =
+        decltype(make_tensor_adaptor_coordinate(WindowAdaptor{}, AdaptorTopIndex{}));
 
     using BottomTensorCoord =
-        decltype(make_tensor_coordinate(BottomTensorDesc{}, MultiIndex<NDimBottomTensor>{}));
+        decltype(make_tensor_coordinate(BottomTensorDesc{}, BottomTensorIndex{}));
 
     __device__ constexpr BlockTensorWindow(const BottomTensorView& bottom_tensor_view,
-                                           const MultiIndex<NDimBottomTensor>& block_window_origin,
+                                           const BottomTensorIndex& block_window_origin,
                                            const BlockTensorDstr& block_tensor_distribution)
         : window_adaptor_{block_tensor_distribution.GetWidLidYs2XsAdaptor()},
           bottom_tensor_view_{bottom_tensor_view},
           window_adaptor_thread_coord_{make_tensor_adaptor_coordinate(
               window_adaptor_, block_tensor_distribution.CalculateThreadWidLidYsOrigin())},
-          bottom_tensor_thread_coord_{make_tensor_coordinate(
-              bottom_tensor_view_.GetTensorDescriptor(),
-              block_window_origin + window_adaptor_thread_coord_.GetBottomIndex())}
+          bottom_tensor_thread_coord_{}
     {
+          BottomTensorIndex bottom_tensor_thread_origin_idx;
+
+          for(index_t i = 0; i < NDimBottomTensor; ++i)
+          {
+              bottom_tensor_thread_origin_idx(i) = block_window_origin[i] + window_adaptor_thread_coord_.GetBottomIndex()[i];
+          }
+
+          bottom_tensor_thread_coord_ = make_tensor_coordinate(
+              bottom_tensor_view_.GetTensorDescriptor(),
+              bottom_tensor_thread_origin_idx);
     }
 
     // move thread's window adaptor coordiante
     // e.g. [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
-    __device__ void
-    MoveWindowAdaptorThreadCoordinate(const MultiIndex<NDimWindowAdaptorTop>& idx_diff_adaptor)
+    __device__ void MoveWindowAdaptorThreadCoordinate(const AdaptorTopIndex& idx_diff_adaptor)
     {
         move_tensor_adaptor_coordinate(
             window_adaptor_, window_adaptor_thread_coord_, idx_diff_adaptor);
@@ -53,8 +63,7 @@ struct BlockTensorWindow
 
     // move thread's botom tensor coordiante
     // [x0', x1', ... ] ==> [offset]
-    __device__ void
-    MoveBottomTensorThreadCoordinate(const MultiIndex<NDimBottomTensor>& idx_diff_tensor)
+    __device__ void MoveBottomTensorThreadCoordinate(const BottomTensorIndex& idx_diff_tensor)
     {
         move_tensor_coordinate(bottom_tensor_view_.GetTensorDescriptor(),
                                bottom_tensor_thread_coord_,
@@ -63,8 +72,8 @@ struct BlockTensorWindow
 
     // move thread's window adaptor coordinate and bottom tensor coordinate
     // e.g. [wid, lid, y0, y1, ...] ==> [x0, x1, ...] ==> [x0', x1', ...] ==> [offset]
-    __device__ void MoveWindowAdaptorAndBottomTensorThreadCoordinate(
-        const MultiIndex<NDimWindowAdaptorTop>& idx_diff_adaptor_top)
+    __device__ void
+    MoveWindowAdaptorAndBottomTensorThreadCoordinate(const AdaptorTopIndex& idx_diff_adaptor_top)
     {
         Array<index_t, NDimBottomTensor> idx_diff_adaptor_bottom;
 
@@ -93,14 +102,14 @@ struct BlockTensorWindow
     BottomTensorCoord bottom_tensor_thread_coord_;
 };
 
-template <typename Tensor_, typename BlockTensorDistribution_>
+template <typename TensorView_, typename BlockTensorDistribution_>
 __device__ constexpr auto
-make_block_tensor_window(const Tensor_& tensor,
-                         const MultiIndex<Tensor_::GetNumOfDimension()>& origin,
+make_block_tensor_window(const TensorView_& tensor_view,
+                         const Array<index_t, TensorView_::GetNumOfDimension()>& origin,
                          const BlockTensorDistribution_& block_tensor_distribution)
 {
-    return BlockTensorWindow<remove_cvref_t<Tensor_>, remove_cvref_t<BlockTensorDistribution_>>{
-        tensor, origin, block_tensor_distribution};
+    return BlockTensorWindow<remove_cvref_t<TensorView_>, remove_cvref_t<BlockTensorDistribution_>>{
+        tensor_view, origin, block_tensor_distribution};
 }
 
 template <typename BlockTensorWindow_, typename Index>

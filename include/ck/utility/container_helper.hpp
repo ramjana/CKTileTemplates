@@ -10,7 +10,6 @@
 #include "tuple.hpp"
 #include "tuple_helper.hpp"
 #include "statically_indexed_array.hpp"
-#include "container_element_picker.hpp"
 
 namespace ck {
 
@@ -380,7 +379,14 @@ set_container_subset(Array<T, N>& y, Sequence<Is...> picks, const Array<T, sizeo
 {
     static_assert(N >= sizeof...(Is), "wrong! size");
 
+#if 0
     static_for<0, sizeof...(Is), 1>{}([&](auto i) { y(picks[i]) = x[i]; });
+#else
+    for(index_t i = 0; i < picks.Size(); ++i)
+    {
+        y(picks[i]) = x[i];
+    }
+#endif
 }
 
 template <typename... Ys, index_t... Is, typename... Xs>

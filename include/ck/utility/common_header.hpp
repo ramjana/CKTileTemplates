@@ -8,7 +8,6 @@
 #include "ck/utility/array.hpp"
 #include "ck/utility/container_helper.hpp"
 #include "ck/utility/statically_indexed_array.hpp"
-#include "ck/utility/container_element_picker.hpp"
 #include "ck/utility/multi_index.hpp"
 #include "ck/utility/data_type.hpp"
 #include "ck/utility/functional.hpp"
