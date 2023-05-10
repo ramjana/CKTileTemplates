@@ -254,8 +254,6 @@ struct Im2Col
     {
         using namespace ck;
 
-        constexpr auto I0 = Number<0>{};
-
         const index_t N = a_g_n_c_wis_lengths[1];
         const index_t C = a_g_n_c_wis_lengths[2];
 
@@ -305,7 +303,7 @@ struct Im2Col
             make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{}),
             make_tuple(Sequence<0>{}, Sequence<1, 2>{}, Sequence<3, 4>{}, Sequence<5>{}));
 
-#if 0
+#if 1
         const auto src_gemmm_gemmk =
             transform_tensor_view(a_n_y_ho_x_wo_c,
                                   make_tuple(ps(make_merge_transform(make_tuple(N, Ho, Wo))),
@@ -337,15 +335,15 @@ struct Im2Col
 
         const auto num_tile_m = ps.read_first_lane(numGemmM / kMPerTile);
 
-#if 0
+#if 1
         const auto block2tile = ps(make_cluster_descriptor(make_tuple(num_tile_m)));
 #else
         const auto block2tile = make_cluster_descriptor(make_tuple(num_tile_m));
 #endif
 
-        const auto i_gemmm_gemmk = block2tile.CalculateBottomIndex(make_tuple(id_block));
+        const auto i_gemmm_gemmk = block2tile.CalculateBottomIndex(make_multi_index(id_block));
 
-        const auto iGemmM = ps.read_first_lane(i_gemmm_gemmk[I0]) * kMPerTile;
+        const auto iGemmM = ps.read_first_lane(i_gemmm_gemmk[0]) * kMPerTile;
 
 #if 0
         auto window_src = make_block_tensor_window(src_gemmm_gemmk,
@@ -387,17 +385,19 @@ struct Im2Col
             Sequence<0, 1>{},
             Sequence<0, 1>{});
 
-        auto window_src =
-            make_block_tensor_window(src_gemmm_gemmk, {iGemmM, 0}, src_block_dstr);
+        auto window_src = ck::tile_program::block::make_block_tensor_window(
+            src_gemmm_gemmk, {iGemmM, 0}, src_block_dstr);
 
-      //index_t iGemmK = 0;
+        index_t iGemmK = 0;
 
-      //do
-      //{
-      //    move_block_tensor_window(window_src, {0, kKPerTile});
+        do
+        {
+            move_block_tensor_window(window_src, MultiIndex<2>{0, kKPerTile});
 
-      //    iGemmK += kKPerTile;
-      //} while(iGemmK < numGemmK - kKPerTile);
+            p_a_mtx[iGemmK] = window_src.bottom_tensor_thread_coord_.GetOffset();
+
+            iGemmK += kKPerTile;
+        } while(iGemmK < numGemmK - kKPerTile);
 #elif 0
         auto copier = ps.make_copier(src_gemmm_gemmk,
                                      make_tuple(iGemmM, 0),

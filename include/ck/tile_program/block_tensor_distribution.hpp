@@ -61,7 +61,7 @@ __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t
 
     for(index_t i = 0; i < iend - ibegin; ++i)
     {
-        arr[i] = ibegin + i;
+        arr(i) = ibegin + i;
     }
 
     return arr;
@@ -79,8 +79,8 @@ template <typename... XsUnMergeUpLengthss,
           index_t... DimsYs2XsMajor,
           index_t... DimsYs2XsMinor,
           index_t... YsOrder>
-__device__ constexpr auto make_block_tensor_distribution(
-    // Tuple of Sequence<...>
+__host__ __device__ constexpr auto make_block_tensor_distribution(
+    // Tuple<Sequence<...>, ...>
     Tuple<XsUnMergeUpLengthss...>,
     //
     Sequence<DimsWid2XsMajor...>,
@@ -137,7 +137,7 @@ __device__ constexpr auto make_block_tensor_distribution(
 
                 constexpr index_t ndim_x_minor = x_minor_lengths.Size();
 
-                trans[num_tran++] = {IndexTransformEnum::UnMerge,
+                trans(num_tran++) = {IndexTransformEnum::UnMerge,
                                      MetaData{to_array<index_t, ndim_x_minor>(x_minor_lengths)},
                                      NumDim{1},
                                      Dims{idim_x_major},
@@ -147,8 +147,8 @@ __device__ constexpr auto make_block_tensor_distribution(
 
                 for(index_t i = 0; i < ndim_x_minor; ++i)
                 {
-                    dims_x_major_x_minor_to_hidden_ids[idim_x_major][i]     = hidden_dim_cnt;
-                    dims_x_major_x_minor_to_hidden_lengths[idim_x_major][i] = x_minor_lengths[i];
+                    dims_x_major_x_minor_to_hidden_ids(idim_x_major)(i)     = hidden_dim_cnt;
+                    dims_x_major_x_minor_to_hidden_lengths(idim_x_major)(i) = x_minor_lengths[i];
 
                     hidden_dim_cnt++;
                 }
@@ -169,11 +169,11 @@ __device__ constexpr auto make_block_tensor_distribution(
             {
                 index_t x_major = dims_wid_to_xs_major[i];
                 index_t x_minor = dims_wid_to_xs_minor[i];
-                low_dims[i]     = dims_x_major_x_minor_to_hidden_ids[x_major][x_minor];
-                low_lengths[i]  = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
+                low_dims(i)     = dims_x_major_x_minor_to_hidden_ids[x_major][x_minor];
+                low_lengths(i)  = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
             }
 
-            trans[num_tran++] = {IndexTransformEnum::Merge,
+            trans(num_tran++) = {IndexTransformEnum::Merge,
                                  MetaData{to_array<index_t, ndim_low>(low_lengths)},
                                  NumDim{ndim_low},
                                  low_dims,
@@ -196,11 +196,11 @@ __device__ constexpr auto make_block_tensor_distribution(
             {
                 index_t x_major = dims_lid_to_xs_major[i];
                 index_t x_minor = dims_lid_to_xs_minor[i];
-                low_dims[i]     = dims_x_major_x_minor_to_hidden_ids[x_major][x_minor];
-                low_lengths[i]  = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
+                low_dims(i)     = dims_x_major_x_minor_to_hidden_ids[x_major][x_minor];
+                low_lengths(i)  = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
             }
 
-            trans[num_tran++] = {IndexTransformEnum::Merge,
+            trans(num_tran++) = {IndexTransformEnum::Merge,
                                  MetaData{to_array<index_t, ndim_low>(low_lengths)},
                                  NumDim{ndim_low},
                                  low_dims,
@@ -228,7 +228,7 @@ __device__ constexpr auto make_block_tensor_distribution(
             {
                 index_t x_major    = dims_ys_to_xs_major[i];
                 index_t x_minor    = dims_ys_to_xs_minor[i];
-                top_dim_ids[2 + i] = dims_x_major_x_minor_to_hidden_ids[x_major][x_minor];
+                top_dim_ids(2 + i) = dims_x_major_x_minor_to_hidden_ids[x_major][x_minor];
             }
         }
 
@@ -241,7 +241,7 @@ __device__ constexpr auto make_block_tensor_distribution(
 
             index_t x_major = dims_ys_to_xs_major[ys_order[i]];
             index_t x_minor = dims_ys_to_xs_minor[ys_order[i]];
-            up_lengths[i]   = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
+            up_lengths(i)   = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
         }
 
         auto tran = make_tuple(IndexTransformEnum::UnMerge,
@@ -281,7 +281,7 @@ template <typename XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
           typename DimsYs2XsMinor,      // Sequence<...>
           typename YsOrder              // Sequence<...>
           >
-__device__ constexpr auto make_block_tensor_distribution(
+__host__ __device__ constexpr auto make_block_tensor_distribution(
     // Tuple of Sequence<...>
     XsUnMergeUpLengthss,
     //

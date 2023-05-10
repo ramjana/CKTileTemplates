@@ -25,7 +25,7 @@ struct MetaDataBuffer
 
         for(int i = 0; i < size; i++)
         {
-            buffer_[size_] = tmp[i];
+            buffer_(size_) = tmp[i];
 
             size_++;
         }
@@ -47,7 +47,7 @@ struct MetaDataBuffer
 
         for(int i = 0; i < size; i++)
         {
-            tmp[i] = buffer_[pos];
+            tmp(i) = buffer_[pos];
 
             pos++;
         }

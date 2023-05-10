@@ -6,6 +6,7 @@
 #include "ck/utility/common_header.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tensor_description/tensor_adaptor_coordinate.hpp"
+#include "ck/tile_program/block_tensor_distribution.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -32,6 +33,17 @@ struct BlockTensorWindow
     using BottomTensorCoord =
         decltype(make_tensor_coordinate(BottomTensorDesc{}, BottomTensorIndex{}));
 
+    // FIXME: host dummy constructor for tile program
+    __host__ constexpr BlockTensorWindow(const BottomTensorView& bottom_tensor_view,
+                                         const BottomTensorIndex&,
+                                         const BlockTensorDstr&)
+        : window_adaptor_{},
+          bottom_tensor_view_{bottom_tensor_view},
+          window_adaptor_thread_coord_{},
+          bottom_tensor_thread_coord_{}
+    {
+    }
+
     __device__ constexpr BlockTensorWindow(const BottomTensorView& bottom_tensor_view,
                                            const BottomTensorIndex& block_window_origin,
                                            const BlockTensorDstr& block_tensor_distribution)
@@ -41,20 +53,20 @@ struct BlockTensorWindow
               window_adaptor_, block_tensor_distribution.CalculateThreadWidLidYsOrigin())},
           bottom_tensor_thread_coord_{}
     {
-          BottomTensorIndex bottom_tensor_thread_origin_idx;
+        BottomTensorIndex bottom_tensor_thread_origin_idx;
 
-          for(index_t i = 0; i < NDimBottomTensor; ++i)
-          {
-              bottom_tensor_thread_origin_idx(i) = block_window_origin[i] + window_adaptor_thread_coord_.GetBottomIndex()[i];
-          }
+        for(index_t i = 0; i < NDimBottomTensor; ++i)
+        {
+            bottom_tensor_thread_origin_idx(i) =
+                block_window_origin[i] + window_adaptor_thread_coord_.GetBottomIndex()[i];
+        }
 
-          bottom_tensor_thread_coord_ = make_tensor_coordinate(
-              bottom_tensor_view_.GetTensorDescriptor(),
-              bottom_tensor_thread_origin_idx);
+        bottom_tensor_thread_coord_ = make_tensor_coordinate(
+            bottom_tensor_view_.GetTensorDescriptor(), bottom_tensor_thread_origin_idx);
     }
 
     // move thread's window adaptor coordiante
-    // e.g. [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
+    // [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
     __device__ void MoveWindowAdaptorThreadCoordinate(const AdaptorTopIndex& idx_diff_adaptor)
     {
         move_tensor_adaptor_coordinate(
@@ -71,7 +83,7 @@ struct BlockTensorWindow
     }
 
     // move thread's window adaptor coordinate and bottom tensor coordinate
-    // e.g. [wid, lid, y0, y1, ...] ==> [x0, x1, ...] ==> [x0', x1', ...] ==> [offset]
+    // [wid, lid, y0, y1, ...] ==> [x0, x1, ...] ==> [x0', x1', ...] ==> [offset]
     __device__ void
     MoveWindowAdaptorAndBottomTensorThreadCoordinate(const AdaptorTopIndex& idx_diff_adaptor_top)
     {
@@ -103,13 +115,19 @@ struct BlockTensorWindow
 };
 
 template <typename TensorView_, typename BlockTensorDistribution_>
-__device__ constexpr auto
+__host__ __device__ constexpr auto
 make_block_tensor_window(const TensorView_& tensor_view,
                          const Array<index_t, TensorView_::GetNumOfDimension()>& origin,
                          const BlockTensorDistribution_& block_tensor_distribution)
 {
     return BlockTensorWindow<remove_cvref_t<TensorView_>, remove_cvref_t<BlockTensorDistribution_>>{
         tensor_view, origin, block_tensor_distribution};
+}
+
+// FIXME: dummy host function for tile program
+template <typename BlockTensorWindow_, typename Index>
+__host__ void move_block_tensor_window(BlockTensorWindow_&, const Index&)
+{
 }
 
 template <typename BlockTensorWindow_, typename Index>
