@@ -392,7 +392,7 @@ struct Im2Col
 
         do
         {
-            move_block_tensor_window(window_src, MultiIndex<2>{0, kKPerTile});
+            move_block_tensor_window(window_src, {0, kKPerTile});
 
             p_a_mtx[iGemmK] = window_src.bottom_tensor_thread_coord_.GetOffset();
 

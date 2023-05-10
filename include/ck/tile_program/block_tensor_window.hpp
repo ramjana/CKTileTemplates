@@ -65,6 +65,8 @@ struct BlockTensorWindow
             bottom_tensor_view_.GetTensorDescriptor(), bottom_tensor_thread_origin_idx);
     }
 
+    __host__ __device__ static constexpr index_t GetNumOfDimension() { return NDimBottomTensor; }
+
     // move thread's window adaptor coordiante
     // [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
     __device__ void MoveWindowAdaptorThreadCoordinate(const AdaptorTopIndex& idx_diff_adaptor)
@@ -125,16 +127,17 @@ make_block_tensor_window(const TensorView_& tensor_view,
 }
 
 // FIXME: dummy host function for tile program
-template <typename BlockTensorWindow_, typename Index>
-__host__ void move_block_tensor_window(BlockTensorWindow_&, const Index&)
+template <typename BlockTensorWindow_>
+__host__ void move_block_tensor_window(BlockTensorWindow_&,
+                                       const MultiIndex<BlockTensorWindow_::GetNumOfDimension()>&)
 {
 }
 
-template <typename BlockTensorWindow_, typename Index>
-__device__ void move_block_tensor_window(BlockTensorWindow_& window, const Index& step)
+template <typename BlockTensorWindow_>
+__device__ void
+move_block_tensor_window(BlockTensorWindow_& window,
+                         const MultiIndex<BlockTensorWindow_::GetNumOfDimension()>& step)
 {
-    STATIC_ASSERT(BlockTensorWindow_::GetNumOfDimension() == Index::Size(), "");
-
     window.MoveBottomTensorThreadCoordinate(step);
 }
 
