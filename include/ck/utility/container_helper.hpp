@@ -45,7 +45,7 @@ container_reorder_given_new2old(const Array<TData, NSize>& old_array, Sequence<I
 
     static_assert(is_valid_sequence_map<Sequence<IRs...>>{}, "wrong! invalid reorder map");
 
-    return make_array(old_array[Number<IRs>{}]...);
+    return make_array<remove_cvref_t<TData>>(old_array[IRs]...);
 }
 
 template <typename TData, index_t NSize, index_t... IRs>
@@ -360,15 +360,15 @@ __host__ __device__ constexpr auto container_concat(const Container& x)
 template <typename T, index_t N, index_t... Is>
 __host__ __device__ constexpr auto get_container_subset(const Array<T, N>& arr, Sequence<Is...>)
 {
-    static_assert(N >= sizeof...(Is), "wrong! size");
+    STATIC_ASSERT(N >= sizeof...(Is), "wrong! size");
 
-    return make_array(arr[Number<Is>{}]...);
+    return make_array<T>(arr[Is]...);
 }
 
 template <typename... Ts, index_t... Is>
 __host__ __device__ constexpr auto get_container_subset(const Tuple<Ts...>& tup, Sequence<Is...>)
 {
-    static_assert(sizeof...(Ts) >= sizeof...(Is), "wrong! size");
+    STATIC_ASSERT(sizeof...(Ts) >= sizeof...(Is), "wrong! size");
 
     return make_tuple(tup[Number<Is>{}]...);
 }
@@ -377,23 +377,19 @@ template <typename T, index_t N, index_t... Is>
 __host__ __device__ constexpr void
 set_container_subset(Array<T, N>& y, Sequence<Is...> picks, const Array<T, sizeof...(Is)>& x)
 {
-    static_assert(N >= sizeof...(Is), "wrong! size");
+    STATIC_ASSERT(N >= sizeof...(Is), "wrong! size");
 
-#if 0
-    static_for<0, sizeof...(Is), 1>{}([&](auto i) { y(picks[i]) = x[i]; });
-#else
     for(index_t i = 0; i < picks.Size(); ++i)
     {
         y(picks[i]) = x[i];
     }
-#endif
 }
 
 template <typename... Ys, index_t... Is, typename... Xs>
 __host__ __device__ constexpr void
 set_container_subset(Tuple<Ys...>& y, Sequence<Is...> picks, const Tuple<Xs...>& x)
 {
-    static_assert(sizeof...(Ys) >= sizeof...(Is) && sizeof...(Is) == sizeof...(Xs), "wrong! size");
+    STATIC_ASSERT(sizeof...(Ys) >= sizeof...(Is) && sizeof...(Is) == sizeof...(Xs), "wrong! size");
 
     static_for<0, sizeof...(Is), 1>{}([&](auto i) { y(picks[i]) = x[i]; });
 }

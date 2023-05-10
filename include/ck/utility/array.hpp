@@ -59,9 +59,6 @@ struct Array
 
     __host__ __device__ constexpr const TData& operator[](index_t i) const { return mData[i]; }
 
-    __host__ __device__ constexpr TData& operator[](index_t i) { return mData[i]; }
-
-    // TODO: remove
     __host__ __device__ constexpr TData& operator()(index_t i) { return mData[i]; }
 
     template <typename T>
@@ -69,14 +66,10 @@ struct Array
     {
         static_assert(T::Size() == Size(), "wrong! size not the same");
 
-#if 0
-        static_for<0, Size(), 1>{}([&](auto i) { operator()(i) = a[i]; });
-#else
         for(index_t i = 0; i < NSize; ++i)
         {
             mData[i] = a[i];
         }
-#endif
 
         return *this;
     }
@@ -92,18 +85,12 @@ struct Array<TData, 0>
     __host__ __device__ static constexpr index_t Size() { return 0; }
 };
 
-template <typename X, typename... Xs>
-__host__ __device__ constexpr auto make_array(X&& x, Xs&&... xs)
+template <typename T, typename... Xs>
+__host__ __device__ constexpr auto make_array(Xs&&... xs)
 {
-    using data_type = remove_cvref_t<X>;
-    return Array<data_type, sizeof...(Xs) + 1>{std::forward<X>(x), std::forward<Xs>(xs)...};
-}
+    using data_type = remove_cvref_t<T>;
 
-// make empty array
-template <typename X>
-__host__ __device__ constexpr auto make_array()
-{
-    return Array<X, 0>{};
+    return Array<data_type, sizeof...(Xs)>{std::forward<Xs>(xs)...};
 }
 
 template <typename T, index_t N, typename X>

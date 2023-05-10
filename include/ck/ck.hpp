@@ -102,7 +102,7 @@
 #define CK_EXPERIMENTAL_BLOCK_SYNC_LDS_WITHOUT_SYNC_VMEM 1
 
 // experimental feature: multi index implemented as array
-#define CK_EXPERIMENTAL_USE_DYNAMICALLY_INDEXED_MULTI_INDEX 0
+#define CK_EXPERIMENTAL_USE_DYNAMICALLY_INDEXED_MULTI_INDEX 1
 
 // experimental feature: static tensor descriptor
 #define CK_EXPERIMENTAL_STATIC_TENSOR_DESCRIPTOR 0
