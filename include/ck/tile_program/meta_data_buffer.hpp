@@ -57,6 +57,25 @@ struct MetaDataBuffer
         return data;
     }
 
+    template <typename T>
+    __host__ __device__ constexpr T Get(index_t pos) const
+    {
+        constexpr index_t size = sizeof(T);
+
+        Array<std::byte, size> tmp;
+
+        for(int i = 0; i < size; i++)
+        {
+            tmp(i) = buffer_[pos];
+
+            pos++;
+        }
+
+        auto data = bit_cast<T>(tmp);
+
+        return data;
+    }
+
     //
     Array<std::byte, MaxSize> buffer_;
     index_t size_ = 0;

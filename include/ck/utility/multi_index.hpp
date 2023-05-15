@@ -30,7 +30,7 @@ template <typename... Xs>
 __host__ __device__ void print_multi_index(const Tuple<Xs...>& x)
 {
     printf("{");
-    printf("MultiIndex, ");
+    printf("Tuple, ");
     printf("size %d,", index_t{sizeof...(Xs)});
     static_for<0, sizeof...(Xs), 1>{}(
         [&](auto i) { printf("%d ", static_cast<index_t>(x.At(i))); });

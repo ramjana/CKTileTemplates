@@ -11,16 +11,7 @@
 namespace ck {
 
 template <typename T>
-struct is_known_at_compile_time;
-
-template <>
-struct is_known_at_compile_time<index_t>
-{
-    static constexpr bool value = false;
-};
-
-template <>
-struct is_known_at_compile_time<long_index_t>
+struct is_known_at_compile_time
 {
     static constexpr bool value = false;
 };

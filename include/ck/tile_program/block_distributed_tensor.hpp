@@ -9,6 +9,7 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
 namespace ck {
+namespace tile_program {
 namespace block {
 
 template <typename Distribution, typename T, index_t MaxThreadTensorElementSize>
@@ -46,4 +47,5 @@ __device__ constexpr auto make_distributed_tensor(const MultiIndex<NDim>& length
 }
 
 } // namespace block
+} // namespace tile_program
 } // namespace ck

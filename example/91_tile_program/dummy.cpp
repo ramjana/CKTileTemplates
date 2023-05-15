@@ -12,118 +12,11 @@
 #include "ck/tile_program/meta_data_buffer.hpp"
 #include "ck/tile_program/block_tensor_distribution.hpp"
 
-#if 0
 __global__ void foo(int* p)
 {
     using namespace ck;
 
-    constexpr auto encoded_adaptor = []() {
-        constexpr index_t kMaxNumTransforms = 10;
-        constexpr index_t kMaxMetaDataSize  = 128;
-        constexpr index_t kMaxNumDims       = 10;
-
-        using Name     = IndexTransformEnum;
-        using MetaData = MetaDataBuffer<kMaxMetaDataSize>;
-        using NumDim   = index_t;
-        using Ids      = Array<index_t, kMaxNumDims>;
-
-        index_t N = 128;
-        index_t C = 192;
-
-        index_t Y             = 3;
-        index_t X             = 3;
-        index_t InLeftPadH    = 1;
-        index_t InRightPadH   = 1;
-        index_t InLeftPadW    = 1;
-        index_t InRightPadW   = 1;
-        index_t ConvStrideH   = 1;
-        index_t ConvStrideW   = 1;
-        index_t ConvDilationH = 1;
-        index_t ConvDilationW = 1;
-
-        index_t Hi = 17;
-        index_t Wi = 17;
-        index_t Ho = 17;
-        index_t Wo = 17;
-
-        auto trans = Array<Tuple<Name, MetaData, NumDim, Ids, NumDim, Ids>, kMaxNumTransforms>{};
-
-        index_t num_tran = 0;
-
-        trans[num_tran++] = {IndexTransformEnum::Pad,
-                             MetaData{index_t{Hi}, index_t{InLeftPadH}, index_t{InRightPadH}},
-                             NumDim{1},
-                             Ids{2},
-                             NumDim{1},
-                             Ids{4}};
-
-        trans[num_tran++] = {IndexTransformEnum::Pad,
-                             MetaData{index_t{Wi}, index_t{InLeftPadW}, index_t{InRightPadW}},
-                             NumDim{1},
-                             Ids{3},
-                             NumDim{1},
-                             Ids{5}};
-
-        trans[num_tran++] = {
-            IndexTransformEnum::Embed,
-            MetaData{Array<index_t, 2>{Y, Ho}, Array<index_t, 2>{ConvDilationH, ConvStrideH}},
-            NumDim{1},
-            Ids{4},
-            NumDim{2},
-            Ids{6, 7}};
-
-        trans[num_tran++] = {
-            IndexTransformEnum::Embed,
-            MetaData{Array<index_t, 2>{X, Wo}, Array<index_t, 2>{ConvDilationW, ConvStrideW}},
-            NumDim{1},
-            Ids{5},
-            NumDim{2},
-            Ids{8, 9}};
-
-        trans[num_tran++] = {IndexTransformEnum::Merge,
-                             MetaData{Array<index_t, 3>{N, Ho, Wo}},
-                             NumDim{3},
-                             Ids{0, 7, 9},
-                             NumDim{1},
-                             Ids{10}};
-
-        trans[num_tran++] = {IndexTransformEnum::Merge,
-                             MetaData{Array<index_t, 3>{C, Y, X}},
-                             NumDim{3},
-                             Ids{1, 6, 8},
-                             NumDim{1},
-                             Ids{11}};
-
-        index_t num_bottom_dim = 4;
-
-        auto bottom_dim_ids = Ids{0, 1, 2, 3};
-
-        index_t num_top_dim = 2;
-
-        auto top_dim_ids = Ids{10, 11};
-
-        return make_tuple(
-            trans, num_tran, bottom_dim_ids, num_bottom_dim, top_dim_ids, num_top_dim);
-    }();
-
-    constexpr auto adaptor = CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_adaptor);
-
-#if 0
-    adaptor.foo();
-#elif 0
-    adaptor.Print();
-#endif
-
-    p[4] = adaptor.template GetTopDimensionLength<0>();
-    p[5] = adaptor.template GetTopDimensionLength<1>();
-    p[6] = adaptor.GetElementSize();
-}
-#else
-__global__ void foo(int* /*p*/)
-{
-    using namespace ck;
-
-    constexpr auto hbm_block_dstr = ck::tile_program::block::make_block_tensor_distribution(
+    constexpr auto block_dstr_0 = ck::tile_program::block::make_static_block_tensor_distribution(
         make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
         Sequence<0>{},
         Sequence<1>{},
@@ -133,7 +26,7 @@ __global__ void foo(int* /*p*/)
         Sequence<0, 1>{},
         Sequence<0, 1>{});
 
-    constexpr auto lds_block_dstr = ck::tile_program::block::make_block_tensor_distribution(
+    constexpr auto block_dstr_1 = ck::tile_program::block::make_block_tensor_distribution(
         make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
         Sequence<0>{},
         Sequence<1>{},
@@ -143,10 +36,15 @@ __global__ void foo(int* /*p*/)
         Sequence<0, 1>{},
         Sequence<0, 1>{});
 
-    hbm_block_dstr.Print();
-    lds_block_dstr.Print();
+    static_assert(block_dstr_0.GetWidLidYs2XsAdaptor().IsKnownAtCompileTime(), "");
+    static_assert(block_dstr_1.GetYs2DidAdaptor().IsKnownAtCompileTime() == false, "");
+
+    p[0] = block_dstr_0.GetWidLidYs2XsAdaptor().GetElementSize();
+    p[1] = block_dstr_0.GetYs2DidAdaptor().GetElementSize();
+
+    p[2] = block_dstr_1.GetWidLidYs2XsAdaptor().GetElementSize();
+    p[3] = block_dstr_1.GetYs2DidAdaptor().GetElementSize();
 }
-#endif
 
 int main()
 {

@@ -392,7 +392,10 @@ struct Im2Col
 
         do
         {
-            move_block_tensor_window(window_src, {0, kKPerTile});
+            // this is distributed tensor
+            //       const auto src_vgpr_block = ck::tile_program::block::load(window_src);
+
+            ck::tile_program::block::move_block_tensor_window(window_src, {0, kKPerTile});
 
             p_a_mtx[iGemmK] = window_src.bottom_tensor_thread_coord_.GetOffset();
 
