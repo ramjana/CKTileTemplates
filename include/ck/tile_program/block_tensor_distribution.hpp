@@ -184,20 +184,23 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
         }
     }
 
-    // Adaptor: [y0, y1, ...] to [did]
-    Lengths up_lengths;
+    // adaptor: [y0, y1, ...] to [did]
+    Lengths y_lengths;
+    index_t did_length = 1;
 
     for(index_t i = 0; i < ndim_y; ++i)
     {
         constexpr auto ys_order = Sequence<YsOrder...>{};
 
-        index_t x_major = dims_ys_to_xs_major[ys_order[i]];
-        index_t x_minor = dims_ys_to_xs_minor[ys_order[i]];
-        up_lengths(i)   = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
+        index_t x_major  = dims_ys_to_xs_major[ys_order[i]];
+        index_t x_minor  = dims_ys_to_xs_minor[ys_order[i]];
+        index_t y_length = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
+        y_lengths(i)     = y_length;
+        did_length *= y_length;
     }
 
     auto tran = make_tuple(IndexTransformEnum::UnMerge,
-                           MetaData{to_array<index_t, ndim_y>(up_lengths)},
+                           MetaData{to_array<index_t, ndim_y>(y_lengths)},
                            NumDim{1},
                            Dims{0},
                            NumDim{ndim_y},
@@ -205,26 +208,27 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
 
     return make_tuple(
         make_tuple(trans, num_tran, bottom_dim_ids, ndim_bottom, top_dim_ids, ndim_top),
-        make_tuple(make_tuple(tran), 1, Dims{0}, 1, Dims{1 + YsOrder...}, ndim_y));
+        make_tuple(make_tuple(tran), 1, Dims{0}, 1, Dims{1 + YsOrder...}, ndim_y),
+        did_length);
 }
 
 } // namespace detail
 
-template <typename WidLidYs2XsAdaptor_, typename Ys2DidAdaptor_>
+template <typename WidLidYs2XsAdaptor_, typename Ys2DidDescriptor_>
 struct BlockTensorDistribution
 {
     using WidLidYs2XsAdaptor = remove_cvref_t<WidLidYs2XsAdaptor_>;
-    using Ys2DidAdaptor      = remove_cvref_t<Ys2DidAdaptor_>;
+    using Ys2DidDescriptor   = remove_cvref_t<Ys2DidDescriptor_>;
 
     WidLidYs2XsAdaptor wid_lid_ys_to_xs_;
-    Ys2DidAdaptor ys_to_did_;
+    Ys2DidDescriptor ys_to_did_;
 
     __host__ __device__ constexpr const auto& GetWidLidYs2XsAdaptor() const
     {
         return wid_lid_ys_to_xs_;
     }
 
-    __host__ __device__ constexpr const auto& GetYs2DidAdaptor() const { return ys_to_did_; }
+    __host__ __device__ constexpr const auto& GetYs2DidDescriptor() const { return ys_to_did_; }
 
     __device__ auto CalculateThreadWidLidYsOrigin() const
     {
@@ -286,6 +290,7 @@ __host__ __device__ constexpr auto make_block_tensor_distribution(
 
     constexpr auto encoded_wid_lid_ys_to_xs_adaptor = encode.template At<0>();
     constexpr auto encoded_ys_to_did_adaptor        = encode.template At<1>();
+    constexpr index_t did_length                    = encode.template At<2>();
 
     constexpr auto wid_lid_ys_to_xs_adaptor =
         CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_wid_lid_ys_to_xs_adaptor);
@@ -293,9 +298,12 @@ __host__ __device__ constexpr auto make_block_tensor_distribution(
     constexpr auto ys_to_did_adaptor =
         CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ys_to_did_adaptor);
 
+    constexpr auto ys_to_did_descriptor =
+        make_tensor_descriptor_from_adaptor(ys_to_did_adaptor, did_length);
+
     return BlockTensorDistribution<remove_cvref_t<decltype(wid_lid_ys_to_xs_adaptor)>,
-                                   remove_cvref_t<decltype(ys_to_did_adaptor)>>{
-        wid_lid_ys_to_xs_adaptor, ys_to_did_adaptor};
+                                   remove_cvref_t<decltype(ys_to_did_descriptor)>>{
+        wid_lid_ys_to_xs_adaptor, ys_to_did_descriptor};
 }
 
 // this returns a static BlockTensorDistribution
@@ -334,6 +342,7 @@ __host__ __device__ constexpr auto make_static_block_tensor_distribution(
 
     constexpr auto encoded_wid_lid_ys_to_xs_adaptor = encode.template At<0>();
     constexpr auto encoded_ys_to_did_adaptor        = encode.template At<1>();
+    constexpr index_t did_length                    = encode.template At<2>();
 
     constexpr auto wid_lid_ys_to_xs_adaptor =
         CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(encoded_wid_lid_ys_to_xs_adaptor);
@@ -341,9 +350,12 @@ __host__ __device__ constexpr auto make_static_block_tensor_distribution(
     constexpr auto ys_to_did_adaptor =
         CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ys_to_did_adaptor);
 
+    constexpr auto ys_to_did_descriptor =
+        make_tensor_descriptor_from_adaptor(ys_to_did_adaptor, Number<did_length>{});
+
     return BlockTensorDistribution<remove_cvref_t<decltype(wid_lid_ys_to_xs_adaptor)>,
-                                   remove_cvref_t<decltype(ys_to_did_adaptor)>>{
-        wid_lid_ys_to_xs_adaptor, ys_to_did_adaptor};
+                                   remove_cvref_t<decltype(ys_to_did_descriptor)>>{
+        wid_lid_ys_to_xs_adaptor, ys_to_did_descriptor};
 }
 
 } // namespace block

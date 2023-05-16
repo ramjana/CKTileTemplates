@@ -375,15 +375,16 @@ struct Im2Col
         (void)dst_gemmm_gemmk;
         (void)numGemmK;
 
-        constexpr auto src_block_dstr = ck::tile_program::block::make_block_tensor_distribution(
-            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-            Sequence<0>{},
-            Sequence<1>{},
-            Sequence<0, 1>{},
-            Sequence<2, 0>{},
-            Sequence<0, 1>{},
-            Sequence<0, 1>{},
-            Sequence<0, 1>{});
+        constexpr auto src_block_dstr =
+            ck::tile_program::block::make_static_block_tensor_distribution(
+                make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+                Sequence<0>{},
+                Sequence<1>{},
+                Sequence<0, 1>{},
+                Sequence<2, 0>{},
+                Sequence<0, 1>{},
+                Sequence<0, 1>{},
+                Sequence<0, 1>{});
 
         auto window_src = ck::tile_program::block::make_block_tensor_window(
             src_gemmm_gemmk, {iGemmM, 0}, src_block_dstr);

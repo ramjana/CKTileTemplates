@@ -37,13 +37,15 @@ __global__ void foo(int* p)
         Sequence<0, 1>{});
 
     static_assert(block_dstr_0.GetWidLidYs2XsAdaptor().IsKnownAtCompileTime(), "");
-    static_assert(block_dstr_1.GetYs2DidAdaptor().IsKnownAtCompileTime() == false, "");
+    static_assert(block_dstr_1.GetYs2DidDescriptor().IsKnownAtCompileTime() == false, "");
 
     p[0] = block_dstr_0.GetWidLidYs2XsAdaptor().GetElementSize();
-    p[1] = block_dstr_0.GetYs2DidAdaptor().GetElementSize();
+    p[1] = block_dstr_0.GetYs2DidDescriptor().GetElementSize();
+    p[2] = block_dstr_0.GetYs2DidDescriptor().GetElementSpaceSize();
 
-    p[2] = block_dstr_1.GetWidLidYs2XsAdaptor().GetElementSize();
-    p[3] = block_dstr_1.GetYs2DidAdaptor().GetElementSize();
+    p[3] = block_dstr_1.GetWidLidYs2XsAdaptor().GetElementSize();
+    p[4] = block_dstr_1.GetYs2DidDescriptor().GetElementSize();
+    p[5] = block_dstr_1.GetYs2DidDescriptor().GetElementSpaceSize();
 }
 
 int main()

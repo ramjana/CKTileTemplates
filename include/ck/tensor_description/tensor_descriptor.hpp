@@ -120,6 +120,19 @@ struct TensorDescriptor : public TensorAdaptor<Transforms,
     ElementSpaceSize element_space_size_;
 };
 
+template <typename Adaptor, typename ElementSpaceSize>
+__host__ __device__ constexpr auto
+make_tensor_descriptor_from_adaptor(const Adaptor& adaptor,
+                                    const ElementSpaceSize& element_space_size)
+{
+    return TensorDescriptor<remove_cvref_t<decltype(adaptor.GetTransforms())>,
+                            remove_cvref_t<decltype(adaptor.GetLowerDimensionHiddenIdss())>,
+                            remove_cvref_t<decltype(adaptor.GetUpperDimensionHiddenIdss())>,
+                            remove_cvref_t<decltype(adaptor.GetTopDimensionHiddenIds())>,
+                            remove_cvref_t<decltype(element_space_size)>>{adaptor,
+                                                                          element_space_size};
+}
+
 template <typename OldTensorDescriptor,
           typename NewTransforms,
           typename NewLowerDimensionOldTopIdss,
