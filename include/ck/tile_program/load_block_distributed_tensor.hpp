@@ -40,7 +40,7 @@ __device__ auto load_from_static_block_tensor_window(
 
     static_assert(BlockWindow::HasStaticBlockTensorDistribution(), "wrong!");
 
-    constexpr auto block_dstr = decltype(block_tensor_window.GetBlockTensorDistribution()){};
+    constexpr auto block_dstr = BlockTensorDstr{};
 
     auto block_dstr_tensor = make_static_block_distributed_tensor<DataType>(block_dstr);
 
@@ -69,7 +69,7 @@ __device__ auto load_from_static_block_tensor_window(
 
     // loop over thread tensor space [y0, y1, ...]
     static_for<0, num_access, 1>{}([&](auto iAccess) {
-        // load from bottom tensor
+        // read from bottom tensor
         const vector_t vec =
             block_tensor_window.GetBottomTensorView().template GetVectorizedElements<vector_t>(
                 block_tensor_window.GetBottomTensorThreadCoordinate());
@@ -79,7 +79,7 @@ __device__ auto load_from_static_block_tensor_window(
 
         constexpr index_t did = block_dstr.GetYs2DidDescriptor().CalculateOffset(idx_ys);
 
-        // put into block distributed tensor
+        // write into block distributed tensor
         block_dstr_tensor.GetThreadBuffer().template SetAsType<vector_t>(Number<did>{}, vec);
 
         // move thread coordinate

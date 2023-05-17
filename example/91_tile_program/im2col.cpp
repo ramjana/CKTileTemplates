@@ -30,6 +30,7 @@
 #include "ck/tile_program/block_tensor_window.hpp"
 #include "ck/tile_program/static_block_distributed_tensor.hpp"
 #include "ck/tile_program/load_block_distributed_tensor.hpp"
+#include "ck/tile_program/store_block_distributed_tensor.hpp"
 
 namespace ck {
 
@@ -407,11 +408,11 @@ struct Im2Col
             // FIXME: use shuffle API
             const auto dst_vgpr_block = src_vgpr_block;
 
-            // ck::tile_program::block::store_into_static_block_tensor_window(window_dst);
-
-            p_a_mtx[iGemmK] = dst_vgpr_block.thread_buf_[Number<0>{}];
+            ck::tile_program::block::store_into_static_block_tensor_window(window_dst,
+                                                                           dst_vgpr_block);
 
             ck::tile_program::block::move_block_tensor_window(window_src, {0, kKPerTile});
+
             ck::tile_program::block::move_block_tensor_window(window_dst, {0, kKPerTile});
 
             iGemmK += kKPerTile;
