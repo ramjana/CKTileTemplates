@@ -37,21 +37,22 @@ struct BlockTensorWindow
     __host__ constexpr BlockTensorWindow(const BottomTensorView& bottom_tensor_view,
                                          const BottomTensorIndex&,
                                          const BlockTensorDstr&)
-        : window_adaptor_{},
-          bottom_tensor_view_{bottom_tensor_view},
-          window_adaptor_thread_coord_{},
-          bottom_tensor_thread_coord_{}
+        : bottom_tensor_view_{bottom_tensor_view},
+          bottom_tensor_thread_coord_{},
+          block_tensor_dstr_{},
+          window_adaptor_thread_coord_{}
     {
     }
 
     __device__ constexpr BlockTensorWindow(const BottomTensorView& bottom_tensor_view,
                                            const BottomTensorIndex& block_window_origin,
                                            const BlockTensorDstr& block_tensor_distribution)
-        : window_adaptor_{block_tensor_distribution.GetWidLidYs2XsAdaptor()},
-          bottom_tensor_view_{bottom_tensor_view},
+        : bottom_tensor_view_{bottom_tensor_view},
+          bottom_tensor_thread_coord_{},
+          block_tensor_dstr_{block_tensor_distribution},
           window_adaptor_thread_coord_{make_tensor_adaptor_coordinate(
-              window_adaptor_, block_tensor_distribution.CalculateThreadWidLidYsOrigin())},
-          bottom_tensor_thread_coord_{}
+              block_tensor_distribution.GetWidLidYs2XsAdaptor(),
+              block_tensor_distribution.CalculateThreadWidLidYsOrigin())}
     {
         BottomTensorIndex bottom_tensor_thread_origin_idx;
 
@@ -67,12 +68,30 @@ struct BlockTensorWindow
 
     __host__ __device__ static constexpr index_t GetNumOfDimension() { return NDimBottomTensor; }
 
+    __host__ __device__ static constexpr bool HasStaticBlockTensorDistribution()
+    {
+        return BlockTensorDstr::IsKnownAtCompileTime();
+    }
+
+    __host__ __device__ constexpr auto GetBlockTensorDistribution() const
+    {
+        return block_tensor_dstr_;
+    }
+
+    __host__ __device__ constexpr auto GetBottomTensorView() const { return bottom_tensor_view_; }
+
+    __host__ __device__ constexpr auto GetBottomTensorThreadCoordinate() const
+    {
+        return bottom_tensor_thread_coord_;
+    }
+
     // move thread's window adaptor coordiante
     // [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
     __device__ void MoveWindowAdaptorThreadCoordinate(const AdaptorTopIndex& idx_diff_adaptor)
     {
-        move_tensor_adaptor_coordinate(
-            window_adaptor_, window_adaptor_thread_coord_, idx_diff_adaptor);
+        move_tensor_adaptor_coordinate(block_tensor_dstr_.GetWidLidYs2XsAdaptor(),
+                                       window_adaptor_thread_coord_,
+                                       idx_diff_adaptor);
     }
 
     // move thread's botom tensor coordiante
@@ -91,7 +110,7 @@ struct BlockTensorWindow
     {
         Array<index_t, NDimBottomTensor> idx_diff_adaptor_bottom;
 
-        move_tensor_adaptor_coordinate(window_adaptor_,
+        move_tensor_adaptor_coordinate(block_tensor_dstr_.GetWidLidYs2XsAdaptor(),
                                        window_adaptor_thread_coord_,
                                        idx_diff_adaptor_top,
                                        idx_diff_adaptor_bottom);
@@ -101,19 +120,19 @@ struct BlockTensorWindow
                                idx_diff_adaptor_bottom);
     }
 
-    // this is the adaptor for window
-    // [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
-    WindowAdaptor window_adaptor_;
-
     // this is the bottom tensor
     // [x0', x1', ...] ==> [offset]
+    // tensor view and per-thread coordinate for bottom tensor
     BottomTensorView bottom_tensor_view_;
-
-    // [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
-    WindowAdaptorCoord window_adaptor_thread_coord_;
-
-    // [x0', x1', ...] ==> [offset]
     BottomTensorCoord bottom_tensor_thread_coord_;
+
+    // Block tensor distribution, which contains:
+    //   1. adaptor for window: [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
+    //   2. thread descriptor for thread tensor in register
+    BlockTensorDstr block_tensor_dstr_;
+
+    //    thread window coordinate
+    WindowAdaptorCoord window_adaptor_thread_coord_;
 };
 
 template <typename TensorView_, typename BlockTensorDistribution_>
@@ -140,36 +159,6 @@ move_block_tensor_window(BlockTensorWindow_& window,
 {
     window.MoveBottomTensorThreadCoordinate(step);
 }
-
-#if 0
-template <index_t BlockSize, index_t... BlockWindowLengths, template Strategy>
-__host__ __device__ constexpr auto
-make_block_tensor_window_from_strategy(Sequence<BlockWindowLengths...>, const Stragety& strategy)
-{
-
-    constexpr auto xs_unmerge_up_lengthss = xxx;
-
-    constexpr auto dims_wid_2_xs_major = xxx;
-    constexpr auto dims_wid_2_xs_minor = xxx;
-
-    constexpr auto dims_lid_2_xs_major = xxx;
-    constexpr auto dims_lid_2_xs_minor = xxx;
-
-    constexpr auto dims_ys_2_xs_major = xxx;
-    constexpr auto dims_ys_2_xs_minor = xxx;
-
-    constexpr auto ys_order = xxx;
-
-    return make_block_tensor_distribution(xs_unmerge_up_lengthss,
-                                          dims_wid_2_xs_major,
-                                          dims_wid_2_xs_minor,
-                                          dims_lid_2_xs_major,
-                                          dims_lid_2_xs_minor,
-                                          dims_ys_2_xs_major,
-                                          dims_ys_2_xs_minor,
-                                          ys_order);
-}
-#endif
 
 } // namespace block
 } // namespace tile_program

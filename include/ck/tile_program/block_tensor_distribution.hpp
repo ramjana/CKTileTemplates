@@ -230,6 +230,11 @@ struct BlockTensorDistribution
 
     __host__ __device__ constexpr const auto& GetYs2DidDescriptor() const { return ys_to_did_; }
 
+    __host__ __device__ constexpr const auto& GetWidLidYsLengths() const
+    {
+        return wid_lid_ys_to_xs_;
+    }
+
     __device__ auto CalculateThreadWidLidYsOrigin() const
     {
         constexpr index_t ndim = WidLidYs2XsAdaptor::GetNumOfTopDimension();
@@ -242,6 +247,12 @@ struct BlockTensorDistribution
         }
 
         return idx;
+    }
+
+    __host__ __device__ static constexpr bool IsKnownAtCompileTime()
+    {
+        return WidLidYs2XsAdaptor::IsKnownAtCompileTime() &&
+               Ys2DidDescriptor::IsKnownAtCompileTime();
     }
 
     __host__ __device__ void Print() const

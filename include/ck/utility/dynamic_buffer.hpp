@@ -5,7 +5,7 @@
 
 #include "buffer_view.hpp"
 
-// FIXME: deprecate BynamicBuffer
+// FIXME: deprecate DynamicBuffer
 
 namespace ck {
 

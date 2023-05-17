@@ -182,13 +182,13 @@ struct TensorAdaptor
         return GetHiddenDimensionLength(TopDimensionHiddenIds::template At<IDimTop>());
     }
 
-#if 0 // debug
     __host__ __device__ constexpr auto GetTopDimensionLengths() const
     {
-        return generate_sequence_v2([&](auto i) { return GetTopDimensionLength(i); },
-                                    Number<ndim_top_>{});
+        return generate_tuple([&](auto i) { return GetTopDimensionLength(i); },
+                              Number<ndim_top_>{});
     }
 
+#if 0 // debug
     template <index_t I>
     __host__ __device__ constexpr index_t GetBottomDimensionLength(Number<I> idim) const
     {

@@ -341,7 +341,7 @@ template <typename T, index_t NX, index_t NY>
 __host__ __device__ constexpr auto container_concat(const Array<T, NX>& ax, const Array<T, NY>& ay)
 {
     return unpack2(
-        [&](auto&&... zs) { return make_array(std::forward<decltype(zs)>(zs)...); }, ax, ay);
+        [&](auto&&... zs) { return make_array<T>(std::forward<decltype(zs)>(zs)...); }, ax, ay);
 }
 
 template <typename... X, typename... Y>

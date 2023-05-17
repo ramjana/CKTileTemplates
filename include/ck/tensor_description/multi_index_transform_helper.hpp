@@ -62,23 +62,6 @@ __host__ __device__ constexpr auto make_embed_transform(const UpLengths& up_leng
 }
 
 template <typename LowLengths>
-__host__ __device__ constexpr auto make_merge_transform(const LowLengths& low_lengths)
-{
-#if CK_EXPERIMENTAL_MERGE_USE_MAGIC_DIVISION
-    return make_merge_transform_v2_magic_division(low_lengths);
-#else
-    return make_merge_transform_v1_carry_check(low_lengths);
-#endif
-}
-
-template <typename LowLengths>
-__host__ __device__ constexpr auto
-make_merge_transform_v1_carry_check(const LowLengths& low_lengths)
-{
-    return Merge_v1_carry_check<LowLengths>{low_lengths};
-}
-
-template <typename LowLengths>
 __host__ __device__ constexpr auto
 make_merge_transform_v2_magic_division(const LowLengths& low_lengths)
 {
@@ -90,6 +73,12 @@ __host__ __device__ constexpr auto
 make_merge_transform_v3_division_mod(const LowLengths& low_lengths)
 {
     return Merge_v3_division_mod<LowLengths>{low_lengths};
+}
+
+template <typename LowLengths>
+__host__ __device__ constexpr auto make_merge_transform(const LowLengths& low_lengths)
+{
+    return make_merge_transform_v2_magic_division(low_lengths);
 }
 
 template <typename UpLengths, bool Use24BitIntegerCalculation = false>
