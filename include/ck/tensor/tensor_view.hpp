@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "ck/tensor_description/tensor_coordinate.hpp"
+
 namespace ck {
 
 template <typename BufferView_, typename TensorDesc_>
