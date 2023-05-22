@@ -92,12 +92,12 @@ struct Im2Col
     template <typename Server, typename CopierStrategy>
     __host__ __device__ void
     operator()(Server& ps,
-               const std::array<ck::index_t, NDimSpatial + 2>& a_n_c_wis_lengths,
-               const std::array<ck::index_t, NDimSpatial + 2>& /* a_n_c_wis_strides */,
-               const std::array<ck::index_t, NDimSpatial + 2>& b_k_c_xs_lengths,
-               const std::array<ck::index_t, NDimSpatial + 2>& /* b_k_c_xs_strides */,
-               const std::array<ck::index_t, NDimSpatial + 2>& c_n_k_wos_lengths,
-               const std::array<ck::index_t, NDimSpatial + 2>& /* c_n_k_wos_strides */,
+               const std::array<ck::index_t, NDimSpatial + 2>& a_n_wis_c_lengths,
+               const std::array<ck::index_t, NDimSpatial + 2>& /* a_n_wis_c_strides */,
+               const std::array<ck::index_t, NDimSpatial + 2>& b_k_xs_c_lengths,
+               const std::array<ck::index_t, NDimSpatial + 2>& /* b_k_xs_c_strides */,
+               const std::array<ck::index_t, NDimSpatial + 2>& c_n_wos_k_lengths,
+               const std::array<ck::index_t, NDimSpatial + 2>& /* c_n_wos_k_strides */,
                const std::array<ck::index_t, NDimSpatial>& conv_filter_strides,
                const std::array<ck::index_t, NDimSpatial>& conv_filter_dilations,
                const std::array<ck::index_t, NDimSpatial>& input_left_pads,
@@ -113,20 +113,20 @@ struct Im2Col
     {
         using namespace ck;
 
-        const index_t N = a_n_c_wis_lengths[0];
-        const index_t C = a_n_c_wis_lengths[1];
+        const index_t N = a_n_wis_c_lengths[0];
+        const index_t C = a_n_wis_c_lengths[3];
 
-        const index_t Hi = a_n_c_wis_lengths[2];
-        const index_t Wi = a_n_c_wis_lengths[3];
+        const index_t Hi = a_n_wis_c_lengths[1];
+        const index_t Wi = a_n_wis_c_lengths[2];
 
-        const index_t Ho = c_n_k_wos_lengths[2];
-        const index_t Wo = c_n_k_wos_lengths[3];
+        const index_t Ho = c_n_wos_k_lengths[1];
+        const index_t Wo = c_n_wos_k_lengths[2];
+
+        const index_t Y = b_k_xs_c_lengths[1];
+        const index_t X = b_k_xs_c_lengths[2];
 
         const index_t ConvStrideH = conv_filter_strides[0];
         const index_t ConvStrideW = conv_filter_strides[1];
-
-        const index_t Y = b_k_c_xs_lengths[2];
-        const index_t X = b_k_c_xs_lengths[3];
 
         const index_t ConvDilationH = conv_filter_dilations[0];
         const index_t ConvDilationW = conv_filter_dilations[1];
@@ -242,7 +242,7 @@ struct Im2Col
             ck::tile_program::block::move_block_tensor_window(window_dst, {0, kKPerTile});
 
             iGemmK += kKPerTile;
-        } while(iGemmK < numGemmK - kKPerTile);
+        } while(iGemmK < numGemmK);
     }
 };
 
@@ -252,15 +252,15 @@ int main()
 
     constexpr ck::index_t NumDimSpatial = 2;
 
-    ck::index_t N  = 16;
-    ck::index_t K  = 192;
+    ck::index_t N  = 32;
+    ck::index_t K  = 1;
     ck::index_t C  = 192;
     ck::index_t Y  = 3;
     ck::index_t X  = 3;
     ck::index_t Hi = 28;
     ck::index_t Wi = 28;
-    ck::index_t Ho = 28;
-    ck::index_t Wo = 28;
+    ck::index_t Ho = 14;
+    ck::index_t Wo = 14;
 
     std::array<ck::index_t, NumDimSpatial + 2> in_lengths{N, Hi, Wi, C};
     std::array<ck::index_t, NumDimSpatial + 2> in_strides{0, 0, 0, 1};
@@ -284,13 +284,13 @@ int main()
                      std::next(rbegin(out_strides)),
                      std::multiplies<>{});
 
-    std::array<ck::index_t, NumDimSpatial> filter_strides{1, 1};
+    std::array<ck::index_t, NumDimSpatial> filter_strides{2, 2};
     std::array<ck::index_t, NumDimSpatial> filter_dilations{1, 1};
     std::array<ck::index_t, NumDimSpatial> input_left_pads{1, 1};
     std::array<ck::index_t, NumDimSpatial> input_right_pads{1, 1};
 
     // matrix
-    std::array<ck::index_t, 2> in_mtx_lengths{N * Ho * Wo, C * Y * X};
+    std::array<ck::index_t, 2> in_mtx_lengths{N * Ho * Wo, Y * X * C};
     std::array<ck::index_t, 2> in_mtx_strides{0, 1};
 
     std::partial_sum(rbegin(in_mtx_lengths),
@@ -328,8 +328,8 @@ int main()
                      input_right_pads[0],
                      input_right_pads[1]);
 
-    DeviceMem in_buf(sizeof(DataType) * N * Hi * Wi * C);
-    DeviceMem in_mtx_buf(sizeof(DataType) * N * Ho * Wo * C * Y * X);
+    DeviceMem in_buf(sizeof(DataType) * in_host.GetElementSpaceSize());
+    DeviceMem in_mtx_buf(sizeof(DataType) * in_mtx_host_ref.GetElementSpaceSize());
 
     std::cout << in_mtx_host_ref.GetElementSpaceSize() << std::endl;
 
@@ -339,7 +339,9 @@ int main()
     constexpr ck::index_t kGemmKPerBlock = 32;
 
     constexpr ck::index_t kBlockSize = 256;
-    const ck::index_t kGridSize = ((N * Ho * Wo) / kGemmMPerBlock) * ((C * Y * X) / kGemmKPerBlock);
+    ck::index_t kGridSize            = (N * Ho * Wo) / kGemmMPerBlock;
+
+    std::cout << "grid size " << kGridSize << std::endl;
 
     launch(ProgramServer{},
            Im2Col<2, DataType, kGemmMPerBlock, kGemmKPerBlock>{},
