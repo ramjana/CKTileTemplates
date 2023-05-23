@@ -219,27 +219,25 @@ struct Im2Col
         // FIXME: make dst's block distribution different from src's
         constexpr auto dst_block_dstr = src_block_dstr;
 
-        auto window_src = ck::tile_program::block::make_block_tensor_window(
+        auto src_block_window = ck::tile_program::block::make_block_window(
             src_gemmm_gemmk, {iGemmM, 0}, src_block_dstr);
 
-        auto window_dst = ck::tile_program::block::make_block_tensor_window(
+        auto dst_block_window = ck::tile_program::block::make_block_window(
             dst_gemmm_gemmk, {iGemmM, 0}, dst_block_dstr);
 
         index_t iGemmK = 0;
 
         do
         {
-            const auto src_vgpr_block =
-                ck::tile_program::block::load_from_static_block_tensor_window(window_src);
+            const auto src_block_tile = ck::tile_program::block::load_block_tile(src_block_window);
 
             // FIXME: use shuffle API
-            const auto dst_vgpr_block = src_vgpr_block;
+            const auto dst_block_tile = src_block_tile;
 
-            ck::tile_program::block::store_into_static_block_tensor_window(window_dst,
-                                                                           dst_vgpr_block);
+            ck::tile_program::block::store_block_tile(dst_block_window, dst_block_tile);
 
-            ck::tile_program::block::move_block_tensor_window(window_src, {0, kKPerTile});
-            ck::tile_program::block::move_block_tensor_window(window_dst, {0, kKPerTile});
+            ck::tile_program::block::move_block_window(src_block_window, {0, kKPerTile});
+            ck::tile_program::block::move_block_window(dst_block_window, {0, kKPerTile});
 
             iGemmK += kKPerTile;
         } while(iGemmK < numGemmK);

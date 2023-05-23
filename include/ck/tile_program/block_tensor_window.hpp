@@ -137,9 +137,9 @@ struct BlockTensorWindow
 
 template <typename TensorView_, typename BlockTensorDistribution_>
 __host__ __device__ constexpr auto
-make_block_tensor_window(const TensorView_& tensor_view,
-                         const Array<index_t, TensorView_::GetNumOfDimension()>& origin,
-                         const BlockTensorDistribution_& block_tensor_distribution)
+make_block_window(const TensorView_& tensor_view,
+                  const Array<index_t, TensorView_::GetNumOfDimension()>& origin,
+                  const BlockTensorDistribution_& block_tensor_distribution)
 {
     return BlockTensorWindow<remove_cvref_t<TensorView_>, remove_cvref_t<BlockTensorDistribution_>>{
         tensor_view, origin, block_tensor_distribution};
@@ -147,15 +147,14 @@ make_block_tensor_window(const TensorView_& tensor_view,
 
 // FIXME: dummy host function for tile program
 template <typename BlockTensorWindow_>
-__host__ void move_block_tensor_window(BlockTensorWindow_&,
-                                       const MultiIndex<BlockTensorWindow_::GetNumOfDimension()>&)
+__host__ void move_block_window(BlockTensorWindow_&,
+                                const MultiIndex<BlockTensorWindow_::GetNumOfDimension()>&)
 {
 }
 
 template <typename BlockTensorWindow_>
-__device__ void
-move_block_tensor_window(BlockTensorWindow_& window,
-                         const MultiIndex<BlockTensorWindow_::GetNumOfDimension()>& step)
+__device__ void move_block_window(BlockTensorWindow_& window,
+                                  const MultiIndex<BlockTensorWindow_::GetNumOfDimension()>& step)
 {
     window.MoveBottomTensorThreadCoordinate(step);
 }

@@ -16,14 +16,14 @@ namespace block {
 
 // FIXME: host dummy function for tile program
 template <typename BottomTensorView_, typename BlockTensorDistribution_, typename DataType_>
-__host__ void store_into_static_block_tensor_window(
-    BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>&,
-    const StaticBlockDistributedTensor<DataType_, BlockTensorDistribution_>&)
+__host__ void
+store_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>&,
+                 const StaticBlockDistributedTensor<DataType_, BlockTensorDistribution_>&)
 {
 }
 
 template <typename BottomTensorView_, typename BlockTensorDistribution_, typename DataType_>
-__device__ void store_into_static_block_tensor_window(
+__device__ void store_block_tile(
     BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& block_tensor_window,
     const StaticBlockDistributedTensor<DataType_, BlockTensorDistribution_>& block_dstr_tensor)
 {

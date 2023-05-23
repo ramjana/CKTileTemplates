@@ -16,7 +16,7 @@ namespace block {
 
 // FIXME: host dummy function for tile program
 template <typename BottomTensorView_, typename BlockTensorDistribution_>
-__host__ auto load_from_static_block_tensor_window(
+__host__ auto load_block_tile(
     const BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& block_tensor_window)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
@@ -31,8 +31,8 @@ __host__ auto load_from_static_block_tensor_window(
 }
 
 template <typename BottomTensorView_, typename BlockTensorDistribution_>
-__device__ auto load_from_static_block_tensor_window(
-    BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& block_tensor_window)
+__device__ auto
+load_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& block_tensor_window)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;
