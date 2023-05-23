@@ -52,17 +52,22 @@ __device__ auto load_from_static_block_tensor_window(
 
     // FIXME:
     constexpr index_t ScalarPerVector = 1;
+    constexpr index_t VectorDimY      = 1;
 
-    // FIXME:
+    // FIXME
     using DimAccessOrder = typename arithmetic_sequence_gen<0, ndim_ys, 1>::type;
 
-    // FIXME:
-    using ScalarsPerAccess = typename uniform_sequence_gen<ndim_ys, 1>::type;
+    constexpr auto scalars_per_access_arr = generate_array(
+        [&](auto i) { return (i == VectorDimY) ? ScalarPerVector : 1; }, Number<ndim_ys>{});
 
-    using vector_t = typename vector_type_maker_t<DataType, ScalarPerVector>::type;
+    constexpr auto scalars_per_access = TO_SEQUENCE(scalars_per_access_arr, ndim_ys);
 
-    using SFC_Ys =
-        SpaceFillingCurve<decltype(thread_tensor_lengths_ys), DimAccessOrder, ScalarsPerAccess>;
+    using vector_type_t = vector_type_maker_t<DataType, ScalarPerVector>;
+    using vector_t      = typename vector_type_t::type;
+
+    using SFC_Ys = SpaceFillingCurve<decltype(thread_tensor_lengths_ys),
+                                     DimAccessOrder,
+                                     decltype(scalars_per_access)>;
 
     constexpr index_t num_access = SFC_Ys::GetNumOfAccess();
 
@@ -71,17 +76,28 @@ __device__ auto load_from_static_block_tensor_window(
     // loop over thread tensor space [y0, y1, ...]
     static_for<0, num_access, 1>{}([&](auto iAccess) {
         // read from bottom tensor
-        const vector_t vec =
+        const vector_t vec_value =
             block_tensor_window.GetBottomTensorView().template GetVectorizedElements<vector_t>(
                 block_tensor_window.GetBottomTensorThreadCoordinate());
 
-        // data index [y0, y1, ...]
-        constexpr auto idx_ys = SFC_Ys::GetIndex(iAccess);
+        const vector_type_t vec{vec_value};
 
-        constexpr index_t did = block_dstr.GetYs2DidDescriptor().CalculateOffset(idx_ys);
+        // data index [y0, y1, ...]
+        constexpr auto idx_ys_start = SFC_Ys::GetIndex(iAccess);
 
         // write into block distributed tensor
-        block_dstr_tensor.GetThreadBuffer().template SetAsType<vector_t>(Number<did>{}, vec);
+        static_for<0, ScalarPerVector, 1>{}([&](auto j) {
+            constexpr auto idx_ys = generate_array(
+                [&](auto jj) {
+                    return jj == VectorDimY ? (idx_ys_start[jj] + j) : idx_ys_start[jj];
+                },
+                Number<ndim_ys>{});
+
+            constexpr index_t did = block_dstr.GetYs2DidDescriptor().CalculateOffset(idx_ys);
+
+            block_dstr_tensor.GetThreadBuffer().template At<did>() =
+                vec.template AsType<DataType>()[j];
+        });
 
         // move thread coordinate
         if constexpr(iAccess.value != num_access - 1)

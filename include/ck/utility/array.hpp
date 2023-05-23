@@ -93,6 +93,15 @@ __host__ __device__ constexpr auto make_array(Xs&&... xs)
     return Array<data_type, sizeof...(Xs)>{std::forward<Xs>(xs)...};
 }
 
+template <typename F, index_t N>
+__host__ __device__ constexpr auto generate_array(F&& f, Number<N>)
+{
+    using T = remove_cvref_t<decltype(f(0))>;
+
+    return unpack([&f](auto&&... is) { return Array<T, N>{f(is)...}; },
+                  typename arithmetic_sequence_gen<0, N, 1>::type{});
+}
+
 template <typename T, index_t N, typename X>
 __host__ __device__ constexpr auto to_array(const X& x)
 {

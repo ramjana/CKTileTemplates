@@ -248,7 +248,7 @@ struct Im2Col
 
 int main()
 {
-    using DataType = float;
+    using DataType = ck::half_t;
 
     constexpr ck::index_t NumDimSpatial = 2;
 
