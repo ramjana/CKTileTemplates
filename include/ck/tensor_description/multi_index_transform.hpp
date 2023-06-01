@@ -8,9 +8,45 @@
 
 namespace ck {
 
-template <typename LowLength>
-struct PassThrough
+enum struct IndexTransformEnum
 {
+    Undefined,
+    PassThrough,
+    Pad,
+    Embed,
+    Merge,
+    UnMerge,
+};
+
+template <index_t NDimLow, index_t NDimUp>
+struct BaseTransform
+{
+    __host__ __device__ static constexpr auto GetTypeEnum()
+    {
+        return IndexTransformEnum::Undefined;
+    }
+
+    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return NDimLow; }
+
+    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return NDimUp; }
+
+#if 0
+    template<typename LowVectorAlignments, typename LowVectorLengths, typename LowVectorStrides>
+    __host__ __device__ static constexpr auto CalculateUpperDimensionVectorAlignmentLengthStrides(
+            const LowVectorAlignments& low_vec_aligns,
+            const LowVectorLengths& low_vec_lengths,
+            const LowVectorStrides& low_vec_strides)
+    {
+        Array<index_t, n>
+    }
+#endif
+};
+
+template <typename LowLength>
+struct PassThrough : public BaseTransform<1, 1>
+{
+    static constexpr auto type_enum = IndexTransformEnum::PassThrough;
+
     using LowerIndex = MultiIndex<1>;
     using UpperIndex = MultiIndex<1>;
 
@@ -25,9 +61,10 @@ struct PassThrough
     {
     }
 
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
+    __host__ __device__ static constexpr auto GetTypeEnum()
+    {
+        return IndexTransformEnum::PassThrough;
+    }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -63,8 +100,6 @@ struct PassThrough
         idx_low += idx_diff_low;
     }
 
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
-
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
         return true;
@@ -96,7 +131,7 @@ template <typename LowLength,
           typename LeftPadLength,
           typename RightPadLength,
           bool SkipIsValidCheck = false>
-struct Pad
+struct Pad : public BaseTransform<1, 1>
 {
     using LowerIndex = MultiIndex<1>;
     using UpperIndex = MultiIndex<1>;
@@ -117,10 +152,6 @@ struct Pad
           right_pad_length_{right_pad_length}
     {
     }
-
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -155,8 +186,6 @@ struct Pad
 
         idx_low += idx_diff_low;
     }
-
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
 
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
@@ -210,10 +239,6 @@ struct LeftPad
     {
     }
 
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
-
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
     template <typename LowIdx, typename UpIdx>
@@ -248,8 +273,6 @@ struct LeftPad
         idx_low += idx_diff_low;
     }
 
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
-
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
         return SkipIsValidCheck;
@@ -280,7 +303,7 @@ struct LeftPad
 };
 
 template <typename LowLength, typename RightPadLength, bool SkipIsValidCheck = false>
-struct RightPad
+struct RightPad : public BaseTransform<1, 1>
 {
     using LowerIndex = MultiIndex<1>;
     using UpperIndex = MultiIndex<1>;
@@ -300,10 +323,6 @@ struct RightPad
           right_pad_length_{right_pad_length}
     {
     }
-
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -338,8 +357,6 @@ struct RightPad
 
         idx_low += idx_diff_low;
     }
-
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
 
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
@@ -381,7 +398,7 @@ struct RightPad
 template <typename UpLengths,
           typename Coefficients,
           typename enable_if<UpLengths::Size() == Coefficients::Size(), bool>::type = false>
-struct Embed
+struct Embed : BaseTransform<1, UpLengths::Size()>
 {
     static constexpr index_t NDimUp = UpLengths::Size();
 
@@ -399,9 +416,7 @@ struct Embed
     {
     }
 
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return NDimUp; }
+    __host__ __device__ static constexpr auto GetTypeEnum() { return IndexTransformEnum::Embed; }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -441,8 +456,6 @@ struct Embed
 
         idx_low += idx_diff_low;
     }
-
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
 
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
@@ -497,7 +510,7 @@ struct lambda_merge_generate_MagicDivision_calculate_magic_divisor
 //   5. When upper-index is int32_t type (when index_t is int32_t), its value need to be
 //   non-negative.
 template <typename LowLengths>
-struct Merge_v2_magic_division
+struct Merge_v2_magic_division : public BaseTransform<LowLengths::Size(), 1>
 {
     static constexpr index_t NDimLow = LowLengths::Size();
 
@@ -530,9 +543,7 @@ struct Merge_v2_magic_division
         static_assert(LowerIndex::Size() == NDimLow, "wrong!");
     }
 
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return NDimLow; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
+    __host__ __device__ static constexpr auto GetTypeEnum() { return IndexTransformEnum::Merge; }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -591,8 +602,6 @@ struct Merge_v2_magic_division
         idx_low(Number<0>{}) = tmp;
     }
 
-    __host__ __device__ static constexpr bool IsLinearTransform() { return false; }
-
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
         return true;
@@ -628,7 +637,7 @@ struct Merge_v2_magic_division
 // be used for low_lengths that are known at compile time and are power of 2, otherwise performance
 // will be very bad
 template <typename LowLengths>
-struct Merge_v3_division_mod
+struct Merge_v3_division_mod : public BaseTransform<LowLengths::Size(), 1>
 {
     static constexpr index_t NDimLow = LowLengths::Size();
 
@@ -655,10 +664,6 @@ struct Merge_v3_division_mod
     {
         static_assert(LowerIndex::Size() == NDimLow, "wrong!");
     }
-
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return NDimLow; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -712,8 +717,6 @@ struct Merge_v3_division_mod
         idx_diff_low(INm1) = idx_low[INm1] - tmp2;
     }
 
-    __host__ __device__ static constexpr bool IsLinearTransform() { return false; }
-
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
         return true;
@@ -748,7 +751,7 @@ struct Merge_v3_division_mod
 };
 
 template <typename UpLengths, bool Use24BitIntegerCalculation>
-struct UnMerge
+struct UnMerge : public BaseTransform<1, UpLengths::Size()>
 {
     static constexpr index_t NDimUp = UpLengths::Size();
 
@@ -770,9 +773,7 @@ struct UnMerge
     {
     }
 
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return NDimUp; }
+    __host__ __device__ static constexpr auto GetTypeEnum() { return IndexTransformEnum::UnMerge; }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -815,8 +816,6 @@ struct UnMerge
         idx_low += idx_diff_low;
     }
 
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
-
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
         return true;
@@ -848,17 +847,13 @@ struct UnMerge
 };
 
 template <typename LowerIndex>
-struct Freeze
+struct Freeze : public BaseTransform<1, 0>
 {
     LowerIndex low_idx_;
 
     __host__ __device__ constexpr Freeze() = default;
 
     __host__ __device__ constexpr Freeze(const LowerIndex& low_idx) : low_idx_{low_idx} {}
-
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 0; }
 
     __host__ __device__ static constexpr auto GetUpperLengths() { return Tuple<>{}; }
 
@@ -886,8 +881,6 @@ struct Freeze
         idx_diff_low(Number<0>{}) = 0;
     }
 
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
-
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
         return true;
@@ -914,7 +907,7 @@ struct Freeze
 
 // Insert a dangling upper dimension without lower dimension
 template <typename UpperLength>
-struct Insert
+struct Insert : public BaseTransform<0, 1>
 {
     using UpLengths = decltype(make_tuple(UpperLength{}));
 
@@ -926,10 +919,6 @@ struct Insert
         : up_lengths_{make_tuple(up_length)}
     {
     }
-
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 0; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
 
     __host__ __device__ constexpr auto GetUpperLengths() const { return up_lengths_; }
 
@@ -952,8 +941,6 @@ struct Insert
                           UpIdx::Size() == 1,
                       "wrong! inconsistent # of dimension");
     }
-
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
 
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
@@ -980,7 +967,7 @@ struct Insert
 };
 
 template <typename VectorSize, typename UpLength>
-struct Vectorize
+struct Vectorize : public BaseTransform<1, 1>
 {
     using LowerIndex = MultiIndex<1>;
     using UpperIndex = MultiIndex<1>;
@@ -997,10 +984,6 @@ struct Vectorize
         : vector_size_{vector_size}, up_lengths_{make_tuple(up_length)}
     {
     }
-
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -1036,8 +1019,6 @@ struct Vectorize
         idx_low += idx_diff_low;
     }
 
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
-
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
         return true;
@@ -1066,7 +1047,7 @@ struct Vectorize
 };
 
 template <typename LowLength, typename SliceBegin, typename SliceEnd>
-struct Slice
+struct Slice : public BaseTransform<1, 1>
 {
     using LowerIndex = MultiIndex<1>;
     using UpperIndex = MultiIndex<1>;
@@ -1087,10 +1068,6 @@ struct Slice
           slice_end_{slice_end}
     {
     }
-
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -1125,8 +1102,6 @@ struct Slice
 
         idx_low += idx_diff_low;
     }
-
-    __host__ __device__ static constexpr bool IsLinearTransform() { return true; }
 
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {
@@ -1163,7 +1138,7 @@ struct Slice
  * TODO: Need an improved implementation since the modulo operation is expensive.
  */
 template <typename Modulus, typename UpLength>
-struct Modulo
+struct Modulo : public BaseTransform<1, 1>
 {
     using LowerIndex = MultiIndex<1>;
     using UpperIndex = MultiIndex<1>;
@@ -1178,10 +1153,6 @@ struct Modulo
         : modulus_{modulus}, up_lengths_{make_tuple(up_length)}
     {
     }
-
-    __host__ __device__ static constexpr index_t GetNumOfLowerDimension() { return 1; }
-
-    __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return 1; }
 
     __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
 
@@ -1216,8 +1187,6 @@ struct Modulo
         idx_low(I0)            = (up_idx(I0) + idx_diff_up(I0)) % modulus_;
         idx_diff_low(I0)       = idx_low - idx_low_old;
     }
-
-    __host__ __device__ static constexpr bool IsLinearTransform() { return false; }
 
     __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
     {

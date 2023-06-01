@@ -120,6 +120,14 @@ struct BlockTensorWindow
                                idx_diff_adaptor_bottom);
     }
 
+    // return vector dimension among [y0, y1, ...]
+    __host__ __device__ static constexpr auto GetVectorDimensinAndVectorLength()
+    {
+        // check bottom tensor
+
+        // check window adaptor
+    }
+
     // this is the bottom tensor
     // [x0', x1', ...] ==> [offset]
     // tensor view and per-thread coordinate for bottom tensor
@@ -128,7 +136,7 @@ struct BlockTensorWindow
 
     // Block tensor distribution, which contains:
     //   1. adaptor for window: [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
-    //   2. thread descriptor for thread tensor in register
+    //   2. thread descriptor for thread tensor in register: [y0, y1, ...] ==> [did]
     BlockTensorDstr block_tensor_dstr_;
 
     //    thread window coordinate

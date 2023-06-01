@@ -54,7 +54,7 @@ struct TensorDescriptor : public TensorAdaptor<Transforms,
         // TODO check dependency of dimensions is valid
     }
 
-    // construct from TensorAdaptor bass class
+    // construct from TensorAdaptor base class
     __host__ __device__ constexpr TensorDescriptor(const Base& adaptor,
                                                    ElementSpaceSize element_space_size)
         : Base{adaptor}, element_space_size_{element_space_size}

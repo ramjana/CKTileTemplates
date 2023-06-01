@@ -240,6 +240,33 @@ struct TensorAdaptor
         return is_known && is_known_at_compile_time<ElementSize>::value;
     }
 
+#if 0
+    __host__ __device__ static constexpr auto GetVectorAlignmentLengthStrides()
+    {
+        // FIXME
+        Array<index_t, ndim_hidden> vector_alignments{-1};
+        Array<index_t, ndim_hidden> vector_lengths{-1};
+        Array<index_t, ndim_hidden> vector_strides{-1};
+
+        static_for<0, GetNumOfTransform(), 1>{}([&](auto itran) {
+            const auto& tran        = GetTransforms().At(itran);
+            constexpr auto low_dims = GetLowerDimensionHiddenIdss().At(itran);
+            constexpr auto up_dims  = GetUpperDimensionHiddenIdss().At(itran);
+
+            const auto tmp = tran.CalculateUpperDimensionVectorAlignmentLengthStrides(
+                get_container_subset(vector_alignments, low_dims),
+                get_container_subset(vector_lengths, low_dims),
+                get_container_subset(vector_strides, low_dims));
+
+            set_container_subset(vector_alignments, tmp.template At<0>();
+            set_container_subset(vector_lengths, tmp.template At<1>();
+            set_container_subset(vector_strides, tmp.template At<2>();
+        });
+
+        return make_tuple(vector_alignments, vector_lengths, vector_strides);
+    }
+#endif
+
     __host__ __device__ void Print() const
     {
         printf("{");
