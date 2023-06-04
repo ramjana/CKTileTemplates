@@ -225,6 +225,40 @@ struct Im2Col
         auto dst_block_window = ck::tile_program::block::make_block_window(
             dst_gemmm_gemmk, {iGemmM, 0}, dst_block_dstr);
 
+#if 1 // debug
+        {
+            // FIXME: set these override vector inforamtion correctly
+            constexpr auto guaranteed_vector_alignments =
+                to_array<index_t, 17>(typename uniform_sequence_gen<17, -1>::type{});
+
+            auto guaranteed_vector_lengths =
+                to_array<index_t, 17>(typename uniform_sequence_gen<17, -1>::type{});
+
+            auto guaranteed_vector_strides =
+                to_array<index_t, 17>(typename uniform_sequence_gen<17, -1>::type{});
+
+            guaranteed_vector_lengths(0) = 32;
+            guaranteed_vector_lengths(4) = 8;
+
+            guaranteed_vector_strides(0) = 1;
+
+            const auto [src_aligns, src_lengths, src_strides] =
+                src_gemmm_gemmk.GetTensorDescriptor()
+                    .GetHiddenDimensionSafeVectorAlignmentLengthStrides(
+                        guaranteed_vector_alignments,
+                        guaranteed_vector_lengths,
+                        guaranteed_vector_strides);
+
+            if(ps.get_block_1d_id() == 0 && ps.get_thread_local_1d_id() == 0)
+            {
+                printf("src\n");
+                print_array("aligns ", src_aligns);
+                print_array("lengths", src_lengths);
+                print_array("strides", src_strides);
+            }
+        }
+#endif
+
         index_t iGemmK = 0;
 
         do

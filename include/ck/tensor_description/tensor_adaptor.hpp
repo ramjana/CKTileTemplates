@@ -176,10 +176,11 @@ struct TensorAdaptor
         return GetHiddenDimensionLength(TopDimensionHiddenIds::At(idim_top));
     }
 
-    template <index_t IDimTop>
-    __host__ __device__ constexpr auto GetTopDimensionLength() const
+    template <index_t IDimBottom>
+    __host__ __device__ constexpr index_t
+    GetBottomDimensionLength(Number<IDimBottom> idim_bottom) const
     {
-        return GetHiddenDimensionLength(TopDimensionHiddenIds::template At<IDimTop>());
+        return GetHiddenDimensionLength(TopDimensionHiddenIds::At(idim_bottom));
     }
 
     __host__ __device__ constexpr auto GetTopDimensionLengths() const
@@ -188,13 +189,11 @@ struct TensorAdaptor
                               Number<ndim_top_>{});
     }
 
-#if 0 // debug
-    template <index_t I>
-    __host__ __device__ constexpr index_t GetBottomDimensionLength(Number<I> idim) const
+    __host__ __device__ constexpr auto GetBottomDimensionLengths() const
     {
-        // TODO: not implemented
+        return generate_tuple([&](auto i) { return GetBottomDimensionLength(i); },
+                              Number<ndim_bottom_>{});
     }
-#endif
 
     template <typename TopIdx>
     __host__ __device__ constexpr auto CalculateBottomIndex(const TopIdx& idx_top) const
@@ -229,7 +228,7 @@ struct TensorAdaptor
         return get_container_subset(idx_hidden, BottomDimensionHiddenIds{});
     }
 
-    __host__ __device__ static constexpr bool IsKnownAtCompileTime()
+    __host__ __device__ static constexpr bool IsStatic()
     {
         bool is_known = true;
 
@@ -240,32 +239,87 @@ struct TensorAdaptor
         return is_known && is_known_at_compile_time<ElementSize>::value;
     }
 
-#if 0
-    __host__ __device__ static constexpr auto GetVectorAlignmentLengthStrides()
+    __host__ __device__ static constexpr bool IsKnownAtCompileTime() { return IsStatic(); }
+
+    __host__ __device__ static constexpr auto GetHiddenDimensionSafeVectorAlignmentLengthStrides(
+        const Array<index_t, ndim_hidden_>& guaranteed_vector_alignments,
+        const Array<index_t, ndim_hidden_>& guaranteed_vector_lengths,
+        const Array<index_t, ndim_hidden_>& guaranteed_vector_strides)
     {
-        // FIXME
-        Array<index_t, ndim_hidden> vector_alignments{-1};
-        Array<index_t, ndim_hidden> vector_lengths{-1};
-        Array<index_t, ndim_hidden> vector_strides{-1};
+#if 0
+        Array<index_t, ndim_hidden_> vector_alignments{-1};
+        Array<index_t, ndim_hidden_> vector_lengths{-1};
+        Array<index_t, ndim_hidden_> vector_strides{-1};
+#else
+        auto vector_alignments = guaranteed_vector_alignments;
+        auto vector_lengths    = guaranteed_vector_lengths;
+        auto vector_strides    = guaranteed_vector_strides;
+#endif
 
         static_for<0, GetNumOfTransform(), 1>{}([&](auto itran) {
-            const auto& tran        = GetTransforms().At(itran);
             constexpr auto low_dims = GetLowerDimensionHiddenIdss().At(itran);
             constexpr auto up_dims  = GetUpperDimensionHiddenIdss().At(itran);
 
-            const auto tmp = tran.CalculateUpperDimensionVectorAlignmentLengthStrides(
-                get_container_subset(vector_alignments, low_dims),
-                get_container_subset(vector_lengths, low_dims),
-                get_container_subset(vector_strides, low_dims));
+            const auto up_guaranteed_vector_alignments =
+                get_container_subset(guaranteed_vector_alignments, up_dims);
+            const auto up_guaranteed_vector_lengths =
+                get_container_subset(guaranteed_vector_lengths, up_dims);
+            const auto up_guaranteed_vector_strides =
+                get_container_subset(guaranteed_vector_strides, up_dims);
 
-            set_container_subset(vector_alignments, tmp.template At<0>();
-            set_container_subset(vector_lengths, tmp.template At<1>();
-            set_container_subset(vector_strides, tmp.template At<2>();
+            // only need type of transform
+            auto [up_vector_alignments, up_vector_lengths, up_vector_strides] =
+                Transforms{}.At(itran).CalculateUpperDimensionSafeVectorAlignmentLengthStrides(
+                    get_container_subset(vector_alignments, low_dims),
+                    get_container_subset(vector_lengths, low_dims),
+                    get_container_subset(vector_strides, low_dims));
+
+            for(index_t i = 0; i < up_dims.Size(); ++i)
+            {
+                up_vector_alignments(i) = (up_guaranteed_vector_alignments[i] != -1)
+                                              ? up_guaranteed_vector_alignments[i]
+                                              : up_vector_alignments[i];
+
+                up_vector_lengths(i) = (up_guaranteed_vector_lengths[i] != -1)
+                                           ? up_guaranteed_vector_lengths[i]
+                                           : up_vector_lengths[i];
+
+                up_vector_strides(i) = (up_guaranteed_vector_strides[i] != -1)
+                                           ? up_guaranteed_vector_strides[i]
+                                           : up_vector_strides[i];
+            }
+
+            set_container_subset(vector_alignments, up_dims, up_vector_alignments);
+            set_container_subset(vector_lengths, up_dims, up_vector_lengths);
+            set_container_subset(vector_strides, up_dims, up_vector_strides);
         });
 
+#if 0 // debug
+        constexpr auto top_dims = TopDimensionHiddenIds{};
+
+        return make_tuple(get_container_subset(vector_alignments, top_dims),
+                          get_container_subset(vector_lengths, top_dims),
+                          get_container_subset(vector_strides, top_dims));
+#else
         return make_tuple(vector_alignments, vector_lengths, vector_strides);
-    }
 #endif
+    }
+
+    __host__ __device__ static constexpr auto GetTopDimensionSafeVectorAlignmentLengthStrides(
+        const Array<index_t, ndim_hidden_>& guaranteed_vector_alignments,
+        const Array<index_t, ndim_hidden_>& guaranteed_vector_lengths,
+        const Array<index_t, ndim_hidden_>& guaranteed_vector_strides)
+    {
+        const auto [vector_alignments, vector_lengths, vector_strides] =
+            GetHiddenDimensionSafeVectorAlignmentLengthStrides(
+                guaranteed_vector_alignments, guaranteed_vector_lengths, guaranteed_vector_strides);
+
+        constexpr auto top_dims = TopDimensionHiddenIds{};
+
+        return make_tuple(get_container_subset(vector_alignments, top_dims),
+                          get_container_subset(vector_lengths, top_dims),
+                          get_container_subset(vector_strides, top_dims));
+    }
 
     __host__ __device__ void Print() const
     {

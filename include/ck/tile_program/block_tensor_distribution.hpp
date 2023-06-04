@@ -223,17 +223,17 @@ struct BlockTensorDistribution
     WidLidYs2XsAdaptor wid_lid_ys_to_xs_;
     Ys2DidDescriptor ys_to_did_;
 
+    __host__ __device__ constexpr auto GetLengths() const
+    {
+        wid_lid_ys_to_xs_.GetBottomDimensionLengths();
+    }
+
     __host__ __device__ constexpr const auto& GetWidLidYs2XsAdaptor() const
     {
         return wid_lid_ys_to_xs_;
     }
 
     __host__ __device__ constexpr const auto& GetYs2DidDescriptor() const { return ys_to_did_; }
-
-    __host__ __device__ constexpr const auto& GetWidLidYsLengths() const
-    {
-        return wid_lid_ys_to_xs_;
-    }
 
     __device__ auto CalculateThreadWidLidYsOrigin() const
     {
@@ -249,10 +249,9 @@ struct BlockTensorDistribution
         return idx;
     }
 
-    __host__ __device__ static constexpr bool IsKnownAtCompileTime()
+    __host__ __device__ static constexpr bool IsStatic()
     {
-        return WidLidYs2XsAdaptor::IsKnownAtCompileTime() &&
-               Ys2DidDescriptor::IsKnownAtCompileTime();
+        return WidLidYs2XsAdaptor::IsStatic() && Ys2DidDescriptor::IsStatic();
     }
 
     __host__ __device__ void Print() const

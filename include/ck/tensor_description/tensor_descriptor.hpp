@@ -103,10 +103,55 @@ struct TensorDescriptor : public TensorAdaptor<Transforms,
         return Base::GetTopDimensionHiddenIds();
     }
 
-    __host__ __device__ static constexpr bool IsKnownAtCompileTime()
+    __host__ __device__ static constexpr bool IsStatic()
     {
         return Base::IsKnownAtCompileTime() && is_known_at_compile_time<ElementSpaceSize>::value;
     }
+
+    __host__ __device__ static constexpr bool IsKnownAtCompileTime() { return IsStatic(); }
+
+    __host__ __device__ static constexpr auto GetTopDimensionSafeVectorAlignmentLengthStrides()
+    {
+        // FIXME: set these override vector inforamtion correctly
+        constexpr auto guaranteed_vector_alignments = to_array<index_t, ndim_hidden_>(
+            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
+
+        auto guaranteed_vector_lengths = to_array<index_t, ndim_hidden_>(
+            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
+
+        auto guaranteed_vector_strides = to_array<index_t, ndim_hidden_>(
+            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
+
+        return Base::GetTopDimensionSafeVectorAlignmentLengthStrides(
+            guaranteed_vector_alignments, guaranteed_vector_lengths, guaranteed_vector_strides);
+    }
+
+    __host__ __device__ static constexpr auto GetHiddenDimensionSafeVectorAlignmentLengthStrides()
+    {
+        // FIXME: set these override vector inforamtion correctly
+        constexpr auto guaranteed_vector_alignments = to_array<index_t, ndim_hidden_>(
+            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
+
+        auto guaranteed_vector_lengths = to_array<index_t, ndim_hidden_>(
+            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
+
+        auto guaranteed_vector_strides = to_array<index_t, ndim_hidden_>(
+            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
+
+        return Base::GetHiddenDimensionSafeVectorAlignmentLengthStrides(
+            guaranteed_vector_alignments, guaranteed_vector_lengths, guaranteed_vector_strides);
+    }
+
+#if 1 // debug
+    __host__ __device__ static constexpr auto GetHiddenDimensionSafeVectorAlignmentLengthStrides(
+        const Array<index_t, ndim_hidden_>& guaranteed_vector_alignments,
+        const Array<index_t, ndim_hidden_>& guaranteed_vector_lengths,
+        const Array<index_t, ndim_hidden_>& guaranteed_vector_strides)
+    {
+        return Base::GetHiddenDimensionSafeVectorAlignmentLengthStrides(
+            guaranteed_vector_alignments, guaranteed_vector_lengths, guaranteed_vector_strides);
+    }
+#endif
 
     __host__ __device__ void Print() const
     {

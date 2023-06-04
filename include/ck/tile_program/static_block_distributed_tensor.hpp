@@ -19,7 +19,7 @@ struct StaticBlockDistributedTensor
     using T                       = remove_cvref_t<T_>;
     using StaticBlockDistribution = remove_cvref_t<StaticBlockDistribution_>;
 
-    static_assert(StaticBlockDistribution::IsKnownAtCompileTime(),
+    static_assert(StaticBlockDistribution::IsStatic(),
                   "wrong! StaticBlockDistribution should be known at compile tile");
 
     using ThreadTensorDesc =

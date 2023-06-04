@@ -182,6 +182,20 @@ struct Tuple : detail::TupleImpl<typename arithmetic_sequence_gen<0, sizeof...(X
         return At(i);
     }
 
+    // WARNING: needed by compiler for C++ structured binding support only, don't use this function!
+    template <std::size_t I>
+    __host__ __device__ constexpr const auto& get() const
+    {
+        return this->template At<I>();
+    }
+
+    // WARNING: needed bu compiler for C++ structured binding support only, don't use this function!
+    template <std::size_t I>
+    __host__ __device__ constexpr auto& get()
+    {
+        return this->template At<I>();
+    }
+
     template <typename T>
     __host__ __device__ constexpr auto operator=(const T& a)
     {
@@ -236,3 +250,19 @@ constexpr Tuple<Args&...> tie(Args&... args) noexcept
 }
 
 } // namespace ck
+
+namespace std {
+
+// WARNING: needed by compiler for C++ structured binding support only, don't use this
+template <typename... Ts>
+struct tuple_size<ck::Tuple<Ts...>> : std::integral_constant<std::size_t, sizeof...(Ts)>
+{
+};
+
+// WARNING: needed by compiler for C++ structured binding support only, don't use this
+template <std::size_t I, typename... Ts>
+struct tuple_element<I, ck::Tuple<Ts...>> : ck::tuple_element<I, ck::Tuple<Ts...>>
+{
+};
+
+} // namespace std
