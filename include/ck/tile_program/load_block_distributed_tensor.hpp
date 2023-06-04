@@ -53,14 +53,9 @@ load_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& 
 
     constexpr index_t ndim_ys = thread_tensor_lengths_ys.Size();
 
-#if 0
-    // FIXME:
-    constexpr index_t VectorDimY      = 1;
-    constexpr index_t ScalarPerVector = 1;
-#else
     constexpr auto tmp = []() {
-        const auto [ignore, ys_vector_lengths, ys_vector_strides] =
-            BlockWindow::GetWindowAdaptorYsSafeVectorAlignmentLengthStrides();
+        const auto [ys_vector_lengths, ys_vector_strides] =
+            BlockWindow::GetWindowAdaptorYsSafeVectorLengthStrides();
 
         index_t VectorDimY      = 0;
         index_t ScalarPerVector = 1;
@@ -79,20 +74,6 @@ load_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& 
 
     constexpr index_t VectorDimY      = tmp.template At<0>();
     constexpr index_t ScalarPerVector = tmp.template At<1>();
-
-    {
-        const auto [ignore, ys_vector_lengths, ys_vector_strides] =
-            BlockWindow::GetWindowAdaptorYsSafeVectorAlignmentLengthStrides();
-
-        if(get_block_1d_id() == 0 && get_thread_local_1d_id() == 0)
-        {
-            print_array("ys_vector_lengths", ys_vector_lengths);
-            print_array("ys_vector_strides", ys_vector_strides);
-
-            printf("VectorDimY %d, ScalarPerVector %d\n", VectorDimY, ScalarPerVector);
-        }
-    }
-#endif
 
     // FIXME
     using DimAccessOrder = typename arithmetic_sequence_gen<0, ndim_ys, 1>::type;

@@ -131,35 +131,23 @@ struct BlockTensorWindow
                                idx_diff_adaptor_bottom);
     }
 
-    // return vector dimension among [wid, lid, y0, y1, ...]
-    __host__ __device__ static constexpr auto GetWindowAdaptorYsSafeVectorAlignmentLengthStrides()
+    // return vector dimension among [y0, y1, ...]
+    __host__ __device__ static constexpr auto GetWindowAdaptorYsSafeVectorLengthStrides()
     {
-        // bottom tensor top dimension vector-alignments, lengths and strides
-        const auto [ingore,
-                    bottom_tensor_top_dim_vector_lengths,
-                    bottom_tensor_top_dim_vector_strides] =
-            BottomTensorDesc::GetTopDimensionSafeVectorAlignmentLengthStrides();
-
-        // window vector-alignments: window can be moved arbitrarily, so alignment is unknown
-        // TODO: restrict step size so that alignments can be satisfied
-        const auto window_adaptor_bottom_dim_vector_alignments =
-            Array<index_t, WindowAdaptor::GetNumOfBottomDimension()>{-1};
+        // bottom tensor top dimension vector lengths and strides
+        const auto [bottom_tensor_top_dim_vector_lengths, bottom_tensor_top_dim_vector_strides] =
+            BottomTensorDesc::GetTopDimensionSafeVectorLengthStrides();
 
         // window vector lengths/strides
         const auto window_adaptor_bottom_dim_vector_lengths = bottom_tensor_top_dim_vector_lengths;
         const auto window_adaptor_bottom_dim_vector_strides = bottom_tensor_top_dim_vector_strides;
 
         // window adaptor [wid, lid, y0, y1, ...]
-        Array<index_t, WindowAdaptor::GetNumOfHiddenDimension()> window_adaptor_vector_alignments{
-            -1};
         Array<index_t, WindowAdaptor::GetNumOfHiddenDimension()> window_adaptor_vector_lengths{-1};
         Array<index_t, WindowAdaptor::GetNumOfHiddenDimension()> window_adaptor_vector_strides{-1};
 
         constexpr auto window_adaptor_bottom_dims = WindowAdaptor::GetBottomDimensionHiddenIds();
 
-        set_container_subset(window_adaptor_vector_alignments,
-                             window_adaptor_bottom_dims,
-                             window_adaptor_bottom_dim_vector_alignments);
         set_container_subset(window_adaptor_vector_lengths,
                              window_adaptor_bottom_dims,
                              window_adaptor_bottom_dim_vector_lengths);
@@ -167,20 +155,16 @@ struct BlockTensorWindow
                              window_adaptor_bottom_dims,
                              window_adaptor_bottom_dim_vector_strides);
 
-        const auto [window_adaptor_wid_lid_ys_vector_alignments,
-                    window_adaptor_wid_lid_ys_vector_lengths,
+        const auto [window_adaptor_wid_lid_ys_vector_lengths,
                     window_adaptor_wid_lid_ys_vector_strides] =
-            WindowAdaptor::GetTopDimensionSafeVectorAlignmentLengthStrides(
-                window_adaptor_vector_alignments,
-                window_adaptor_vector_lengths,
-                window_adaptor_vector_strides);
+            WindowAdaptor{}.GetTopDimensionSafeVectorLengthStrides(window_adaptor_vector_lengths,
+                                                                   window_adaptor_vector_strides);
 
         // [y0, y1, ...]
         constexpr auto y_dims =
             typename arithmetic_sequence_gen<2, NDimWindowAdaptorTop, 1>::type{};
 
-        return make_tuple(get_container_subset(window_adaptor_wid_lid_ys_vector_alignments, y_dims),
-                          get_container_subset(window_adaptor_wid_lid_ys_vector_lengths, y_dims),
+        return make_tuple(get_container_subset(window_adaptor_wid_lid_ys_vector_lengths, y_dims),
                           get_container_subset(window_adaptor_wid_lid_ys_vector_strides, y_dims));
     }
 

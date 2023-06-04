@@ -91,21 +91,34 @@ __host__ __device__ constexpr auto make_tensor_view(BufferView_& buffer_view,
 template <typename BufferView_,
           typename... Lengths,
           typename... Strides,
+          index_t GuaranteedLastDimensionVectorLength                              = -1,
+          index_t GuaranteedLastDimensionVectorStride                              = -1,
           typename enable_if<sizeof...(Lengths) == sizeof...(Strides), bool>::type = false>
-__host__ __device__ constexpr auto make_naive_tensor_view(BufferView_& buffer_view,
-                                                          const Tuple<Lengths...>& lengths,
-                                                          const Tuple<Strides...>& strides)
+__host__ __device__ constexpr auto
+make_naive_tensor_view(BufferView_& buffer_view,
+                       const Tuple<Lengths...>& lengths,
+                       const Tuple<Strides...>& strides,
+                       Number<GuaranteedLastDimensionVectorLength> = Number<-1>{},
+                       Number<GuaranteedLastDimensionVectorStride> = Number<-1>{})
 {
-    auto desc = make_naive_tensor_descriptor(lengths, strides);
+    auto desc = make_naive_tensor_descriptor(lengths,
+                                             strides,
+                                             Number<GuaranteedLastDimensionVectorLength>{},
+                                             Number<GuaranteedLastDimensionVectorStride>{});
 
     return TensorView<BufferView_, decltype(desc)>{buffer_view, desc};
 }
 
-template <typename BufferView_, typename... Lengths>
-__host__ __device__ constexpr auto make_naive_tensor_view_packed(BufferView_& buffer_view,
-                                                                 const Tuple<Lengths...>& lengths)
+template <typename BufferView_,
+          typename... Lengths,
+          index_t GuaranteedLastDimensionVectorLength = -1>
+__host__ __device__ constexpr auto
+make_naive_tensor_view_packed(BufferView_& buffer_view,
+                              const Tuple<Lengths...>& lengths,
+                              Number<GuaranteedLastDimensionVectorLength> = Number<-1>{})
 {
-    auto desc = make_naive_tensor_descriptor_packed(lengths);
+    auto desc =
+        make_naive_tensor_descriptor_packed(lengths, Number<GuaranteedLastDimensionVectorLength>{});
 
     return TensorView<BufferView_, decltype(desc)>{buffer_view, desc};
 }

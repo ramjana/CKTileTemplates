@@ -16,7 +16,9 @@ template <typename Transforms,
           typename LowerDimensionHiddenIdss,
           typename UpperDimensionHiddenIdss,
           typename TopDimensionHiddenIds,
-          typename ElementSpaceSize>
+          typename ElementSpaceSize,
+          typename GuaranteedVectorLengths_,
+          typename GuaranteedVectorSrides_>
 struct TensorDescriptor : public TensorAdaptor<Transforms,
                                                LowerDimensionHiddenIdss,
                                                UpperDimensionHiddenIdss,
@@ -34,6 +36,13 @@ struct TensorDescriptor : public TensorAdaptor<Transforms,
     constexpr static index_t ntransform_  = Base::GetNumOfTransform();
     constexpr static index_t ndim_hidden_ = Base::GetNumOfHiddenDimension();
     constexpr static index_t ndim_top_    = Base::GetNumOfTopDimension();
+
+    using GuaranteedVectorLengths = GuaranteedVectorLengths_;
+    using GuaranteedVectorStrides = GuaranteedVectorSrides_;
+
+    static_assert(GuaranteedVectorLengths::Size() == ndim_hidden_ &&
+                      GuaranteedVectorStrides::Size() == ndim_hidden_,
+                  "wrong! inconsistent # of hidden dimensions");
 
     using TopIndex    = MultiIndex<ndim_top_>;
     using HiddenIndex = MultiIndex<ndim_hidden_>;
@@ -110,48 +119,12 @@ struct TensorDescriptor : public TensorAdaptor<Transforms,
 
     __host__ __device__ static constexpr bool IsKnownAtCompileTime() { return IsStatic(); }
 
-    __host__ __device__ static constexpr auto GetTopDimensionSafeVectorAlignmentLengthStrides()
+    __host__ __device__ static constexpr auto GetTopDimensionSafeVectorLengthStrides()
     {
-        // FIXME: set these override vector inforamtion correctly
-        constexpr auto guaranteed_vector_alignments = to_array<index_t, ndim_hidden_>(
-            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
-
-        auto guaranteed_vector_lengths = to_array<index_t, ndim_hidden_>(
-            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
-
-        auto guaranteed_vector_strides = to_array<index_t, ndim_hidden_>(
-            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
-
-        return Base::GetTopDimensionSafeVectorAlignmentLengthStrides(
-            guaranteed_vector_alignments, guaranteed_vector_lengths, guaranteed_vector_strides);
+        return Base::GetTopDimensionSafeVectorLengthStrides(
+            to_array<index_t, ndim_hidden_>(GuaranteedVectorLengths{}),
+            to_array<index_t, ndim_hidden_>(GuaranteedVectorStrides{}));
     }
-
-    __host__ __device__ static constexpr auto GetHiddenDimensionSafeVectorAlignmentLengthStrides()
-    {
-        // FIXME: set these override vector inforamtion correctly
-        constexpr auto guaranteed_vector_alignments = to_array<index_t, ndim_hidden_>(
-            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
-
-        auto guaranteed_vector_lengths = to_array<index_t, ndim_hidden_>(
-            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
-
-        auto guaranteed_vector_strides = to_array<index_t, ndim_hidden_>(
-            typename uniform_sequence_gen<ndim_hidden_, -1>::type{});
-
-        return Base::GetHiddenDimensionSafeVectorAlignmentLengthStrides(
-            guaranteed_vector_alignments, guaranteed_vector_lengths, guaranteed_vector_strides);
-    }
-
-#if 1 // debug
-    __host__ __device__ static constexpr auto GetHiddenDimensionSafeVectorAlignmentLengthStrides(
-        const Array<index_t, ndim_hidden_>& guaranteed_vector_alignments,
-        const Array<index_t, ndim_hidden_>& guaranteed_vector_lengths,
-        const Array<index_t, ndim_hidden_>& guaranteed_vector_strides)
-    {
-        return Base::GetHiddenDimensionSafeVectorAlignmentLengthStrides(
-            guaranteed_vector_alignments, guaranteed_vector_lengths, guaranteed_vector_strides);
-    }
-#endif
 
     __host__ __device__ void Print() const
     {
@@ -170,12 +143,16 @@ __host__ __device__ constexpr auto
 make_tensor_descriptor_from_adaptor(const Adaptor& adaptor,
                                     const ElementSpaceSize& element_space_size)
 {
+    constexpr index_t NDimHidden = Adaptor::GetNumOfHiddenDimension();
+
     return TensorDescriptor<remove_cvref_t<decltype(adaptor.GetTransforms())>,
                             remove_cvref_t<decltype(adaptor.GetLowerDimensionHiddenIdss())>,
                             remove_cvref_t<decltype(adaptor.GetUpperDimensionHiddenIdss())>,
                             remove_cvref_t<decltype(adaptor.GetTopDimensionHiddenIds())>,
-                            remove_cvref_t<decltype(element_space_size)>>{adaptor,
-                                                                          element_space_size};
+                            remove_cvref_t<decltype(element_space_size)>,
+                            typename uniform_sequence_gen<NDimHidden, -1>::type,
+                            typename uniform_sequence_gen<NDimHidden, -1>::type>{
+        adaptor, element_space_size};
 }
 
 template <typename OldTensorDescriptor,
@@ -195,12 +172,25 @@ transform_tensor_descriptor(const OldTensorDescriptor& old_tensor_desc,
                                                              NewLowerDimensionOldTopIdss{},
                                                              NewUpperDimensionNewTopIdss{});
 
+    constexpr index_t NDimHiddenOld = OldTensorDescriptor::GetNumOfHiddenDimension();
+    constexpr index_t NDimHiddenNew = decltype(new_tensor_adaptor)::GetNumOfHiddenDimension();
+
+    using NewGuaranteedVectorLengths = typename sequence_merge<
+        typename OldTensorDescriptor::GuaranteedVectorLengths,
+        typename uniform_sequence_gen<NDimHiddenNew - NDimHiddenOld, -1>::type>::type;
+
+    using NewGuaranteedVectorStrides = typename sequence_merge<
+        typename OldTensorDescriptor::GuaranteedVectorStrides,
+        typename uniform_sequence_gen<NDimHiddenNew - NDimHiddenOld, -1>::type>::type;
+
     return TensorDescriptor<
         remove_cvref_t<decltype(new_tensor_adaptor.GetTransforms())>,
         remove_cvref_t<decltype(new_tensor_adaptor.GetLowerDimensionHiddenIdss())>,
         remove_cvref_t<decltype(new_tensor_adaptor.GetUpperDimensionHiddenIdss())>,
         remove_cvref_t<decltype(new_tensor_adaptor.GetTopDimensionHiddenIds())>,
-        remove_cvref_t<decltype(element_space_size)>>{new_tensor_adaptor, element_space_size};
+        remove_cvref_t<decltype(element_space_size)>,
+        NewGuaranteedVectorLengths,
+        NewGuaranteedVectorStrides>{new_tensor_adaptor, element_space_size};
 }
 
 } // namespace ck

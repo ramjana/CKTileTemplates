@@ -140,7 +140,8 @@ struct Im2Col
         const auto a_img_buf = make_dynamic_buffer<AddressSpaceEnum::Global, const T, index_t>(
             p_a_img, N * Hi * Wi * C);
 
-        const auto a_n_hi_wi_c = make_naive_tensor_view_packed(a_img_buf, make_tuple(N, Hi, Wi, C));
+        const auto a_n_hi_wi_c =
+            make_naive_tensor_view_packed(a_img_buf, make_tuple(N, Hi, Wi, C), Number<32>{});
 
         const auto a_n_hip_wip_c = transform_tensor_view(
             a_n_hi_wi_c,
@@ -183,7 +184,9 @@ struct Im2Col
         auto dst_gemmm_gemmk =
             make_naive_tensor_view(a_mtx_buf,
                                    make_tuple(a_gemmm_gemmk_lengths[0], a_gemmm_gemmk_lengths[1]),
-                                   make_tuple(a_gemmm_gemmk_strides[0], a_gemmm_gemmk_strides[1]));
+                                   make_tuple(a_gemmm_gemmk_strides[0], a_gemmm_gemmk_strides[1]),
+                                   Number<32>{},
+                                   Number<1>{});
 
         const auto numGemmM = a_gemmm_gemmk_lengths[0];
         const auto numGemmK = a_gemmm_gemmk_lengths[1];
@@ -225,12 +228,9 @@ struct Im2Col
         auto dst_block_window = ck::tile_program::block::make_block_window(
             dst_gemmm_gemmk, {iGemmM, 0}, dst_block_dstr);
 
-#if 1 // debug
+#if 0 // debug
         {
             // FIXME: set these override vector inforamtion correctly
-            constexpr auto guaranteed_vector_alignments =
-                to_array<index_t, 17>(typename uniform_sequence_gen<17, -1>::type{});
-
             auto guaranteed_vector_lengths =
                 to_array<index_t, 17>(typename uniform_sequence_gen<17, -1>::type{});
 
@@ -242,17 +242,41 @@ struct Im2Col
 
             guaranteed_vector_strides(0) = 1;
 
-            const auto [src_aligns, src_lengths, src_strides] =
-                src_gemmm_gemmk.GetTensorDescriptor()
-                    .GetHiddenDimensionSafeVectorAlignmentLengthStrides(
-                        guaranteed_vector_alignments,
-                        guaranteed_vector_lengths,
-                        guaranteed_vector_strides);
+            const auto [src_lengths, src_strides] =
+                src_gemmm_gemmk.GetTensorDescriptor().GetHiddenDimensionSafeVectorLengthStrides(
+                    guaranteed_vector_lengths, guaranteed_vector_strides);
 
             if(ps.get_block_1d_id() == 0 && ps.get_thread_local_1d_id() == 0)
             {
                 printf("src\n");
-                print_array("aligns ", src_aligns);
+                print_array("lengths", src_lengths);
+                print_array("strides", src_strides);
+            }
+        }
+#elif 0
+        {
+            const auto [src_lengths, src_strides] =
+                src_gemmm_gemmk.GetTensorDescriptor().GetHiddenDimensionSafeVectorLengthStrides();
+
+            if(ps.get_block_1d_id() == 0 && ps.get_thread_local_1d_id() == 0)
+            {
+                printf("src\n");
+                print_array("lengths", src_lengths);
+                print_array("strides", src_strides);
+            }
+        }
+
+        {
+            static_assert(
+                src_block_window.GetBlockTensorDistribution().GetWidLidYs2XsAdaptor().IsStatic(),
+                "wrong!");
+
+            if(ps.get_block_1d_id() == 0 && ps.get_thread_local_1d_id() == 0)
+            {
+                const auto [src_lengths, src_strides] =
+                    src_block_window.GetWindowAdaptorYsSafeVectorLengthStrides_tmp();
+
+                printf("src window\n");
                 print_array("lengths", src_lengths);
                 print_array("strides", src_strides);
             }

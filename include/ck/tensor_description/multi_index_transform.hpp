@@ -30,20 +30,17 @@ struct BaseTransform
 
     __host__ __device__ static constexpr index_t GetNumOfUpperDimension() { return NDimUp; }
 
-    // return safe value for vector alignment/length/stride, based on compile-time known only
+    // return safe value for vector length/stride, based on compile-time known only
     // variables
     // MUST be static function
-    template <typename LowVectorAlignments, typename LowVectorLengths, typename LowVectorStrides>
+    template <typename LowVectorLengths, typename LowVectorStrides>
     __host__ __device__ static constexpr auto
-    CalculateUpperDimensionSafeVectorAlignmentLengthStrides(const LowVectorAlignments&,
-                                                            const LowVectorLengths&,
-                                                            const LowVectorStrides&)
+    CalculateUpperDimensionSafeVectorLengthStrides(const LowVectorLengths&, const LowVectorStrides&)
     {
-        Array<index_t, NDimUp> up_vector_aligns{-1};
         Array<index_t, NDimUp> up_vector_lengths{-1};
         Array<index_t, NDimUp> up_vector_strides{-1};
 
-        return make_tuple(up_vector_aligns, up_vector_lengths, up_vector_strides);
+        return make_tuple(up_vector_lengths, up_vector_strides);
     }
 };
 
@@ -123,14 +120,12 @@ struct PassThrough : public BaseTransform<1, 1>
     }
 
     // MUST be static function
-    template <typename LowVectorAlignments, typename LowVectorLengths, typename LowVectorStrides>
+    template <typename LowVectorLengths, typename LowVectorStrides>
     __host__ __device__ static constexpr auto
-    CalculateUpperDimensionSafeVectorAlignmentLengthStrides(
-        const LowVectorAlignments& low_vector_aligns,
-        const LowVectorLengths& low_vector_lengths,
-        const LowVectorStrides& low_vector_strides)
+    CalculateUpperDimensionSafeVectorLengthStrides(const LowVectorLengths& low_vector_lengths,
+                                                   const LowVectorStrides& low_vector_strides)
     {
-        return make_tuple(low_vector_aligns, low_vector_lengths, low_vector_strides);
+        return make_tuple(low_vector_lengths, low_vector_strides);
     }
 
     __host__ __device__ void Print() const
@@ -638,21 +633,18 @@ struct Merge_v2_magic_division : public BaseTransform<LowLengths::Size(), 1>
     }
 
     // MUST be static function
-    template <typename LowVectorAlignments, typename LowVectorLengths, typename LowVectorStrides>
+    template <typename LowVectorLengths, typename LowVectorStrides>
     __host__ __device__ static constexpr auto
-    CalculateUpperDimensionSafeVectorAlignmentLengthStrides(
-        const LowVectorAlignments&,
-        const LowVectorLengths& low_vector_lengths,
-        const LowVectorStrides& low_vector_strides)
+    CalculateUpperDimensionSafeVectorLengthStrides(const LowVectorLengths& low_vector_lengths,
+                                                   const LowVectorStrides& low_vector_strides)
     {
-        Array<index_t, 1> up_vector_aligns{-1};
         Array<index_t, 1> up_vector_lengths{-1};
         Array<index_t, 1> up_vector_strides{-1};
 
         up_vector_lengths(0) = low_vector_lengths[Number<NDimLow - 1>{}];
         up_vector_strides(0) = low_vector_strides[Number<NDimLow - 1>{}];
 
-        return make_tuple(up_vector_aligns, up_vector_lengths, up_vector_strides);
+        return make_tuple(up_vector_lengths, up_vector_strides);
     }
 
     __host__ __device__ void Print() const
@@ -771,21 +763,18 @@ struct Merge_v3_division_mod : public BaseTransform<LowLengths::Size(), 1>
     }
 
     // MUST be static function
-    template <typename LowVectorAlignments, typename LowVectorLengths, typename LowVectorStrides>
+    template <typename LowVectorLengths, typename LowVectorStrides>
     __host__ __device__ static constexpr auto
-    CalculateUpperDimensionSafeVectorAlignmentLengthStrides(
-        const LowVectorAlignments&,
-        const LowVectorLengths& low_vector_lengths,
-        const LowVectorStrides& low_vector_strides)
+    CalculateUpperDimensionSafeVectorLengthStrides(const LowVectorLengths& low_vector_lengths,
+                                                   const LowVectorStrides& low_vector_strides)
     {
-        Array<index_t, 1> up_vector_aligns{-1};
         Array<index_t, 1> up_vector_lengths{-1};
         Array<index_t, 1> up_vector_strides{-1};
 
         up_vector_lengths(0) = low_vector_lengths[Number<NDimLow - 1>{}];
         up_vector_strides(0) = low_vector_strides[Number<NDimLow - 1>{}];
 
-        return make_tuple(up_vector_aligns, up_vector_lengths, up_vector_strides);
+        return make_tuple(up_vector_lengths, up_vector_strides);
     }
 
     __host__ __device__ void Print() const
@@ -887,14 +876,11 @@ struct UnMerge : public BaseTransform<1, UpLengths::Size()>
     }
 
     // MUST be static function
-    template <typename LowVectorAlignments, typename LowVectorLengths, typename LowVectorStrides>
+    template <typename LowVectorLengths, typename LowVectorStrides>
     __host__ __device__ static constexpr auto
-    CalculateUpperDimensionSafeVectorAlignmentLengthStrides(
-        const LowVectorAlignments&,
-        const LowVectorLengths& low_vector_lengths,
-        const LowVectorStrides& low_vector_strides)
+    CalculateUpperDimensionSafeVectorLengthStrides(const LowVectorLengths& low_vector_lengths,
+                                                   const LowVectorStrides& low_vector_strides)
     {
-        Array<index_t, NDimUp> up_vector_aligns{-1};
         Array<index_t, NDimUp> up_vector_lengths{-1};
         Array<index_t, NDimUp> up_vector_strides{-1};
 
@@ -910,7 +896,7 @@ struct UnMerge : public BaseTransform<1, UpLengths::Size()>
 
         up_vector_strides(NDimUp - 1) = low_vector_strides[0];
 
-        return make_tuple(up_vector_aligns, up_vector_lengths, up_vector_strides);
+        return make_tuple(up_vector_lengths, up_vector_strides);
     }
 
     __host__ __device__ void Print() const

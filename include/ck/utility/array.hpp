@@ -26,16 +26,19 @@ struct Array
 
         static_assert(list_size <= NSize, "out of bound");
 
-        index_t i = 0;
+        index_t i   = 0;
+        TData vlast = TData{};
+
         for(const TData& val : ilist)
         {
             mData[i] = val;
+            vlast    = val;
             ++i;
         }
 
         for(; i < NSize; ++i)
         {
-            mData[i] = TData();
+            mData[i] = vlast;
         }
     }
 
