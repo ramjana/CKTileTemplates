@@ -137,11 +137,8 @@ struct Im2Col
         const index_t InRightPadH = input_right_pads[0];
         const index_t InRightPadW = input_right_pads[1];
 
-        const auto a_img_buf = make_dynamic_buffer<AddressSpaceEnum::Global, const T, index_t>(
-            p_a_img, N * Hi * Wi * C);
-
-        const auto a_n_hi_wi_c =
-            make_naive_tensor_view_packed(a_img_buf, make_tuple(N, Hi, Wi, C), Number<32>{});
+        const auto a_n_hi_wi_c = make_naive_tensor_view_packed<AddressSpaceEnum::Global>(
+            p_a_img, make_tuple(N, Hi, Wi, C), Number<32>{});
 
         const auto a_n_hip_wip_c = transform_tensor_view(
             a_n_hi_wi_c,
@@ -178,15 +175,12 @@ struct Im2Col
                                   make_tuple(Sequence<0>{}, Sequence<1>{}));
 #endif
 
-        auto a_mtx_buf = make_dynamic_buffer<AddressSpaceEnum::Global, T, index_t>(
-            p_a_mtx, N * Ho * Wo * Y * X * C);
-
-        auto dst_gemmm_gemmk =
-            make_naive_tensor_view(a_mtx_buf,
-                                   make_tuple(a_gemmm_gemmk_lengths[0], a_gemmm_gemmk_lengths[1]),
-                                   make_tuple(a_gemmm_gemmk_strides[0], a_gemmm_gemmk_strides[1]),
-                                   Number<32>{},
-                                   Number<1>{});
+        auto dst_gemmm_gemmk = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            p_a_mtx,
+            make_tuple(a_gemmm_gemmk_lengths[0], a_gemmm_gemmk_lengths[1]),
+            make_tuple(a_gemmm_gemmk_strides[0], a_gemmm_gemmk_strides[1]),
+            Number<32>{},
+            Number<1>{});
 
         const auto numGemmM = a_gemmm_gemmk_lengths[0];
         const auto numGemmK = a_gemmm_gemmk_lengths[1];

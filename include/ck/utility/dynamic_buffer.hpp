@@ -5,11 +5,11 @@
 
 #include "buffer_view.hpp"
 
-// FIXME: deprecate DynamicBuffer
+// FIXME: deprecate DynamicBuffer, use BufferView instead
 
 namespace ck {
 
-// FIXME: remove
+// FIXME: deprecate DynamicBuffer, use BufferView instead
 template <AddressSpaceEnum BufferAddressSpace,
           typename T,
           typename ElementSpaceSize,
@@ -17,14 +17,14 @@ template <AddressSpaceEnum BufferAddressSpace,
 using DynamicBuffer =
     BufferView<BufferAddressSpace, T, ElementSpaceSize, InvalidElementUseNumericalZeroValue>;
 
-// FIXME: remove
+// FIXME: deprecate make_dynamic_buffer, use make_buffer_view instead
 template <AddressSpaceEnum BufferAddressSpace, typename T, typename ElementSpaceSize>
 __host__ __device__ constexpr auto make_dynamic_buffer(T* p, ElementSpaceSize element_space_size)
 {
-    return DynamicBuffer<BufferAddressSpace, T, ElementSpaceSize, true>{p, element_space_size};
+    return make_buffer_view<BufferAddressSpace, T, ElementSpaceSize>(p, element_space_size);
 }
 
-// FIXME: remove
+// FIXME: deprecate make_dynamic_buffer, use make_buffer_view instead
 template <
     AddressSpaceEnum BufferAddressSpace,
     typename T,
@@ -34,8 +34,8 @@ template <
 __host__ __device__ constexpr auto
 make_dynamic_buffer(T* p, ElementSpaceSize element_space_size, X invalid_element_value)
 {
-    return DynamicBuffer<BufferAddressSpace, T, ElementSpaceSize, false>{
-        p, element_space_size, invalid_element_value};
+    return make_buffer_view<BufferAddressSpace, T, ElementSpaceSize>(
+        p, element_space_size, invalid_element_value);
 }
 
 } // namespace ck

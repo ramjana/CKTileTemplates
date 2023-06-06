@@ -18,7 +18,7 @@ struct TensorView
 
     __host__ __device__ constexpr TensorView() = delete;
 
-    __host__ __device__ constexpr TensorView(BufferView& buffer_view, TensorDesc desc)
+    __host__ __device__ constexpr TensorView(const BufferView& buffer_view, const TensorDesc& desc)
         : buf_{buffer_view}, desc_{desc}
     {
     }
@@ -77,25 +77,19 @@ struct TensorView
     }
 
     // member
-    BufferView& buf_;
+    BufferView buf_;
     TensorDesc desc_;
 };
 
-template <typename BufferView_, typename TensorDesc>
-__host__ __device__ constexpr auto make_tensor_view(BufferView_& buffer_view,
-                                                    const TensorDesc& desc)
-{
-    return TensorView<BufferView_, remove_cvref_t<TensorDesc>>{buffer_view, desc};
-}
-
-template <typename BufferView_,
+template <AddressSpaceEnum BufferAddressSpace = AddressSpaceEnum::Generic,
+          typename DataType,
           typename... Lengths,
           typename... Strides,
           index_t GuaranteedLastDimensionVectorLength                              = -1,
           index_t GuaranteedLastDimensionVectorStride                              = -1,
           typename enable_if<sizeof...(Lengths) == sizeof...(Strides), bool>::type = false>
 __host__ __device__ constexpr auto
-make_naive_tensor_view(BufferView_& buffer_view,
+make_naive_tensor_view(DataType* p,
                        const Tuple<Lengths...>& lengths,
                        const Tuple<Strides...>& strides,
                        Number<GuaranteedLastDimensionVectorLength> = Number<-1>{},
@@ -106,21 +100,27 @@ make_naive_tensor_view(BufferView_& buffer_view,
                                              Number<GuaranteedLastDimensionVectorLength>{},
                                              Number<GuaranteedLastDimensionVectorStride>{});
 
-    return TensorView<BufferView_, decltype(desc)>{buffer_view, desc};
+    auto buffer_view = make_buffer_view<BufferAddressSpace>(p, desc.GetElementSpaceSize());
+
+    return TensorView<decltype(buffer_view), decltype(desc)>{buffer_view, desc};
 }
 
-template <typename BufferView_,
+template <AddressSpaceEnum BufferAddressSpace = AddressSpaceEnum::Generic,
+          typename DataType,
           typename... Lengths,
           index_t GuaranteedLastDimensionVectorLength = -1>
 __host__ __device__ constexpr auto
-make_naive_tensor_view_packed(BufferView_& buffer_view,
+make_naive_tensor_view_packed(const DataType* p,
                               const Tuple<Lengths...>& lengths,
                               Number<GuaranteedLastDimensionVectorLength> = Number<-1>{})
 {
     auto desc =
         make_naive_tensor_descriptor_packed(lengths, Number<GuaranteedLastDimensionVectorLength>{});
 
-    return TensorView<BufferView_, decltype(desc)>{buffer_view, desc};
+    auto buffer_view =
+        make_buffer_view<BufferAddressSpace, const DataType>(p, desc.GetElementSpaceSize());
+
+    return TensorView<decltype(buffer_view), decltype(desc)>{buffer_view, desc};
 }
 
 template <typename OldTensorView,
@@ -132,10 +132,10 @@ __host__ __device__ constexpr auto transform_tensor_view(const OldTensorView& ol
                                                          NewLowerDimensionOldVisibleIdss,
                                                          NewUpperDimensionNewVisibleIdss)
 {
-    const auto new_desc = transform_tensor_descriptor(old_tensor_view.desc_,
-                                                      new_transforms,
-                                                      NewLowerDimensionOldVisibleIdss{},
-                                                      NewUpperDimensionNewVisibleIdss{});
+    auto new_desc = transform_tensor_descriptor(old_tensor_view.desc_,
+                                                new_transforms,
+                                                NewLowerDimensionOldVisibleIdss{},
+                                                NewUpperDimensionNewVisibleIdss{});
 
     return TensorView<typename OldTensorView::BufferView, remove_cvref_t<decltype(new_desc)>>{
         old_tensor_view.buf_, new_desc};
