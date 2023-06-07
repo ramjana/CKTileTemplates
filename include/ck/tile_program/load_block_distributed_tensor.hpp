@@ -10,9 +10,6 @@
 #include "ck/tensor_description/tensor_space_filling_curve.hpp"
 #include "ck/tile_program/block_tensor_distribution.hpp"
 
-// TODO remove
-#include "ck/utility/print.hpp"
-
 namespace ck {
 namespace tile_program {
 namespace block {

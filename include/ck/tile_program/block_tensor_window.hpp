@@ -183,6 +183,7 @@ struct BlockTensorWindow
     WindowAdaptorCoord window_adaptor_thread_coord_;
 };
 
+// TODO: use strategy
 template <typename TensorView_, typename BlockTensorDistribution_>
 __host__ __device__ constexpr auto
 make_block_window(const TensorView_& tensor_view,
