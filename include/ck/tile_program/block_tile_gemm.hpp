@@ -13,7 +13,31 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
-__device__ void block_tile_gemm() {}
+// FIXME:
+template <typename CDataType, typename ATile, typename BTile>
+__host__ __device__ auto block_tile_gemm(const ATile& /* a_block_tile */,
+                                         const BTile& /* b_block_tile */)
+{
+    constexpr auto c_block_distr = make_static_block_tensor_distribution(
+        make_tuple(Sequence<2, 2, 4, 2, 4>{}, Sequence<2, 2, 32, 1>{}),
+        Sequence<0, 1>{},
+        Sequence<1, 1>{},
+        Sequence<0, 1>{},
+        Sequence<3, 3>{},
+        Sequence<0, 1>{},
+        Sequence<0, 1, 0, 0, 1>{},
+        Sequence<0, 0, 2, 4, 4>{});
+
+    return make_static_block_distributed_tensor<CDataType>(c_block_distr);
+}
+
+// FIXME:
+template <typename CTile, typename ATile, typename BTile>
+__host__ __device__ void block_tile_gemm(CTile& /* c_block_tile */,
+                                         const ATile& /* a_block_tile */,
+                                         const BTile& /* b_block_tile */)
+{
+}
 
 } // namespace block
 } // namespace tile_program

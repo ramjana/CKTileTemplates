@@ -373,6 +373,7 @@ __host__ __device__ constexpr auto get_container_subset(const Tuple<Ts...>& tup,
     return make_tuple(tup[Number<Is>{}]...);
 }
 
+#if 0
 template <typename T, index_t N, index_t... Is>
 __host__ __device__ constexpr void
 set_container_subset(Array<T, N>& y, Sequence<Is...> picks, const Array<T, sizeof...(Is)>& x)
@@ -393,6 +394,27 @@ set_container_subset(Tuple<Ys...>& y, Sequence<Is...> picks, const Tuple<Xs...>&
 
     static_for<0, sizeof...(Is), 1>{}([&](auto i) { y(picks[i]) = x[i]; });
 }
+#else
+template <typename T, index_t N, index_t... Is>
+__host__ __device__ constexpr void
+set_container_subset(Array<T, N>& y, Sequence<Is...> picks, const Array<T, sizeof...(Is)>& x)
+{
+    STATIC_ASSERT(N >= sizeof...(Is), "wrong! size");
+
+    for(index_t i = 0; i < picks.Size(); ++i)
+    {
+        y(picks[i]) = x[i];
+    }
+}
+
+template <typename Y, typename X, index_t... Is>
+__host__ __device__ constexpr void set_container_subset(Y& y, Sequence<Is...> picks, const X& x)
+{
+    STATIC_ASSERT(Y::Size() >= sizeof...(Is) && X::Size() == sizeof...(Is), "wrong! size");
+
+    static_for<0, sizeof...(Is), 1>{}([&](auto i) { y(picks[i]) = x[i]; });
+}
+#endif
 
 template <index_t... Is>
 __host__ __device__ constexpr auto sequence_to_tuple_of_number(Sequence<Is...>)

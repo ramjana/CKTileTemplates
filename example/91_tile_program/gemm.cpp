@@ -15,6 +15,7 @@
 #include "ck/tile_program/static_block_distributed_tensor.hpp"
 #include "ck/tile_program/load_block_distributed_tensor.hpp"
 #include "ck/tile_program/store_block_distributed_tensor.hpp"
+#include "ck/tile_program/block_tile_gemm.hpp"
 
 #include "ck/library/utility/check_err.hpp"
 #include "ck/library/utility/device_memory.hpp"
@@ -37,6 +38,13 @@ template <typename ADataType,
           ck::index_t kKPerBlock>
 struct Gemm
 {
+    // FIXME
+    __host__ __device__ static constexpr ck::index_t GetDynamicLdsSize()
+    {
+        return ck::math::integer_divide_ceil(sizeof(ADataType) * kMPerBlock * kKPerBlock, 16) * 16 +
+               sizeof(BDataType) * kNPerBlock * kKPerBlock;
+    }
+
     __host__ __device__ void operator()(ProgramServer& ps,
                                         const ADataType* p_a,
                                         const BDataType* p_b,
@@ -47,9 +55,9 @@ struct Gemm
                                         ck::index_t Lda,
                                         ck::index_t Ldb,
                                         ck::index_t Ldc,
-                                        AElementWiseOperation a_op,
-                                        BElementWiseOperation b_op,
-                                        CElementWiseOperation c_op)
+                                        AElementWiseOperation /* a_op */,
+                                        BElementWiseOperation /* b_op */,
+                                        CElementWiseOperation /* c_op */)
     {
 #if 0
         (void)ps;
@@ -69,6 +77,8 @@ struct Gemm
         using namespace ck;
         using namespace ck::tile_program::block;
 
+        __shared__ char p_shared_char[GetDynamicLdsSize()];
+
         // FIXME: assume RCR layout
         const auto a_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_a, make_tuple(M, K), make_tuple(Lda, 1), Number<32>{}, Number<1>{});
@@ -84,79 +94,101 @@ struct Gemm
 
         const auto block2tile = ps(make_cluster_descriptor(make_tuple(num_tile_m, num_tile_n)));
 
-        const auto id_tile = block2tile.CalculateBottonIndex(make_tuple(id_block);
+        const auto id_tile = block2tile.CalculateBottomIndex(make_tuple(id_block));
 
         const auto iM = id_tile.At<0>() * kMPerBlock;
         const auto iN = id_tile.At<1>() * kNPerBlock;
 
         // A/B tile in LDS
+#if 0
         ADataType* p_a_lds = shared_memmory.get_pointer(0);
+#else
+        ADataType* p_a_lds = static_cast<ADataType*>(static_cast<void*>(p_shared_char));
+#endif
 
         // [allow optimization] allow different LDS layouts
-        auto a_lds_block =
-            make_naive_tensor_view_packed(p_a_lds, make_tuple(kMPerBlock, kKPerBlock), Number<32>{});
+        constexpr auto a_lds_block_desc =
+            make_naive_tensor_descriptor_packed(make_tuple(kMPerBlock, kKPerBlock), Number<32>{});
 
-        constexpr auto a_lds_byte = a_lds_block.GetElemenetSpaceSize() * sizeof(ADataType);
+        auto a_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_a_lds, a_lds_block_desc);
 
+#if 0
         BDataType* p_b_lds = shared_memory.get_aligned_pointer(a_lds_byte);
+#else
+        constexpr index_t a_lds_block_space_size_aligned =
+            math::integer_divide_ceil(a_lds_block_desc.GetElementSpaceSize() * sizeof(ADataType),
+                                      16) *
+            16;
+
+        BDataType* p_b_lds = static_cast<BDataType*>(
+            static_cast<void*>(p_shared_char + a_lds_block_space_size_aligned));
+#endif
 
         // [allow optimization] allow different LDS layouts
-        auto b_lds_block =
-            make_naive_tensor_view_packed(p_b_lds, make_tuple(kNPerBlock, kKPerBlock), Number<32>{});
+        constexpr auto b_lds_block_desc =
+            make_naive_tensor_descriptor_packed(make_tuple(kNPerBlock, kKPerBlock), Number<32>{});
+
+        auto b_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_b_lds, b_lds_block_desc);
 
         // A copy
         // FIXME
-        constexpr auto a_window_dstr= 
-            make_static_block_tensor_distribution(
-                make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-                Sequence<0>{},
-                Sequence<1>{},
-                Sequence<0, 1>{},
-                Sequence<2, 0>{},
-                Sequence<0, 1>{},
-                Sequence<0, 1>{},
-                Sequence<0, 1>{});
+        constexpr auto a_dram_window_dstr = make_static_block_tensor_distribution(
+            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+            Sequence<0>{},
+            Sequence<1>{},
+            Sequence<0, 1>{},
+            Sequence<2, 0>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{});
 
-        auto a_dram_window = make_block_window(
-                                        a_dram_grid,
-                                        {iM, 0},
-                                        a_window_dstr);
+        constexpr auto a_lds_window_dstr = make_static_block_tensor_distribution(
+            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+            Sequence<0>{},
+            Sequence<1>{},
+            Sequence<0, 1>{},
+            Sequence<2, 0>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{});
 
-        auto a_lds_window = make_block_window(
-                                        a_lds_grid,
-                                        {0, 0},
-                                        a_window_dstr);
+        auto a_dram_window = make_block_window(a_dram_grid, {iM, 0}, a_dram_window_dstr);
 
+        auto a_lds_window = make_block_window(a_lds_block, {0, 0}, a_lds_window_dstr);
 
         // B copy
         // FIXME
-        constexpr auto b_window_dstr= 
-            make_static_block_tensor_distribution(
-                make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-                Sequence<0>{},
-                Sequence<1>{},
-                Sequence<0, 1>{},
-                Sequence<2, 0>{},
-                Sequence<0, 1>{},
-                Sequence<0, 1>{},
-                Sequence<0, 1>{});
+        constexpr auto b_dram_window_dstr = make_static_block_tensor_distribution(
+            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+            Sequence<0>{},
+            Sequence<1>{},
+            Sequence<0, 1>{},
+            Sequence<2, 0>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{});
 
-        auto b_dram_window = make_block_window(
-                                        b_dram_grid,
-                                        {iN, 0},
-                                        b_window_dstr);
+        constexpr auto b_lds_window_dstr = make_static_block_tensor_distribution(
+            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+            Sequence<0>{},
+            Sequence<1>{},
+            Sequence<0, 1>{},
+            Sequence<2, 0>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{});
 
-        auto b_lds_window = make_block_window(
-                                        b_lds_grid,
-                                        {0, 0},
-                                        b_window_dstr);
+        auto b_dram_window = make_block_window(b_dram_grid, {iN, 0}, b_dram_window_dstr);
 
+        auto b_lds_window = make_block_window(b_lds_block, {0, 0}, b_lds_window_dstr);
 
         // C tile
-        auto c_block_tile = decltype(block_tile_gemm(a_lds_block, b_lds_block)){};
+        auto c_block_tile = decltype(block_tile_gemm<CDataType>(a_lds_block, b_lds_block)){};
 
+#if 0
         block_tile_elementwise(c_block_tile, [](auto& c){
             c = 0;});
+#endif
 
         index_t iK = 0;
 
@@ -168,26 +200,26 @@ struct Gemm
             store_block_tile(a_lds_window, a_block_tile);
             store_block_tile(b_lds_window, b_block_tile);
 
-            block_sync_lds();
+            ps.block_sync_lds();
 
             block_tile_gemm(c_block_tile, a_lds_window, b_lds_window);
 
-            block_sync_lds();
+            ps.block_sync_lds();
 
-            move_block_window(src_block_window, {0, kKPerTile});
-            move_block_window(dst_block_window, {0, kKPerTile});
+            move_block_window(a_lds_window, {0, kKPerBlock});
+            move_block_window(b_lds_window, {0, kKPerBlock});
 
             iK += kKPerBlock;
-        } while(ik < K)
+        } while(iK < K);
+
+        // FIXME
+        constexpr auto c_block_distr = c_block_tile.GetBlockDistribution();
 
         // store C
-        auto c_dram_grid  = make_naive_tensor_view<AddressSpaceEnum::Global>(
-                p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<32>{}, Number<1>{});
+        auto c_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<32>{}, Number<1>{});
 
-        auto c_dram_window = make_block_window(
-                                        c_dram_grid,
-                                        {iM, iN},
-                                        c_window_dstr);
+        auto c_dram_window = make_block_window(c_dram_grid, {iM, iN}, c_block_distr);
 
         store_block_tile(c_dram_window, c_block_tile);
 #endif

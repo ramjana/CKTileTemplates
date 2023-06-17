@@ -83,6 +83,18 @@ struct TensorView
 
 template <AddressSpaceEnum BufferAddressSpace = AddressSpaceEnum::Generic,
           typename DataType,
+          typename... Ts>
+__host__ __device__ constexpr auto make_tensor_view(DataType* p,
+                                                    const TensorDescriptor<Ts...>& desc)
+{
+    auto buffer_view =
+        make_buffer_view<BufferAddressSpace, DataType>(p, desc.GetElementSpaceSize());
+
+    return TensorView<decltype(buffer_view), decltype(desc)>{buffer_view, desc};
+}
+
+template <AddressSpaceEnum BufferAddressSpace = AddressSpaceEnum::Generic,
+          typename DataType,
           typename... Lengths,
           typename... Strides,
           index_t GuaranteedLastDimensionVectorLength                              = -1,
@@ -110,7 +122,7 @@ template <AddressSpaceEnum BufferAddressSpace = AddressSpaceEnum::Generic,
           typename... Lengths,
           index_t GuaranteedLastDimensionVectorLength = -1>
 __host__ __device__ constexpr auto
-make_naive_tensor_view_packed(const DataType* p,
+make_naive_tensor_view_packed(DataType* p,
                               const Tuple<Lengths...>& lengths,
                               Number<GuaranteedLastDimensionVectorLength> = Number<-1>{})
 {
@@ -118,7 +130,7 @@ make_naive_tensor_view_packed(const DataType* p,
         make_naive_tensor_descriptor_packed(lengths, Number<GuaranteedLastDimensionVectorLength>{});
 
     auto buffer_view =
-        make_buffer_view<BufferAddressSpace, const DataType>(p, desc.GetElementSpaceSize());
+        make_buffer_view<BufferAddressSpace, DataType>(p, desc.GetElementSpaceSize());
 
     return TensorView<decltype(buffer_view), decltype(desc)>{buffer_view, desc};
 }

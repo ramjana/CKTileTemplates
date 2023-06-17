@@ -112,6 +112,7 @@ struct Im2Col
                const CopierStrategy& copier_strategy)
     {
         using namespace ck;
+        using namespace ck::tile_program::block;
 
         const index_t N = a_n_wis_c_lengths[0];
         const index_t C = a_n_wis_c_lengths[3];
@@ -202,39 +203,35 @@ struct Im2Col
         (void)copier_strategy;
 
         // FIXME: use strategy to generate
-        constexpr auto src_block_dstr =
-            ck::tile_program::block::make_static_block_tensor_distribution(
-                make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-                Sequence<0>{},
-                Sequence<1>{},
-                Sequence<0, 1>{},
-                Sequence<2, 0>{},
-                Sequence<0, 1>{},
-                Sequence<0, 1>{},
-                Sequence<0, 1>{});
+        constexpr auto src_block_dstr = make_static_block_tensor_distribution(
+            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+            Sequence<0>{},
+            Sequence<1>{},
+            Sequence<0, 1>{},
+            Sequence<2, 0>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{},
+            Sequence<0, 1>{});
 
         // FIXME: make dst's block distribution different from src's
         constexpr auto dst_block_dstr = src_block_dstr;
 
-        auto src_block_window = ck::tile_program::block::make_block_window(
-            src_gemmm_gemmk, {iGemmM, 0}, src_block_dstr);
-
-        auto dst_block_window = ck::tile_program::block::make_block_window(
-            dst_gemmm_gemmk, {iGemmM, 0}, dst_block_dstr);
+        auto src_block_window = make_block_window(src_gemmm_gemmk, {iGemmM, 0}, src_block_dstr);
+        auto dst_block_window = make_block_window(dst_gemmm_gemmk, {iGemmM, 0}, dst_block_dstr);
 
         index_t iGemmK = 0;
 
         do
         {
-            const auto src_block_tile = ck::tile_program::block::load_block_tile(src_block_window);
+            const auto src_block_tile = load_block_tile(src_block_window);
 
             // FIXME: use shuffle API
             const auto dst_block_tile = src_block_tile;
 
-            ck::tile_program::block::store_block_tile(dst_block_window, dst_block_tile);
+            store_block_tile(dst_block_window, dst_block_tile);
 
-            ck::tile_program::block::move_block_window(src_block_window, {0, kKPerTile});
-            ck::tile_program::block::move_block_window(dst_block_window, {0, kKPerTile});
+            move_block_window(src_block_window, {0, kKPerTile});
+            move_block_window(dst_block_window, {0, kKPerTile});
 
             iGemmK += kKPerTile;
         } while(iGemmK < numGemmK);
