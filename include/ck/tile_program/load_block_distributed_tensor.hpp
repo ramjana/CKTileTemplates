@@ -19,15 +19,16 @@ namespace detail {
 
 // "Y dimension": Y dimensions inside BlockTensorWindow
 // input:
-//   y_origin_index: starting index of Y dimension
-//   y_silice_lengths: slice lengths of Y dimensionr.
-//  output:
-//    a threadwise tensor in register
+//   y_slice_origin: starting slice origin of Y dimension
+//   y_slice_lengths: slice lengths of Y dimensionr
+// output:
+//   A StaticBuffer holding slice of thread data, and data layout is hardcoded to be in the order of
+//   [Y0, Y1, Y2, ...]
 template <typename BottomTensorView_,
           typename BlockTensorDistribution_,
           typename YIndex,
           index_t... YSliceLengths>
-__device__ auto load_thread_slice_from_block_tensor_window(
+__device__ auto load_sliced_thread_data_from_block_tensor_window(
     BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& block_tensor_window,
     const YIndex& ys_slice_origin,
     Sequence<YSliceLengths...>)
@@ -189,7 +190,7 @@ load_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& 
 
     auto block_dstr_tensor = make_static_block_distributed_tensor<DataType>(block_dstr);
 
-    block_dstr_tensor.GetThreadBuffer() = detail::load_thread_slice_from_block_tensor_window(
+    block_dstr_tensor.GetThreadBuffer() = detail::load_sliced_thread_data_from_block_tensor_window(
         block_tensor_window,
         MultiIndex<NDimY>{0},
         to_sequence(block_dstr.GetYs2DidDescriptor().GetLengths()));

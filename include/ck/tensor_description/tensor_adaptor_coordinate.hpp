@@ -175,7 +175,7 @@ __host__ __device__ constexpr void move_tensor_adaptor_coordinate(const Adaptor&
 
             MultiIndex<dims_low.Size()> idx_diff_low;
 
-            tran.UpdateLowerIndex(idx_diff_low, idx_diff_up, idx_low, idx_up_new, Number<0>{});
+            tran.UpdateLowerIndex(idx_diff_low, idx_diff_up, idx_low, idx_up_new);
 
             set_container_subset(idx_diff_hidden, dims_low, idx_diff_low);
             set_container_subset(idx_hidden, dims_low, idx_low);

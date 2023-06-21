@@ -80,16 +80,11 @@ struct PassThrough : public BaseTransform<1, 1>
         idx_low(Number<0>{}) = idx_up[Number<0>{}];
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ static void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                                      const UpIdxDiff& idx_diff_up,
                                                      LowIdx& idx_low,
-                                                     const UpIdx&,
-                                                     Number<Hack>)
+                                                     const UpIdx&)
     {
         static_assert(LowIdxDiff::Size() == 1 && UpIdxDiff::Size() == 1 && LowIdx::Size() == 1 &&
                           UpIdx::Size() == 1,
@@ -176,16 +171,11 @@ struct Pad : public BaseTransform<1, 1>
         idx_low(Number<0>{}) = idx_up[Number<0>{}] - left_pad_length_;
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ static void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                                      const UpIdxDiff& idx_diff_up,
                                                      LowIdx& idx_low,
-                                                     const UpIdx&,
-                                                     Number<Hack>)
+                                                     const UpIdx&)
     {
         static_assert(LowIdxDiff::Size() == 1 && UpIdxDiff::Size() == 1 && LowIdx::Size() == 1 &&
                           UpIdx::Size() == 1,
@@ -262,16 +252,11 @@ struct LeftPad
         idx_low(Number<0>{}) = idx_up[Number<0>{}] - left_pad_length_;
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ static void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                                      const UpIdxDiff& idx_diff_up,
                                                      LowIdx& idx_low,
-                                                     const UpIdx&,
-                                                     Number<Hack>)
+                                                     const UpIdx&)
     {
         static_assert(LowIdxDiff::Size() == 1 && UpIdxDiff::Size() == 1 && LowIdx::Size() == 1 &&
                           UpIdx::Size() == 1,
@@ -347,16 +332,11 @@ struct RightPad : public BaseTransform<1, 1>
         idx_low(Number<0>{}) = idx_up[Number<0>{}];
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ static void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                                      const UpIdxDiff& idx_diff_up,
                                                      LowIdx& idx_low,
-                                                     const UpIdx&,
-                                                     Number<Hack>)
+                                                     const UpIdx&)
     {
         static_assert(LowIdxDiff::Size() == 1 && UpIdxDiff::Size() == 1 && LowIdx::Size() == 1 &&
                           UpIdx::Size() == 1,
@@ -445,16 +425,11 @@ struct Embed : public BaseTransform<1, UpLengths::Size()>
         });
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                               const UpIdxDiff& idx_diff_up,
                                               LowIdx& idx_low,
-                                              const UpIdx&,
-                                              Number<Hack>) const
+                                              const UpIdx&) const
     {
         static_assert(LowIdxDiff::Size() == 1 && UpIdxDiff::Size() == NDimUp &&
                           LowIdx::Size() == 1 && UpIdx::Size() == NDimUp,
@@ -578,16 +553,11 @@ struct Merge_v2_magic_division : public BaseTransform<LowLengths::Size(), 1>
         idx_low(Number<0>{}) = tmp;
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                               const UpIdxDiff&,
                                               LowIdx& idx_low,
-                                              const UpIdx& idx_up_new,
-                                              Number<Hack>) const
+                                              const UpIdx& idx_up_new) const
     {
         static_assert(LowIdxDiff::Size() == NDimLow && UpIdxDiff::Size() == 1 &&
                           LowIdx::Size() == NDimLow && UpIdx::Size() == 1,
@@ -711,16 +681,11 @@ struct Merge_v3_division_mod : public BaseTransform<LowLengths::Size(), 1>
         idx_low(Number<NDimLow - 1>{}) = tmp;
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                               const UpIdxDiff&,
                                               LowIdx& idx_low,
-                                              const UpIdx& idx_up_new,
-                                              Number<Hack>) const
+                                              const UpIdx& idx_up_new) const
     {
         static_assert(LowIdxDiff::Size() == NDimLow && UpIdxDiff::Size() == 1 &&
                           LowIdx::Size() == NDimLow && UpIdx::Size() == 1,
@@ -841,16 +806,11 @@ struct UnMerge : public BaseTransform<1, UpLengths::Size()>
         }
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                               const UpIdxDiff& idx_diff_up,
                                               LowIdx& idx_low,
-                                              const UpIdx&,
-                                              Number<Hack>) const
+                                              const UpIdx&) const
     {
         CalculateLowerIndex(idx_diff_low, idx_diff_up);
 
@@ -932,16 +892,11 @@ struct Freeze : public BaseTransform<1, 0>
         idx_low(Number<0>{}) = low_idx_;
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ static void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                                      const UpIdxDiff& /* idx_diff_up */,
                                                      LowIdx& /* idx_low */,
-                                                     const UpIdx& /* idx_up_new */,
-                                                     Number<Hack>)
+                                                     const UpIdx& /* idx_up_new */)
     {
         idx_diff_low(Number<0>{}) = 0;
     }
@@ -970,18 +925,15 @@ struct Freeze : public BaseTransform<1, 0>
     }
 };
 
-// Insert a dangling upper dimension without lower dimension
-template <typename UpperLength>
-struct Insert : public BaseTransform<0, 1>
+// Replicate the original tensor and create a higher dimensional tensor
+template <typename UpLengths>
+struct Replicate : public BaseTransform<0, 1>
 {
-    using UpLengths = decltype(make_tuple(UpperLength{}));
+    static constexpr index_t NDimUp = UpLengths::Size();
 
-    UpLengths up_lengths_;
+    __host__ __device__ constexpr Replicate() = default;
 
-    __host__ __device__ constexpr Insert() = default;
-
-    __host__ __device__ constexpr Insert(const UpperLength& up_length)
-        : up_lengths_{make_tuple(up_length)}
+    __host__ __device__ constexpr Replicate(const UpLengths& up_lengths) : up_lengths_{up_lengths}
     {
     }
 
@@ -990,20 +942,16 @@ struct Insert : public BaseTransform<0, 1>
     template <typename LowIdx, typename UpIdx>
     __host__ __device__ constexpr void CalculateLowerIndex(LowIdx&, const UpIdx&) const
     {
-        static_assert(LowIdx::Size() == 0 && UpIdx::Size() == 1,
+        static_assert(LowIdx::Size() == 0 && UpIdx::Size() == NDimUp,
                       "wrong! inconsistent # of dimension");
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ static void
-    UpdateLowerIndex(LowIdxDiff&, const UpIdxDiff&, LowIdx&, const UpIdx&, Number<Hack>)
+    UpdateLowerIndex(LowIdxDiff&, const UpIdxDiff&, LowIdx&, const UpIdx&)
     {
-        static_assert(LowIdxDiff::Size() == 0 && UpIdxDiff::Size() == 1 && LowIdx::Size() == 0 &&
-                          UpIdx::Size() == 1,
+        static_assert(LowIdxDiff::Size() == 0 && UpIdxDiff::Size() == NDimUp &&
+                          LowIdx::Size() == 0 && UpIdx::Size() == NDimUp,
                       "wrong! inconsistent # of dimension");
     }
 
@@ -1021,16 +969,20 @@ struct Insert : public BaseTransform<0, 1>
 
     __host__ __device__ static constexpr bool IsKnownAtCompileTime()
     {
-        return is_known_at_compile_time<UpperLength>::value;
+        return is_known_at_compile_time<UpLengths>::value;
     }
 
     __host__ __device__ void Print() const
     {
-        printf("Insert");
+        printf("Replicate");
         print_multi_index(up_lengths_);
     }
+
+    //
+    UpLengths up_lengths_;
 };
 
+#if 0
 template <typename VectorSize, typename UpLength>
 struct Vectorize : public BaseTransform<1, 1>
 {
@@ -1065,13 +1017,11 @@ struct Vectorize : public BaseTransform<1, 1>
     template <typename LowIdxDiff,
               typename UpIdxDiff,
               typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+              typename UpIdx>
     __host__ __device__ void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                               const UpIdxDiff& idx_diff_up,
                                               LowIdx& idx_low,
-                                              const UpIdx&,
-                                              Number<Hack>) const
+                                              const UpIdx&) const
     {
         static_assert(LowIdxDiff::Size() == 1 && UpIdxDiff::Size() == 1 && LowIdx::Size() == 1 &&
                           UpIdx::Size() == 1,
@@ -1110,6 +1060,7 @@ struct Vectorize : public BaseTransform<1, 1>
         printf("}");
     }
 };
+#endif
 
 template <typename LowLength, typename SliceBegin, typename SliceEnd>
 struct Slice : public BaseTransform<1, 1>
@@ -1146,16 +1097,11 @@ struct Slice : public BaseTransform<1, 1>
         idx_low(Number<0>{}) = idx_up[Number<0>{}] + slice_begin_;
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ static void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                                      const UpIdxDiff& idx_diff_up,
                                                      LowIdx& idx_low,
-                                                     const UpIdx&,
-                                                     Number<Hack>)
+                                                     const UpIdx&)
     {
         static_assert(LowIdxDiff::Size() == 1 && UpIdxDiff::Size() == 1 && LowIdx::Size() == 1 &&
                           UpIdx::Size() == 1,
@@ -1231,16 +1177,11 @@ struct Modulo : public BaseTransform<1, 1>
         idx_low(Number<0>{}) = idx_up[Number<0>{}] % modulus_;
     }
 
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx,
-              index_t Hack>
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
     __host__ __device__ void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
                                               const UpIdxDiff& idx_diff_up,
                                               LowIdx& idx_low,
-                                              const UpIdx& up_idx,
-                                              Number<Hack>) const
+                                              const UpIdx& up_idx) const
     {
         static_assert(LowIdxDiff::Size() == 1 && UpIdxDiff::Size() == 1 && LowIdx::Size() == 1 &&
                           UpIdx::Size() == 1,

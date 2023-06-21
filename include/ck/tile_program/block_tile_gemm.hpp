@@ -19,17 +19,32 @@ __host__ __device__ auto block_tile_gemm(const ATile& /* a_block_tile */,
                                          const BTile& /* b_block_tile */)
 {
 #if 1
-    // decide A-wave-tile, B-wave-tile, MRepeat, NRepeat, etc
+    // decide A/B/C-block-distribution, A/B-wave-distribution, MRepeat, NRepeat, etc
+    constexpr auto a_block_distr = make_static_block_tensor_distribution(
+        make_tuple(Sequence<2, 2, 32, 1>{}, Sequence<4, 2, 4>{}),
+        Sequence<0, 1>{},
+        Sequence<1, 1>{},
+        Sequence<0, 1>{},
+        Sequence<3, 3>{},
+        Sequence<0, 1>{},
+        Sequence<0, 1, 0, 0, 1>{},
+        Sequence<0, 0, 2, 4, 4>{});
+
+    // construct A/B-block-window from A/B-block-distribution
     //
-    // make wavewise windows for A/B-wave-tile, and calculate starting coordinate
+    // construct several A/B/C-wave-tensor
     //
-    // construct A/B-wave-tensor
+    // zero out C-wave-tensor
     //
-    // construct C-wave-tensor and zero out
+    // for loop:
+    //   load from A/B-block-window into A/B-wave-tensor
+    //   wave_gemm
     //
-    // for loop: load_wave_tile, wave_tile_gemm, move_wave_window
+    // construct C-block-tensor from C-block-distribution
     //
-    // construct C-block-tile and copy over C-wave-tensor
+    // copy C-wave-tensor into C-block-tensor
+    //
+    // return C-block-tensor
 #else
     constexpr auto c_block_distr = make_static_block_tensor_distribution(
         make_tuple(Sequence<2, 2, 4, 2, 4>{}, Sequence<2, 2, 32, 1>{}),
