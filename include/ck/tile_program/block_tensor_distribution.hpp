@@ -28,7 +28,8 @@ __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t
 }
 
 // this returns a constexpr encoding of BlockTensorDistribution
-template <typename... XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
+template <index_t... RsLengths,
+          typename... XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
           index_t... DimsWid2XsMajor,
           index_t... DimsWid2XsMinor,
           index_t... DimsLid2XsMajor,
@@ -37,6 +38,8 @@ template <typename... XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
           index_t... DimsYs2XsMinor,
           index_t... YsOrder>
 __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
+    //
+    Sequence<RsLengths...>,
     //
     Tuple<XsUnMergeUpLengthss...>,
     //
@@ -68,24 +71,47 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
     using Lengths  = Array<index_t, kMaxNumDim>;
 
     // Adaptor: [wid, lid, y0, y1, ...] to [x0, x1, ...]
-    // Adaptor: [y0, y1, ...] to [did]
     constexpr index_t ndim_x_major = sizeof...(XsUnMergeUpLengthss);
 
     // Dim Ids: [idim_x_major, idim_x_minor] to [idim_hidden]
-    Array<Array<index_t, kMaxNumDim>, ndim_x_major> dims_x_major_x_minor_to_hidden_ids;
-    Array<Array<index_t, kMaxNumDim>, ndim_x_major> dims_x_major_x_minor_to_hidden_lengths;
+    Array<Array<index_t, kMaxNumDim>, ndim_x_major + 1> dims_rx_major_rx_minor_to_hidden_ids;
+    Array<Array<index_t, kMaxNumDim>, ndim_x_major + 1> dims_rx_major_rx_minor_to_hidden_lengths;
 
     auto trans = Array<Tuple<Name, MetaData, NumDim, Dims, NumDim, Dims>, kMaxNumTransforms>{};
 
     index_t num_tran       = 0;
     index_t hidden_dim_cnt = ndim_x_major;
 
-    // these are the unmerge transforms
+    // this is Replicate transform
+    {
+        constexpr index_t ndim_r_minor = sizeof...(RsLengths);
+
+        constexpr auto r_minor_lengths = Sequence<RsLengths...>{};
+
+        trans(num_tran++) = {
+            IndexTransformEnum::Replicate,
+            MetaData{to_array<index_t, ndim_r_minor>(r_minor_lengths)},
+            NumDim{0},
+            Dims{},
+            NumDim{ndim_r_minor},
+            make_sequential_index<kMaxNumDim>(hidden_dim_cnt, hidden_dim_cnt + ndim_r_minor)};
+
+        for(index_t i = 0; i < ndim_r_minor; ++i)
+        {
+            dims_rx_major_rx_minor_to_hidden_ids(0)(i)     = hidden_dim_cnt;
+            dims_rx_major_rx_minor_to_hidden_lengths(0)(i) = r_minor_lengths[i];
+
+            hidden_dim_cnt++;
+        }
+    };
+
+    // these are Unmerge transforms
     static_for<0, ndim_x_major, 1>{}([&trans,
                                       &num_tran,
                                       &hidden_dim_cnt,
-                                      &dims_x_major_x_minor_to_hidden_ids,
-                                      &dims_x_major_x_minor_to_hidden_lengths](auto idim_x_major) {
+                                      &dims_rx_major_rx_minor_to_hidden_ids,
+                                      &dims_rx_major_rx_minor_to_hidden_lengths](
+                                         auto idim_x_major) {
         constexpr auto x_minor_lengths = type_pack_element<idim_x_major, XsUnMergeUpLengthss...>{};
 
         constexpr index_t ndim_x_minor = x_minor_lengths.Size();
@@ -100,8 +126,8 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
 
         for(index_t i = 0; i < ndim_x_minor; ++i)
         {
-            dims_x_major_x_minor_to_hidden_ids(idim_x_major)(i)     = hidden_dim_cnt;
-            dims_x_major_x_minor_to_hidden_lengths(idim_x_major)(i) = x_minor_lengths[i];
+            dims_rx_major_rx_minor_to_hidden_ids(idim_x_major + 1)(i)     = hidden_dim_cnt;
+            dims_rx_major_rx_minor_to_hidden_lengths(idim_x_major + 1)(i) = x_minor_lengths[i];
 
             hidden_dim_cnt++;
         }
@@ -111,19 +137,19 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
     index_t hidden_dim_id_wid = hidden_dim_cnt++;
 
     {
-        constexpr index_t ndim_low          = sizeof...(DimsWid2XsMajor);
-        constexpr auto dims_wid_to_xs_major = Sequence<DimsWid2XsMajor...>{};
-        constexpr auto dims_wid_to_xs_minor = Sequence<DimsWid2XsMinor...>{};
+        constexpr index_t ndim_low           = sizeof...(DimsWid2XsMajor);
+        constexpr auto dims_wid_to_rxs_major = Sequence<DimsWid2XsMajor...>{};
+        constexpr auto dims_wid_to_rxs_minor = Sequence<DimsWid2XsMinor...>{};
 
         Dims low_dims;
         Lengths low_lengths;
 
         for(index_t i = 0; i < ndim_low; ++i)
         {
-            index_t x_major = dims_wid_to_xs_major[i];
-            index_t x_minor = dims_wid_to_xs_minor[i];
-            low_dims(i)     = dims_x_major_x_minor_to_hidden_ids[x_major][x_minor];
-            low_lengths(i)  = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
+            index_t rx_major = dims_wid_to_rxs_major[i];
+            index_t rx_minor = dims_wid_to_rxs_minor[i];
+            low_dims(i)      = dims_rx_major_rx_minor_to_hidden_ids[rx_major][rx_minor];
+            low_lengths(i)   = dims_rx_major_rx_minor_to_hidden_lengths[rx_major][rx_minor];
         }
 
         trans(num_tran++) = {IndexTransformEnum::Merge,
@@ -138,19 +164,19 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
     index_t hidden_dim_id_lid = hidden_dim_cnt++;
 
     {
-        constexpr index_t ndim_low          = sizeof...(DimsLid2XsMinor);
-        constexpr auto dims_lid_to_xs_major = Sequence<DimsLid2XsMajor...>{};
-        constexpr auto dims_lid_to_xs_minor = Sequence<DimsLid2XsMinor...>{};
+        constexpr index_t ndim_low           = sizeof...(DimsLid2XsMinor);
+        constexpr auto dims_lid_to_rxs_major = Sequence<DimsLid2XsMajor...>{};
+        constexpr auto dims_lid_to_rxs_minor = Sequence<DimsLid2XsMinor...>{};
 
         Dims low_dims;
         Lengths low_lengths;
 
         for(index_t i = 0; i < ndim_low; ++i)
         {
-            index_t x_major = dims_lid_to_xs_major[i];
-            index_t x_minor = dims_lid_to_xs_minor[i];
-            low_dims(i)     = dims_x_major_x_minor_to_hidden_ids[x_major][x_minor];
-            low_lengths(i)  = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
+            index_t rx_major = dims_lid_to_rxs_major[i];
+            index_t rx_minor = dims_lid_to_rxs_minor[i];
+            low_dims(i)      = dims_rx_major_rx_minor_to_hidden_ids[rx_major][rx_minor];
+            low_lengths(i)   = dims_rx_major_rx_minor_to_hidden_lengths[rx_major][rx_minor];
         }
 
         trans(num_tran++) = {IndexTransformEnum::Merge,
@@ -161,14 +187,15 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
                              Dims{hidden_dim_id_lid}};
     }
 
-    // bottom dims [x0, x1, x2, ...]
+    // window Adaptor
+    //   bottom dims [x0, x1, x2, ...]
+    //   top dims [wid, lid, y0, y1, ...]
     constexpr index_t ndim_bottom = ndim_x_major;
 
     constexpr auto bottom_dim_ids = make_sequential_index<kMaxNumDim>(0, ndim_bottom);
 
-    // top dims [wid, lid, y0, y1, ...]
-    constexpr auto dims_ys_to_xs_major = Sequence<DimsYs2XsMajor...>{};
-    constexpr auto dims_ys_to_xs_minor = Sequence<DimsYs2XsMinor...>{};
+    constexpr auto dims_ys_to_rxs_major = Sequence<DimsYs2XsMajor...>{};
+    constexpr auto dims_ys_to_rxs_minor = Sequence<DimsYs2XsMinor...>{};
 
     constexpr index_t ndim_y   = sizeof...(DimsYs2XsMajor);
     constexpr index_t ndim_top = 2 + ndim_y;
@@ -178,13 +205,13 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
     {
         for(index_t i = 0; i < ndim_y; ++i)
         {
-            index_t x_major    = dims_ys_to_xs_major[i];
-            index_t x_minor    = dims_ys_to_xs_minor[i];
-            top_dim_ids(2 + i) = dims_x_major_x_minor_to_hidden_ids[x_major][x_minor];
+            index_t rx_major   = dims_ys_to_rxs_major[i];
+            index_t rx_minor   = dims_ys_to_rxs_minor[i];
+            top_dim_ids(2 + i) = dims_rx_major_rx_minor_to_hidden_ids[rx_major][rx_minor];
         }
     }
 
-    // adaptor: [y0, y1, ...] to [did]
+    // descriptor: [y0, y1, ...] to [did]
     Lengths y_lengths;
     index_t did_length = 1;
 
@@ -192,9 +219,9 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
     {
         constexpr auto ys_order = Sequence<YsOrder...>{};
 
-        index_t x_major  = dims_ys_to_xs_major[ys_order[i]];
-        index_t x_minor  = dims_ys_to_xs_minor[ys_order[i]];
-        index_t y_length = dims_x_major_x_minor_to_hidden_lengths[x_major][x_minor];
+        index_t rx_major = dims_ys_to_rxs_major[ys_order[i]];
+        index_t rx_minor = dims_ys_to_rxs_minor[ys_order[i]];
+        index_t y_length = dims_rx_major_rx_minor_to_hidden_lengths[rx_major][rx_minor];
         y_lengths(i)     = y_length;
         did_length *= y_length;
     }
@@ -265,7 +292,8 @@ struct BlockTensorDistribution
 };
 
 // this returns a constexpr BlockTensorDistribution
-template <typename... XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
+template <index_t... RsLengths,
+          typename... XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
           index_t... DimsWid2XsMajor,
           index_t... DimsWid2XsMinor,
           index_t... DimsLid2XsMajor,
@@ -274,6 +302,8 @@ template <typename... XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
           index_t... DimsYs2XsMinor,
           index_t... YsOrder>
 __host__ __device__ constexpr auto make_block_tensor_distribution(
+    //
+    Sequence<RsLengths...>,
     //
     Tuple<XsUnMergeUpLengthss...>,
     //
@@ -289,7 +319,8 @@ __host__ __device__ constexpr auto make_block_tensor_distribution(
     Sequence<YsOrder...>)
 {
     constexpr auto encode =
-        detail::make_block_tensor_distribution_encoding(Tuple<XsUnMergeUpLengthss...>{},
+        detail::make_block_tensor_distribution_encoding(Sequence<RsLengths...>{},
+                                                        Tuple<XsUnMergeUpLengthss...>{},
                                                         Sequence<DimsWid2XsMajor...>{},
                                                         Sequence<DimsWid2XsMinor...>{},
                                                         Sequence<DimsLid2XsMajor...>{},
@@ -317,7 +348,8 @@ __host__ __device__ constexpr auto make_block_tensor_distribution(
 }
 
 // this returns a static BlockTensorDistribution
-template <typename... XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
+template <index_t... RsLengths,
+          typename... XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
           index_t... DimsWid2XsMajor,
           index_t... DimsWid2XsMinor,
           index_t... DimsLid2XsMajor,
@@ -326,6 +358,8 @@ template <typename... XsUnMergeUpLengthss, // Tuple<Sequence<...>, ...>
           index_t... DimsYs2XsMinor,
           index_t... YsOrder>
 __host__ __device__ constexpr auto make_static_block_tensor_distribution(
+    //
+    Sequence<RsLengths...>,
     //
     Tuple<XsUnMergeUpLengthss...>,
     //
@@ -341,7 +375,8 @@ __host__ __device__ constexpr auto make_static_block_tensor_distribution(
     Sequence<YsOrder...>)
 {
     constexpr auto encode =
-        detail::make_block_tensor_distribution_encoding(Tuple<XsUnMergeUpLengthss...>{},
+        detail::make_block_tensor_distribution_encoding(Sequence<RsLengths...>{},
+                                                        Tuple<XsUnMergeUpLengthss...>{},
                                                         Sequence<DimsWid2XsMajor...>{},
                                                         Sequence<DimsWid2XsMinor...>{},
                                                         Sequence<DimsLid2XsMajor...>{},

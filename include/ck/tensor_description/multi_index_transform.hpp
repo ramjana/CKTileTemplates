@@ -16,6 +16,7 @@ enum struct IndexTransformEnum
     Embed,
     Merge,
     UnMerge,
+    Replicate,
 };
 
 template <index_t NDimLow, index_t NDimUp>

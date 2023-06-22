@@ -733,6 +733,13 @@ __host__ __device__ constexpr auto chain_tensor_adaptors(const X& x, const Xs&..
                                                                                                   \
                         return make_unmerge_transform(up_lens);                                   \
                     }                                                                             \
+                    else if constexpr(name == IndexTransformEnum::Replicate)                      \
+                    {                                                                             \
+                        index_t pos  = 0;                                                         \
+                        auto up_lens = meta_data.template Pop<Array<index_t, num_up_dim>>(pos);   \
+                                                                                                  \
+                        return make_replicate_transform(up_lens);                                 \
+                    }                                                                             \
                 },                                                                                \
                 Number<num_transform>{});                                                         \
         }();                                                                                      \
@@ -853,6 +860,13 @@ __host__ __device__ constexpr auto chain_tensor_adaptors(const X& x, const Xs&..
                             meta_data.template Get<Array<index_t, num_up_dim>>(0);                 \
                                                                                                    \
                         return make_unmerge_transform(TO_TUPLE_OF_NUMBER(up_lens, num_up_dim));    \
+                    }                                                                              \
+                    else if constexpr(name == IndexTransformEnum::Replicate)                       \
+                    {                                                                              \
+                        constexpr auto up_lens =                                                   \
+                            meta_data.template Get<Array<index_t, num_up_dim>>(0);                 \
+                                                                                                   \
+                        return make_replicate_transform(TO_TUPLE_OF_NUMBER(up_lens, num_up_dim));  \
                     }                                                                              \
                 },                                                                                 \
                 Number<num_transform>{});                                                          \

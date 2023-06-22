@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2018-2023, Advanced Micro Devices, Inc. All rights reserved.
 
-#ifndef CK_CONTAINER_HELPER_HPP
-#define CK_CONTAINER_HELPER_HPP
+#pragma once
 
 #include "sequence.hpp"
 #include "sequence_helper.hpp"
@@ -362,7 +361,14 @@ __host__ __device__ constexpr auto get_container_subset(const Array<T, N>& arr, 
 {
     STATIC_ASSERT(N >= sizeof...(Is), "wrong! size");
 
-    return make_array<T>(arr[Is]...);
+    if constexpr(sizeof...(Is) > 0)
+    {
+        return make_array<T>(arr[Is]...);
+    }
+    else
+    {
+        return Array<T, 0>{};
+    }
 }
 
 template <typename... Ts, index_t... Is>
@@ -370,40 +376,28 @@ __host__ __device__ constexpr auto get_container_subset(const Tuple<Ts...>& tup,
 {
     STATIC_ASSERT(sizeof...(Ts) >= sizeof...(Is), "wrong! size");
 
-    return make_tuple(tup[Number<Is>{}]...);
-}
-
-#if 0
-template <typename T, index_t N, index_t... Is>
-__host__ __device__ constexpr void
-set_container_subset(Array<T, N>& y, Sequence<Is...> picks, const Array<T, sizeof...(Is)>& x)
-{
-    STATIC_ASSERT(N >= sizeof...(Is), "wrong! size");
-
-    for(index_t i = 0; i < picks.Size(); ++i)
+    if constexpr(sizeof...(Is) > 0)
     {
-        y(picks[i]) = x[i];
+        return make_tuple(tup[Number<Is>{}]...);
+    }
+    else
+    {
+        return Tuple<>{};
     }
 }
 
-template <typename... Ys, index_t... Is, typename... Xs>
-__host__ __device__ constexpr void
-set_container_subset(Tuple<Ys...>& y, Sequence<Is...> picks, const Tuple<Xs...>& x)
-{
-    STATIC_ASSERT(sizeof...(Ys) >= sizeof...(Is) && sizeof...(Is) == sizeof...(Xs), "wrong! size");
-
-    static_for<0, sizeof...(Is), 1>{}([&](auto i) { y(picks[i]) = x[i]; });
-}
-#else
 template <typename T, index_t N, index_t... Is>
 __host__ __device__ constexpr void
 set_container_subset(Array<T, N>& y, Sequence<Is...> picks, const Array<T, sizeof...(Is)>& x)
 {
     STATIC_ASSERT(N >= sizeof...(Is), "wrong! size");
 
-    for(index_t i = 0; i < picks.Size(); ++i)
+    if constexpr(sizeof...(Is) > 0)
     {
-        y(picks[i]) = x[i];
+        for(index_t i = 0; i < picks.Size(); ++i)
+        {
+            y(picks[i]) = x[i];
+        }
     }
 }
 
@@ -412,9 +406,11 @@ __host__ __device__ constexpr void set_container_subset(Y& y, Sequence<Is...> pi
 {
     STATIC_ASSERT(Y::Size() >= sizeof...(Is) && X::Size() == sizeof...(Is), "wrong! size");
 
-    static_for<0, sizeof...(Is), 1>{}([&](auto i) { y(picks[i]) = x[i]; });
+    if constexpr(sizeof...(Is) > 0)
+    {
+        static_for<0, sizeof...(Is), 1>{}([&](auto i) { y(picks[i]) = x[i]; });
+    }
 }
-#endif
 
 template <index_t... Is>
 __host__ __device__ constexpr auto sequence_to_tuple_of_number(Sequence<Is...>)
@@ -430,4 +426,3 @@ __host__ __device__ constexpr auto sequence_to_tuple_of_number(Sequence<Is...>)
 }
 
 } // namespace ck
-#endif
