@@ -211,7 +211,6 @@ struct Im2Col
             Sequence<1, 2>{},
             Sequence<2, 0>{},
             Sequence<1, 2>{},
-            Sequence<0, 1>{},
             Sequence<0, 1>{});
 
         // FIXME: make dst's block distribution different from src's
