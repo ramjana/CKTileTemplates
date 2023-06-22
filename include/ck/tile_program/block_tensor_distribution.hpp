@@ -56,7 +56,7 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
                       sizeof...(DimsYs2RHsMajor) == sizeof...(DimsYs2RHsMinor),
                   "");
 
-    constexpr index_t kMaxNumTransforms = 10;
+    constexpr index_t kMaxNumTransforms = 20;
     constexpr index_t kMaxMetaDataSize  = 128;
     constexpr index_t kMaxNumDim        = 10;
 
