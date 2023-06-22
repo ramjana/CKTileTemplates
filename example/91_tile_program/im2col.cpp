@@ -77,10 +77,6 @@ void reference_im2col(Tensor<T>& in_mtx_host_ref,
     }
 }
 
-struct CopierStrategy
-{
-};
-
 // program
 template <ck::index_t NDimSpatial,
           typename T,
@@ -89,7 +85,7 @@ template <ck::index_t NDimSpatial,
           ck::index_t kKPerTile>
 struct Im2Col
 {
-    template <typename Server, typename CopierStrategy>
+    template <typename Server>
     __host__ __device__ void
     operator()(Server& ps,
                const std::array<ck::index_t, NDimSpatial + 2>& a_n_wis_c_lengths,
@@ -107,9 +103,7 @@ struct Im2Col
                const std::array<ck::index_t, 2> a_gemmm_gemmk_strides,
                //
                const T* p_a_img,
-               T* p_a_mtx,
-               // strategy
-               const CopierStrategy& copier_strategy)
+               T* p_a_mtx)
     {
         using namespace ck;
         using namespace ck::tile_program::block;
@@ -199,8 +193,6 @@ struct Im2Col
         const auto i_gemmm_gemmk = block2tile.CalculateBottomIndex(make_multi_index(id_block));
 
         const auto iGemmM = ps.read_first_lane(i_gemmm_gemmk[0]) * kMPerTile;
-
-        (void)copier_strategy;
 
         // FIXME: use strategy to generate
         constexpr auto src_block_dstr = make_static_block_tensor_distribution(
@@ -354,8 +346,7 @@ int main()
            in_mtx_strides,
            //
            static_cast<DataType*>(in_buf.GetDeviceBuffer()),
-           static_cast<DataType*>(in_mtx_buf.GetDeviceBuffer()),
-           CopierStrategy{});
+           static_cast<DataType*>(in_mtx_buf.GetDeviceBuffer()));
 
     in_mtx_buf.FromDevice(in_mtx_host_dev.mData.data());
 
