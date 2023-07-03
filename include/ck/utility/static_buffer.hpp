@@ -40,6 +40,8 @@ struct StaticBuffer : public StaticallyIndexedArray<remove_cvref_t<S_>, N>
 
     __host__ __device__ static constexpr AddressSpaceEnum GetAddressSpace() { return AddressSpace; }
 
+    __host__ __device__ static constexpr index_t Size() { return N; }
+
     __host__ __device__ static constexpr bool IsStaticBuffer() { return true; }
 
     __host__ __device__ static constexpr bool IsDynamicBuffer() { return false; }

@@ -28,6 +28,7 @@ __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t
 }
 
 // this returns a constexpr encoding of BlockTensorDistribution
+// TODO: reimplement as Hierachical-Distribution
 template <index_t... RsLengths,
           typename... HsLengthss, // Tuple<Sequence<...>, ...>
           index_t... DimsWid2RHsMajor,

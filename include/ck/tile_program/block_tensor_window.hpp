@@ -21,6 +21,8 @@ struct BlockTensorWindow
     using WindowAdaptor    = typename BlockTensorDstr::WidLidYs2XsAdaptor;
     using BottomTensorDesc = typename BottomTensorView::TensorDesc;
 
+    using DataType = typename BottomTensorView::DataType;
+
     static constexpr index_t NDimWindowAdaptorTop = WindowAdaptor::GetNumOfTopDimension();
     static constexpr index_t NDimBottomTensor     = BottomTensorDesc::GetNumOfDimension();
 

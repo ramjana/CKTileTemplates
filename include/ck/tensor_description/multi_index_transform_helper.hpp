@@ -99,15 +99,6 @@ __host__ __device__ constexpr auto make_slice_transform(const LowLength& low_len
     return Slice<LowLength, SliceBegin, SliceEnd>{low_length, slice_begin, slice_end};
 }
 
-#if 0
-template <typename VectorSize, typename UpLength>
-__host__ __device__ constexpr auto make_vectorize_transform(const VectorSize& vector_size,
-                                                            const UpLength& up_length)
-{
-    return Vectorize<VectorSize, UpLength>{vector_size, up_length};
-}
-#endif
-
 template <typename Modulus, typename UpLength>
 __host__ __device__ constexpr auto make_modulo_transform(const Modulus& modulus,
                                                          const UpLength& up_length)

@@ -928,9 +928,11 @@ struct Freeze : public BaseTransform<1, 0>
 
 // Replicate the original tensor and create a higher dimensional tensor
 template <typename UpLengths>
-struct Replicate : public BaseTransform<0, 1>
+struct Replicate : public BaseTransform<0, UpLengths::Size()>
 {
     static constexpr index_t NDimUp = UpLengths::Size();
+
+    static_assert(NDimUp > 0, "wrong!");
 
     __host__ __device__ constexpr Replicate() = default;
 
@@ -982,86 +984,6 @@ struct Replicate : public BaseTransform<0, 1>
     //
     UpLengths up_lengths_;
 };
-
-#if 0
-template <typename VectorSize, typename UpLength>
-struct Vectorize : public BaseTransform<1, 1>
-{
-    using LowerIndex = MultiIndex<1>;
-    using UpperIndex = MultiIndex<1>;
-
-    using UpLengths = decltype(make_tuple(UpLength{}));
-
-    UpLengths up_lengths_;
-    VectorSize vector_size_;
-
-    __host__ __device__ constexpr Vectorize() = default;
-
-    __host__ __device__ constexpr Vectorize(const VectorSize& vector_size,
-                                            const UpLength& up_length)
-        : vector_size_{vector_size}, up_lengths_{make_tuple(up_length)}
-    {
-    }
-
-    __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
-
-    template <typename LowIdx, typename UpIdx>
-    __host__ __device__ constexpr void CalculateLowerIndex(LowIdx& idx_low,
-                                                           const UpIdx& idx_up) const
-    {
-        static_assert(LowIdx::Size() == 1 && UpIdx::Size() == 1,
-                      "wrong! inconsistent # of dimension");
-
-        idx_low(Number<0>{}) = vector_size_ * idx_up[Number<0>{}];
-    }
-
-    template <typename LowIdxDiff,
-              typename UpIdxDiff,
-              typename LowIdx,
-              typename UpIdx>
-    __host__ __device__ void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
-                                              const UpIdxDiff& idx_diff_up,
-                                              LowIdx& idx_low,
-                                              const UpIdx&) const
-    {
-        static_assert(LowIdxDiff::Size() == 1 && UpIdxDiff::Size() == 1 && LowIdx::Size() == 1 &&
-                          UpIdx::Size() == 1,
-                      "wrong! inconsistent # of dimension");
-
-        constexpr auto I0 = Number<0>{};
-
-        idx_diff_low(I0) = vector_size_ * idx_diff_up[I0];
-
-        idx_low += idx_diff_low;
-    }
-
-    __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
-    {
-        return true;
-    }
-
-    template <typename UpIdx>
-    __host__ __device__ static constexpr bool
-    IsValidUpperIndexMappedToValidLowerIndex(const UpIdx& /* idx_up */)
-    {
-        return true;
-    }
-
-    __host__ __device__ static constexpr bool IsKnownAtCompileTime()
-    {
-        return is_known_at_compile_time<UpLengths>::value;
-    }
-
-    __host__ __device__ void Print() const
-    {
-        printf("{");
-        printf("Vectorize, ");
-        printf("up_lengths_");
-        print_multi_index(up_lengths_);
-        printf("}");
-    }
-};
-#endif
 
 template <typename LowLength, typename SliceBegin, typename SliceEnd>
 struct Slice : public BaseTransform<1, 1>

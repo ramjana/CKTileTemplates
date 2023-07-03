@@ -23,6 +23,32 @@
 #include "ck/library/utility/host_tensor.hpp"
 #include "ck/library/utility/host_tensor_generator.hpp"
 
+template <typename ADataType, typename BDataType, typename CDataType, typename AccDataType>
+void reference_gemm(const Tensor<ADataType>& a_m_k,
+                    const Tensor<BDataType>& b_n_k,
+                    Tensor<CDataType>& c_m_n)
+{
+    auto f_mk_kn_mn = [&](auto m, auto n) {
+        const int K = a_m_k.mDesc.GetLengths()[1];
+
+        AccDataType v_acc = 0;
+
+        for(int k = 0; k < K; ++k)
+        {
+            ADataType v_a = a_m_k(m, k);
+            BDataType v_b = b_n_k(n, k);
+
+            v_acc += ck::type_convert<AccDataType>(v_a) * ck::type_convert<AccDataType>(v_b);
+        }
+
+        c_m_n(m, n) = ck::type_convert<CDataType>(v_acc);
+    };
+
+    make_ParallelTensorFunctor(f_mk_kn_mn,
+                               c_m_n.mDesc.GetLengths()[0],
+                               c_m_n.mDesc.GetLengths()[1])(std::thread::hardware_concurrency());
+}
+
 // C = A * B
 template <typename ADataType,
           typename BDataType,
@@ -132,58 +158,46 @@ struct Gemm
 
         // A copy
         // FIXME
-        constexpr auto a_dram_window_dstr = make_static_block_tensor_distribution(
-            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-            Sequence<0>{},
+        constexpr auto a_copy_dram_window_dstr = make_static_block_tensor_distribution(
             Sequence<1>{},
-            Sequence<0, 1>{},
+            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+            Sequence<1>{},
+            Sequence<1>{},
+            Sequence<1, 2>{},
             Sequence<2, 0>{},
-            Sequence<0, 1>{},
-            Sequence<0, 1>{},
+            Sequence<1, 2>{},
             Sequence<0, 1>{});
 
-        constexpr auto a_lds_window_dstr = make_static_block_tensor_distribution(
-            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-            Sequence<0>{},
-            Sequence<1>{},
-            Sequence<0, 1>{},
-            Sequence<2, 0>{},
-            Sequence<0, 1>{},
-            Sequence<0, 1>{},
-            Sequence<0, 1>{});
+        constexpr auto a_copy_lds_window_dstr = a_copy_dram_window_dstr;
 
-        auto a_dram_window = make_block_window(a_dram_grid, {iM, 0}, a_dram_window_dstr);
+        auto a_copy_dram_window = make_block_window(a_dram_grid, {iM, 0}, a_copy_dram_window_dstr);
 
-        auto a_lds_window = make_block_window(a_lds_block, {0, 0}, a_lds_window_dstr);
+        auto a_copy_lds_window = make_block_window(a_lds_block, {0, 0}, a_copy_lds_window_dstr);
 
         // B copy
         // FIXME
-        constexpr auto b_dram_window_dstr = make_static_block_tensor_distribution(
-            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-            Sequence<0>{},
+        constexpr auto b_copy_dram_window_dstr = make_static_block_tensor_distribution(
             Sequence<1>{},
-            Sequence<0, 1>{},
+            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+            Sequence<1>{},
+            Sequence<1>{},
+            Sequence<1, 2>{},
             Sequence<2, 0>{},
-            Sequence<0, 1>{},
-            Sequence<0, 1>{},
+            Sequence<1, 2>{},
             Sequence<0, 1>{});
 
-        constexpr auto b_lds_window_dstr = make_static_block_tensor_distribution(
-            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-            Sequence<0>{},
-            Sequence<1>{},
-            Sequence<0, 1>{},
-            Sequence<2, 0>{},
-            Sequence<0, 1>{},
-            Sequence<0, 1>{},
-            Sequence<0, 1>{});
+        constexpr auto b_copy_lds_window_dstr = b_copy_dram_window_dstr;
 
-        auto b_dram_window = make_block_window(b_dram_grid, {iN, 0}, b_dram_window_dstr);
+        auto b_copy_dram_window = make_block_window(b_dram_grid, {iN, 0}, b_copy_dram_window_dstr);
 
-        auto b_lds_window = make_block_window(b_lds_block, {0, 0}, b_lds_window_dstr);
+        auto b_copy_lds_window = make_block_window(b_lds_block, {0, 0}, b_copy_lds_window_dstr);
+
+        // FIXME
+        auto a_lds_gemm_window = a_copy_lds_window;
+        auto b_lds_gemm_window = b_copy_lds_window;
 
         // C tile
-        auto c_block_tile = decltype(block_tile_gemm<CDataType>(a_lds_block, b_lds_block)){};
+        auto c_block_tile = decltype(block_tile_gemm(a_lds_gemm_window, b_lds_gemm_window)){};
 
 #if 0
         block_tile_elementwise(c_block_tile, [](auto& c){
@@ -194,20 +208,20 @@ struct Gemm
 
         do
         {
-            const auto a_block_tile = load_block_tile(a_dram_window);
-            const auto b_block_tile = load_block_tile(b_dram_window);
+            const auto a_block_tile = load_block_tile(a_copy_dram_window);
+            const auto b_block_tile = load_block_tile(b_copy_dram_window);
 
-            store_block_tile(a_lds_window, a_block_tile);
-            store_block_tile(b_lds_window, b_block_tile);
-
-            ps.block_sync_lds();
-
-            block_tile_gemm(c_block_tile, a_lds_window, b_lds_window);
+            store_block_tile(a_copy_lds_window, a_block_tile);
+            store_block_tile(b_copy_lds_window, b_block_tile);
 
             ps.block_sync_lds();
 
-            move_block_window(a_lds_window, {0, kKPerBlock});
-            move_block_window(b_lds_window, {0, kKPerBlock});
+            block_tile_gemm(c_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+
+            ps.block_sync_lds();
+
+            move_block_window(a_copy_lds_window, {0, kKPerBlock});
+            move_block_window(b_copy_lds_window, {0, kKPerBlock});
 
             iK += kKPerBlock;
         } while(iK < K);
@@ -228,7 +242,8 @@ struct Gemm
 
 int main()
 {
-    using DataType = ck::half_t;
+    using ABDataType = ck::half_t;
+    using CDataType  = float;
 
     ck::index_t M = 4096;
     ck::index_t N = 4096;
@@ -244,23 +259,20 @@ int main()
     std::array<ck::index_t, 2> c_strides{N, 1};
 
     // host verify
-    Tensor<DataType> a_host(a_lengths, a_strides);
-    Tensor<DataType> b_host(b_lengths, b_strides);
-    Tensor<DataType> c_host_ref(c_lengths, c_strides);
-    Tensor<DataType> c_host_dev(c_lengths, c_strides);
+    Tensor<ABDataType> a_host(a_lengths, a_strides);
+    Tensor<ABDataType> b_host(b_lengths, b_strides);
+    Tensor<CDataType> c_host_ref(c_lengths, c_strides);
+    Tensor<CDataType> c_host_dev(c_lengths, c_strides);
 
-    ck::utils::FillUniformDistributionIntegerValue<DataType>{-5.f, 5.f}(a_host);
-    ck::utils::FillUniformDistributionIntegerValue<DataType>{-5.f, 5.f}(b_host);
+    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(a_host);
+    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(b_host);
 
-#if 0
-    reference_gemm(a_host,
-                   b_host,
-                   c_host_ref);
-#endif
+    // reference gemm
+    reference_gemm<ABDataType, ABDataType, CDataType, float>(a_host, b_host, c_host_ref);
 
-    DeviceMem a_buf(sizeof(DataType) * a_host.GetElementSpaceSize());
-    DeviceMem b_buf(sizeof(DataType) * b_host.GetElementSpaceSize());
-    DeviceMem c_buf(sizeof(DataType) * c_host_dev.GetElementSpaceSize());
+    DeviceMem a_buf(sizeof(ABDataType) * a_host.GetElementSpaceSize());
+    DeviceMem b_buf(sizeof(ABDataType) * b_host.GetElementSpaceSize());
+    DeviceMem c_buf(sizeof(CDataType) * c_host_dev.GetElementSpaceSize());
 
     a_buf.ToDevice(a_host.mData.data());
     b_buf.ToDevice(b_host.mData.data());
@@ -275,9 +287,9 @@ int main()
     std::cout << "grid size " << kGridSize << std::endl;
 
     launch(ProgramServer{},
-           Gemm<DataType,
-                DataType,
-                DataType,
+           Gemm<ABDataType,
+                ABDataType,
+                CDataType,
                 ck::tensor_layout::gemm::RowMajor,
                 ck::tensor_layout::gemm::ColumnMajor,
                 ck::tensor_layout::gemm::RowMajor,
@@ -289,9 +301,9 @@ int main()
                 kGemmKPerBlock>{},
            kGridSize,
            kBlockSize,
-           static_cast<DataType*>(a_buf.GetDeviceBuffer()),
-           static_cast<DataType*>(b_buf.GetDeviceBuffer()),
-           static_cast<DataType*>(c_buf.GetDeviceBuffer()),
+           static_cast<ABDataType*>(a_buf.GetDeviceBuffer()),
+           static_cast<ABDataType*>(b_buf.GetDeviceBuffer()),
+           static_cast<CDataType*>(c_buf.GetDeviceBuffer()),
            M,
            N,
            K,
