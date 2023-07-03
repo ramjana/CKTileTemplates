@@ -104,7 +104,6 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
                                 const ABlockWindowTmp& a_block_window_tmp,
                                 const BBlockWindowTmp& b_block_window_tmp)
 {
-#if 1
     // FIXME: use heuristic to choose paramters and WarpGEMM
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
@@ -156,15 +155,15 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
                   "wrong!");
 
     // construct A/B-block-window from A/B-block-distribution
-    auto a_block_window =
-        make_block_window(a_block_window_tmp.GetBottomTensorView(), {0, 0}, a_block_dstr);
+    auto a_block_window = make_block_window(a_block_window_tmp.GetBottomTensorView(),
+                                            a_block_window_tmp.GetBlockWindowOrigin(),
+                                            a_block_dstr);
 
-    auto b_block_window =
-        make_block_window(b_block_window_tmp.GetBottomTensorView(), {0, 0}, b_block_dstr);
+    auto b_block_window = make_block_window(b_block_window_tmp.GetBottomTensorView(),
+                                            b_block_window_tmp.GetBlockWindowOrigin(),
+                                            b_block_dstr);
 
-    // for loop:
-    //   load from A/B-block-window into A/B-warp-tensor
-    //   warp_gemm
+    // hot loop:
     static_for<0, KXdlPerWarp, 1>{}([&](auto kIter) {
         static_for<0, MXdlPerWarp, 1>{}([&](auto mIter) {
             // read A warp tensor
@@ -207,11 +206,6 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
             });
         });
     });
-#else
-    (void)c_block_tensor;
-    (void)a_block_window_tmp;
-    (void)b_block_window_tmp;
-#endif
 }
 
 template <typename ABlockWindow, typename BBlockWindow>

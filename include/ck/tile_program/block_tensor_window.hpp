@@ -55,6 +55,7 @@ struct BlockTensorWindow
                                            const BottomTensorIndex& block_window_origin,
                                            const BlockTensorDstr& block_tensor_distribution)
         : bottom_tensor_view_{bottom_tensor_view},
+          block_window_origin_{block_window_origin},
           bottom_tensor_thread_coord_{},
           block_tensor_dstr_{block_tensor_distribution},
           window_adaptor_thread_coord_{make_tensor_adaptor_coordinate(
@@ -92,6 +93,8 @@ struct BlockTensorWindow
     }
 
     __host__ __device__ constexpr auto GetBottomTensorView() const { return bottom_tensor_view_; }
+
+    __host__ __device__ constexpr auto GetBlockWindowOrigin() const { return block_window_origin_; }
 
     __host__ __device__ constexpr auto GetBottomTensorThreadCoordinate() const
     {
@@ -170,10 +173,14 @@ struct BlockTensorWindow
                           get_container_subset(window_adaptor_wid_lid_ys_vector_strides, y_dims));
     }
 
-    // this is the bottom tensor
+    // this is the bottom tensor view
     // [x0', x1', ...] ==> [offset]
-    // tensor view and per-thread coordinate for bottom tensor
     BottomTensorView bottom_tensor_view_;
+
+    // the blockwise origin ([x0', x1', ...]) of block window on bottom tensor
+    BottomTensorIndex block_window_origin_;
+
+    // per-thread coordinate for bottom tensor
     BottomTensorCoord bottom_tensor_thread_coord_;
 
     // Block tensor distribution, which contains:

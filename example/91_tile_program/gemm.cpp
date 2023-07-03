@@ -16,6 +16,7 @@
 #include "ck/tile_program/load_block_distributed_tensor.hpp"
 #include "ck/tile_program/store_block_distributed_tensor.hpp"
 #include "ck/tile_program/block_tile_gemm.hpp"
+#include "ck/tile_program/block_tile_elementwise_op.hpp"
 
 #include "ck/library/utility/check_err.hpp"
 #include "ck/library/utility/device_memory.hpp"
@@ -85,21 +86,6 @@ struct Gemm
                                         BElementWiseOperation /* b_op */,
                                         CElementWiseOperation /* c_op */)
     {
-#if 0
-        (void)ps;
-        (void)p_a;
-        (void)p_b;
-        (void)p_c;
-        (void)M;
-        (void)N;
-        (void)K;
-        (void)Lda;
-        (void)Ldb;
-        (void)Ldc;
-        (void)a_op;
-        (void)b_op;
-        (void)c_op;
-#else
         using namespace ck;
         using namespace ck::tile_program::block;
 
@@ -199,10 +185,7 @@ struct Gemm
         // C tile
         auto c_block_tile = decltype(block_tile_gemm(a_lds_gemm_window, b_lds_gemm_window)){};
 
-#if 0
-        block_tile_elementwise(c_block_tile, [](auto& c){
-            c = 0;});
-#endif
+        block_tile_elementwise([](auto& c) { c = 0; }, c_block_tile);
 
         index_t iK = 0;
 
@@ -220,8 +203,8 @@ struct Gemm
 
             ps.block_sync_lds();
 
-            move_block_window(a_copy_lds_window, {0, kKPerBlock});
-            move_block_window(b_copy_lds_window, {0, kKPerBlock});
+            move_block_window(a_copy_dram_window, {0, kKPerBlock});
+            move_block_window(b_copy_dram_window, {0, kKPerBlock});
 
             iK += kKPerBlock;
         } while(iK < K);
@@ -236,7 +219,6 @@ struct Gemm
         auto c_dram_window = make_block_window(c_dram_grid, {iM, iN}, c_block_distr);
 
         store_block_tile(c_dram_window, c_block_tile);
-#endif
     }
 };
 
@@ -245,9 +227,9 @@ int main()
     using ABDataType = ck::half_t;
     using CDataType  = float;
 
-    ck::index_t M = 4096;
-    ck::index_t N = 4096;
-    ck::index_t K = 4096;
+    ck::index_t M = 128;
+    ck::index_t N = 128;
+    ck::index_t K = 32;
 
     std::array<ck::index_t, 2> a_lengths{M, K};
     std::array<ck::index_t, 2> a_strides{K, 1};
@@ -264,8 +246,19 @@ int main()
     Tensor<CDataType> c_host_ref(c_lengths, c_strides);
     Tensor<CDataType> c_host_dev(c_lengths, c_strides);
 
+#if 1 // debug
     ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(a_host);
     ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(b_host);
+#elif 0
+    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{1.f, 1.f}(a_host);
+    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(b_host);
+#elif 0
+    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(a_host);
+    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{1.f, 1.f}(b_host);
+#elif 0
+    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{1.f, 1.f}(a_host);
+    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{1.f, 1.f}(b_host);
+#endif
 
     // reference gemm
     reference_gemm<ABDataType, ABDataType, CDataType, float>(a_host, b_host, c_host_ref);
@@ -278,7 +271,7 @@ int main()
     b_buf.ToDevice(b_host.mData.data());
 
     constexpr ck::index_t kGemmMPerBlock = 128;
-    constexpr ck::index_t kGemmNPerBlock = 256;
+    constexpr ck::index_t kGemmNPerBlock = 128;
     constexpr ck::index_t kGemmKPerBlock = 32;
 
     constexpr ck::index_t kBlockSize = 256;
