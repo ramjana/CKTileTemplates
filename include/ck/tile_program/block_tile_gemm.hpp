@@ -39,7 +39,7 @@ struct WarpGemmXdlFp16M32N32K8 : public WarpGemm
         make_tuple(Sequence<AMLane>{}, Sequence<ABKLane, ABKPerLane>{}),
         Sequence<0>{},
         Sequence<0>{},
-        Sequence<1, 2>{},
+        Sequence<2, 1>{},
         Sequence<0, 0>{},
         Sequence<2>{},
         Sequence<1>{}));
@@ -50,7 +50,7 @@ struct WarpGemmXdlFp16M32N32K8 : public WarpGemm
         make_tuple(Sequence<BNLane>{}, Sequence<ABKLane, ABKPerLane>{}),
         Sequence<0>{},
         Sequence<0>{},
-        Sequence<1, 2>{},
+        Sequence<2, 1>{},
         Sequence<0, 0>{},
         Sequence<2>{},
         Sequence<1>{}));
@@ -121,8 +121,8 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
                    Sequence<KXdlPerWarp, WG::ABKLane, WG::ABKPerLane>{}),
         Sequence<1, 0, 0>{},
         Sequence<1, 0, 1>{},
-        Sequence<1, 2>{},
         Sequence<2, 1>{},
+        Sequence<1, 2>{},
         Sequence<1, 2, 2>{},
         Sequence<0, 0, 2>{});
 
@@ -133,8 +133,8 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
                    Sequence<KXdlPerWarp, WG::ABKLane, WG::ABKPerLane>{}),
         Sequence<0, 1, 0>{},
         Sequence<0, 1, 1>{},
-        Sequence<1, 2>{},
         Sequence<2, 1>{},
+        Sequence<1, 2>{},
         Sequence<1, 2, 2>{},
         Sequence<0, 0, 2>{});
 

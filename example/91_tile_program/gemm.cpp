@@ -66,7 +66,7 @@ template <typename ADataType,
 struct Gemm
 {
     // FIXME
-    __host__ __device__ static constexpr ck::index_t GetDynamicLdsSize()
+    __host__ __device__ static constexpr ck::index_t GetStaticLdsSize()
     {
         return ck::math::integer_divide_ceil(sizeof(ADataType) * kMPerBlock * kKPerBlock, 16) * 16 +
                sizeof(BDataType) * kNPerBlock * kKPerBlock;
@@ -89,7 +89,7 @@ struct Gemm
         using namespace ck;
         using namespace ck::tile_program::block;
 
-        __shared__ char p_shared_char[GetDynamicLdsSize()];
+        __shared__ char p_shared_char[GetStaticLdsSize()];
 
         // FIXME: assume RCR layout
         const auto a_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
@@ -227,9 +227,9 @@ int main()
     using ABDataType = ck::half_t;
     using CDataType  = float;
 
-    ck::index_t M = 128;
-    ck::index_t N = 128;
-    ck::index_t K = 32;
+    ck::index_t M = 4096;
+    ck::index_t N = 4096;
+    ck::index_t K = 4096;
 
     std::array<ck::index_t, 2> a_lengths{M, K};
     std::array<ck::index_t, 2> a_strides{K, 1};
@@ -246,19 +246,8 @@ int main()
     Tensor<CDataType> c_host_ref(c_lengths, c_strides);
     Tensor<CDataType> c_host_dev(c_lengths, c_strides);
 
-#if 1 // debug
     ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(a_host);
     ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(b_host);
-#elif 0
-    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{1.f, 1.f}(a_host);
-    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(b_host);
-#elif 0
-    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(a_host);
-    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{1.f, 1.f}(b_host);
-#elif 0
-    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{1.f, 1.f}(a_host);
-    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{1.f, 1.f}(b_host);
-#endif
 
     // reference gemm
     reference_gemm<ABDataType, ABDataType, CDataType, float>(a_host, b_host, c_host_ref);
