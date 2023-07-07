@@ -147,10 +147,15 @@ struct Gemm
         constexpr auto a_copy_dram_window_dstr = make_static_block_tensor_distribution(
             Sequence<1>{},
             make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+#if 0
             Sequence<1>{},
             Sequence<1>{},
             Sequence<1, 2>{},
             Sequence<2, 0>{},
+#else
+            Tuple<Sequence<1>, Sequence<1, 2>>{},
+            Tuple<Sequence<1>, Sequence<2, 0>>{},
+#endif
             Sequence<1, 2>{},
             Sequence<0, 1>{});
 
@@ -165,10 +170,15 @@ struct Gemm
         constexpr auto b_copy_dram_window_dstr = make_static_block_tensor_distribution(
             Sequence<1>{},
             make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
+#if 0
             Sequence<1>{},
             Sequence<1>{},
             Sequence<1, 2>{},
             Sequence<2, 0>{},
+#else
+            Tuple<Sequence<1>, Sequence<1, 2>>{},
+            Tuple<Sequence<1>, Sequence<2, 0>>{},
+#endif
             Sequence<1, 2>{},
             Sequence<0, 1>{});
 

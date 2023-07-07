@@ -198,10 +198,8 @@ struct Im2Col
         constexpr auto src_block_dstr = make_static_block_tensor_distribution(
             Sequence<1>{},
             make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-            Sequence<1>{},
-            Sequence<1>{},
-            Sequence<1, 2>{},
-            Sequence<2, 0>{},
+            Tuple<Sequence<1>, Sequence<1, 2>>{},
+            Tuple<Sequence<1>, Sequence<2, 0>>{},
             Sequence<1, 2>{},
             Sequence<0, 1>{});
 

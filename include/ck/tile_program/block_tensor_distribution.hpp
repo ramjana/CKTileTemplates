@@ -31,8 +31,8 @@ __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t
 // TODO: reimplement as Hierachical-Distribution
 template <index_t... RsLengths,
           typename... HsLengthss, // Tuple<Sequence<...>, ...>
-          typename Ps2RHssMajor,
-          typename Ps2RHssMinor,
+          typename Ps2RHssMajor,  // Tuple<Sequence<...>, ...>
+          typename Ps2RHssMinor,  // Tuple<Sequence<...>, ...>
           index_t... Ys2RHsMajor,
           index_t... Ys2RHsMinor>
 __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
@@ -258,10 +258,8 @@ struct BlockTensorDistribution
 // this returns a constexpr BlockTensorDistribution
 template <index_t... RsLengths,
           typename... HsLengthss, // Tuple<Sequence<...>, ...>
-          index_t... Wid2RHsMajor,
-          index_t... Wid2RHsMinor,
-          index_t... Lid2RHsMajor,
-          index_t... Lid2RHsMinor,
+          typename Ps2RHssMajor,  // Tuple<Sequence<...>, ...>
+          typename Ps2RHssMinor,  // Tuple<Sequence<...>, ...>
           index_t... Ys2RHsMajor,
           index_t... Ys2RHsMinor>
 __host__ __device__ constexpr auto make_block_tensor_distribution(
@@ -270,19 +268,12 @@ __host__ __device__ constexpr auto make_block_tensor_distribution(
     //
     Tuple<HsLengthss...>,
     //
-    Sequence<Wid2RHsMajor...>,
-    Sequence<Wid2RHsMinor...>,
-    //
-    Sequence<Lid2RHsMajor...>,
-    Sequence<Lid2RHsMinor...>,
+    Ps2RHssMajor,
+    Ps2RHssMinor,
     //
     Sequence<Ys2RHsMajor...>,
     Sequence<Ys2RHsMinor...>)
 {
-    // FIXME
-    using Ps2RHssMajor = Tuple<Sequence<Wid2RHsMajor...>, Sequence<Lid2RHsMajor...>>;
-    using Ps2RHssMinor = Tuple<Sequence<Wid2RHsMinor...>, Sequence<Lid2RHsMinor...>>;
-
     constexpr auto encode =
         detail::make_block_tensor_distribution_encoding(Sequence<RsLengths...>{},
                                                         Tuple<HsLengthss...>{},
@@ -312,10 +303,8 @@ __host__ __device__ constexpr auto make_block_tensor_distribution(
 // this returns a static BlockTensorDistribution
 template <index_t... RsLengths,
           typename... HsLengthss, // Tuple<Sequence<...>, ...>
-          index_t... Wid2RHsMajor,
-          index_t... Wid2RHsMinor,
-          index_t... Lid2RHsMajor,
-          index_t... Lid2RHsMinor,
+          typename Ps2RHssMajor,  // Tuple<Sequence<...>, ...>
+          typename Ps2RHssMinor,  // Tuple<Sequence<...>, ...>
           index_t... Ys2RHsMajor,
           index_t... Ys2RHsMinor>
 __host__ __device__ constexpr auto make_static_block_tensor_distribution(
@@ -324,19 +313,12 @@ __host__ __device__ constexpr auto make_static_block_tensor_distribution(
     //
     Tuple<HsLengthss...>,
     //
-    Sequence<Wid2RHsMajor...>,
-    Sequence<Wid2RHsMinor...>,
-    //
-    Sequence<Lid2RHsMajor...>,
-    Sequence<Lid2RHsMinor...>,
+    Ps2RHssMajor,
+    Ps2RHssMinor,
     //
     Sequence<Ys2RHsMajor...>,
     Sequence<Ys2RHsMinor...>)
 {
-    // FIXME
-    using Ps2RHssMajor = Tuple<Sequence<Wid2RHsMajor...>, Sequence<Lid2RHsMajor...>>;
-    using Ps2RHssMinor = Tuple<Sequence<Wid2RHsMinor...>, Sequence<Lid2RHsMinor...>>;
-
     constexpr auto encode =
         detail::make_block_tensor_distribution_encoding(Sequence<RsLengths...>{},
                                                         Tuple<HsLengthss...>{},
