@@ -41,6 +41,10 @@ using remove_pointer_t = typename std::remove_pointer<T>::type;
 template <typename T>
 inline constexpr bool is_pointer_v = std::is_pointer<T>::value;
 
+// is_empty
+template <typename T>
+inline constexpr bool is_empty_v = std::is_empty<T>::value;
+
 // bit_cast
 template <typename Y, typename X, typename enable_if<sizeof(X) == sizeof(Y), bool>::type = false>
 __host__ __device__ constexpr Y bit_cast(const X& x)

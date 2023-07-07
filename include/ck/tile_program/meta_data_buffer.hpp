@@ -19,15 +19,18 @@ struct MetaDataBuffer
     template <typename T>
     __host__ __device__ constexpr void Push(const T& data)
     {
-        constexpr index_t size = sizeof(data);
-
-        auto tmp = bit_cast<Array<std::byte, size>>(data);
-
-        for(int i = 0; i < size; i++)
+        if constexpr(!is_empty_v<T>)
         {
-            buffer_(size_) = tmp[i];
+            constexpr index_t size = sizeof(T);
 
-            size_++;
+            auto tmp = bit_cast<Array<std::byte, size>>(data);
+
+            for(int i = 0; i < size; i++)
+            {
+                buffer_(size_) = tmp[i];
+
+                size_++;
+            }
         }
     }
 
@@ -41,18 +44,23 @@ struct MetaDataBuffer
     template <typename T>
     __host__ __device__ constexpr T Pop(index_t& pos) const
     {
-        constexpr index_t size = sizeof(T);
+        T data;
 
-        Array<std::byte, size> tmp;
-
-        for(int i = 0; i < size; i++)
+        if constexpr(!is_empty_v<T>)
         {
-            tmp(i) = buffer_[pos];
+            constexpr index_t size = sizeof(T);
 
-            pos++;
+            Array<std::byte, size> tmp;
+
+            for(int i = 0; i < size; i++)
+            {
+                tmp(i) = buffer_[pos];
+
+                pos++;
+            }
+
+            data = bit_cast<T>(tmp);
         }
-
-        auto data = bit_cast<T>(tmp);
 
         return data;
     }

@@ -35,28 +35,28 @@ struct WarpGemmMfmaF16F16F32M32N32K8 : public WarpGemm
 
     // FIXME: implement hierarical distribution and then reimplement this
     using AWarpDstr = decltype(make_static_block_tensor_distribution(
-        Sequence<1>{},
-        make_tuple(Sequence<AMLane>{}, Sequence<ABKLane, ABKPerLane>{}),
-        Tuple<Sequence<0>, Sequence<2, 1>>{},
-        Tuple<Sequence<0>, Sequence<0, 0>>{},
+        Sequence<>{},
+        Tuple<Sequence<AMLane>, Sequence<ABKLane, ABKPerLane>>{},
+        Tuple<Sequence<2, 1>>{},
+        Tuple<Sequence<0, 0>>{},
         Sequence<2>{},
         Sequence<1>{}));
 
     // FIXME: implement hierarical distribution and then reimplement this
     using BWarpDstr = decltype(make_static_block_tensor_distribution(
-        Sequence<1>{},
-        make_tuple(Sequence<BNLane>{}, Sequence<ABKLane, ABKPerLane>{}),
-        Tuple<Sequence<0>, Sequence<2, 1>>{},
-        Tuple<Sequence<0>, Sequence<0, 0>>{},
+        Sequence<>{},
+        Tuple<Sequence<BNLane>, Sequence<ABKLane, ABKPerLane>>{},
+        Tuple<Sequence<2, 1>>{},
+        Tuple<Sequence<0, 0>>{},
         Sequence<2>{},
         Sequence<1>{}));
 
     // FIXME: implement hierarical distribution and then reimplement this
     using CWarpDstr = decltype(make_static_block_tensor_distribution(
-        Sequence<1>{},
-        make_tuple(Sequence<CM0PerLane, CMLane, CM1PerLane>{}, Sequence<CNLane>{}),
-        Tuple<Sequence<0>, Sequence<1, 2>>{},
-        Tuple<Sequence<0>, Sequence<1, 0>>{},
+        Sequence<>{},
+        Tuple<Sequence<CM0PerLane, CMLane, CM1PerLane>, Sequence<CNLane>>{},
+        Tuple<Sequence<1, 2>>{},
+        Tuple<Sequence<1, 0>>{},
         Sequence<1, 1>{},
         Sequence<0, 2>{}));
 
@@ -110,31 +110,31 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
 
     // FIXME: create block dstr from existing wave dstr
     constexpr auto a_block_dstr = make_static_block_tensor_distribution(
-        Sequence<NWarp, 1>{},
-        make_tuple(Sequence<MXdlPerWarp, MWarp, WG::AMLane>{},
-                   Sequence<KXdlPerWarp, WG::ABKLane, WG::ABKPerLane>{}),
-        Tuple<Sequence<1, 0, 0>, Sequence<2, 1>>{},
-        Tuple<Sequence<1, 0, 1>, Sequence<1, 2>>{},
+        Sequence<NWarp>{},
+        Tuple<Sequence<MXdlPerWarp, MWarp, WG::AMLane>,
+              Sequence<KXdlPerWarp, WG::ABKLane, WG::ABKPerLane>>{},
+        Tuple<Sequence<1, 0>, Sequence<2, 1>>{},
+        Tuple<Sequence<1, 0>, Sequence<1, 2>>{},
         Sequence<1, 2, 2>{},
         Sequence<0, 0, 2>{});
 
     // FIXME: create block dstr from existing wave dstr
     constexpr auto b_block_dstr = make_static_block_tensor_distribution(
-        Sequence<MWarp, 1>{},
-        make_tuple(Sequence<NXdlPerWarp, NWarp, WG::BNLane>{},
-                   Sequence<KXdlPerWarp, WG::ABKLane, WG::ABKPerLane>{}),
-        Tuple<Sequence<0, 1, 0>, Sequence<2, 1>>{},
-        Tuple<Sequence<0, 1, 1>, Sequence<1, 2>>{},
+        Sequence<MWarp>{},
+        Tuple<Sequence<NXdlPerWarp, NWarp, WG::BNLane>,
+              Sequence<KXdlPerWarp, WG::ABKLane, WG::ABKPerLane>>{},
+        Tuple<Sequence<0, 1>, Sequence<2, 1>>{},
+        Tuple<Sequence<0, 1>, Sequence<1, 2>>{},
         Sequence<1, 2, 2>{},
         Sequence<0, 0, 2>{});
 
     // FIXME: create block dstr from existing wave dstr
     constexpr auto c_block_dstr = make_static_block_tensor_distribution(
-        Sequence<1>{},
-        make_tuple(Sequence<MXdlPerWarp, MWarp, WG::CM0PerLane, WG::CMLane, WG::CM1PerLane>{},
-                   Sequence<NXdlPerWarp, NWarp, WG::CNLane>{}),
-        Tuple<Sequence<1, 2, 0>, Sequence<1, 2>>{},
-        Tuple<Sequence<1, 1, 0>, Sequence<3, 2>>{},
+        Sequence<>{},
+        Tuple<Sequence<MXdlPerWarp, MWarp, WG::CM0PerLane, WG::CMLane, WG::CM1PerLane>,
+              Sequence<NXdlPerWarp, NWarp, WG::CNLane>>{},
+        Tuple<Sequence<1, 2>, Sequence<1, 2>>{},
+        Tuple<Sequence<1, 1>, Sequence<3, 2>>{},
         Sequence<1, 2, 1, 1>{},
         Sequence<0, 0, 2, 4>{});
 
@@ -213,11 +213,11 @@ __host__ __device__ auto block_tile_gemm(const ABlockWindow& a_block_window,
 
     // FIXME: create block dstr from existing wave dstr
     constexpr auto c_block_dstr = make_static_block_tensor_distribution(
-        Sequence<1>{},
-        make_tuple(Sequence<MXdlPerWarp, MWarp, WG::CM0PerLane, WG::CMLane, WG::CM1PerLane>{},
-                   Sequence<NXdlPerWarp, NWarp, WG::CNLane>{}),
-        Tuple<Sequence<1, 2, 0>, Sequence<1, 2>>{},
-        Tuple<Sequence<1, 1, 0>, Sequence<3, 2>>{},
+        Sequence<>{},
+        Tuple<Sequence<MXdlPerWarp, MWarp, WG::CM0PerLane, WG::CMLane, WG::CM1PerLane>,
+              Sequence<NXdlPerWarp, NWarp, WG::CNLane>>{},
+        Tuple<Sequence<1, 2>, Sequence<1, 2>>{},
+        Tuple<Sequence<1, 1>, Sequence<3, 2>>{},
         Sequence<1, 2, 1, 1>{},
         Sequence<0, 0, 2, 4>{});
 

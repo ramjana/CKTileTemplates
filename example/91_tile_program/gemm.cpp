@@ -144,20 +144,13 @@ struct Gemm
 
         // A copy
         // FIXME
-        constexpr auto a_copy_dram_window_dstr = make_static_block_tensor_distribution(
-            Sequence<1>{},
-            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-#if 0
-            Sequence<1>{},
-            Sequence<1>{},
-            Sequence<1, 2>{},
-            Sequence<2, 0>{},
-#else
-            Tuple<Sequence<1>, Sequence<1, 2>>{},
-            Tuple<Sequence<1>, Sequence<2, 0>>{},
-#endif
-            Sequence<1, 2>{},
-            Sequence<0, 1>{});
+        constexpr auto a_copy_dram_window_dstr =
+            make_static_block_tensor_distribution(Sequence<1>{},
+                                                  Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>{},
+                                                  Tuple<Sequence<1>, Sequence<1, 2>>{},
+                                                  Tuple<Sequence<1>, Sequence<2, 0>>{},
+                                                  Sequence<1, 2>{},
+                                                  Sequence<0, 1>{});
 
         constexpr auto a_copy_lds_window_dstr = a_copy_dram_window_dstr;
 
@@ -167,20 +160,13 @@ struct Gemm
 
         // B copy
         // FIXME
-        constexpr auto b_copy_dram_window_dstr = make_static_block_tensor_distribution(
-            Sequence<1>{},
-            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-#if 0
-            Sequence<1>{},
-            Sequence<1>{},
-            Sequence<1, 2>{},
-            Sequence<2, 0>{},
-#else
-            Tuple<Sequence<1>, Sequence<1, 2>>{},
-            Tuple<Sequence<1>, Sequence<2, 0>>{},
-#endif
-            Sequence<1, 2>{},
-            Sequence<0, 1>{});
+        constexpr auto b_copy_dram_window_dstr =
+            make_static_block_tensor_distribution(Sequence<1>{},
+                                                  Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>{},
+                                                  Tuple<Sequence<1>, Sequence<1, 2>>{},
+                                                  Tuple<Sequence<1>, Sequence<2, 0>>{},
+                                                  Sequence<1, 2>{},
+                                                  Sequence<0, 1>{});
 
         constexpr auto b_copy_lds_window_dstr = b_copy_dram_window_dstr;
 

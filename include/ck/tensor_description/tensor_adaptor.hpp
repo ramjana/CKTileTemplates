@@ -263,15 +263,18 @@ struct TensorAdaptor
                     get_container_subset(vector_lengths, low_dims),
                     get_container_subset(vector_strides, low_dims));
 
-            for(index_t i = 0; i < up_dims.Size(); ++i)
+            if constexpr(up_dims.Size() > 0)
             {
-                up_vector_lengths(i) = (up_guaranteed_vector_lengths[i] != -1)
-                                           ? up_guaranteed_vector_lengths[i]
-                                           : up_vector_lengths[i];
+                for(index_t i = 0; i < up_dims.Size(); ++i)
+                {
+                    up_vector_lengths(i) = (up_guaranteed_vector_lengths[i] != -1)
+                                               ? up_guaranteed_vector_lengths[i]
+                                               : up_vector_lengths[i];
 
-                up_vector_strides(i) = (up_guaranteed_vector_strides[i] != -1)
-                                           ? up_guaranteed_vector_strides[i]
-                                           : up_vector_strides[i];
+                    up_vector_strides(i) = (up_guaranteed_vector_strides[i] != -1)
+                                               ? up_guaranteed_vector_strides[i]
+                                               : up_vector_strides[i];
+                }
             }
 
             set_container_subset(vector_lengths, up_dims, up_vector_lengths);

@@ -38,10 +38,17 @@ struct BaseTransform
     __host__ __device__ static constexpr auto
     CalculateUpperDimensionSafeVectorLengthStrides(const LowVectorLengths&, const LowVectorStrides&)
     {
-        Array<index_t, NDimUp> up_vector_lengths{-1};
-        Array<index_t, NDimUp> up_vector_strides{-1};
+        if constexpr(NDimUp > 0)
+        {
+            Array<index_t, NDimUp> up_vector_lengths{-1};
+            Array<index_t, NDimUp> up_vector_strides{-1};
 
-        return make_tuple(up_vector_lengths, up_vector_strides);
+            return make_tuple(up_vector_lengths, up_vector_strides);
+        }
+        else
+        {
+            return make_tuple(Array<index_t, 0>{}, Array<index_t, 0>{});
+        }
     }
 };
 
@@ -931,8 +938,6 @@ template <typename UpLengths>
 struct Replicate : public BaseTransform<0, UpLengths::Size()>
 {
     static constexpr index_t NDimUp = UpLengths::Size();
-
-    static_assert(NDimUp > 0, "wrong!");
 
     __host__ __device__ constexpr Replicate() = default;
 

@@ -85,6 +85,8 @@ struct Array<TData, 0>
     using type      = Array;
     using data_type = TData;
 
+    __host__ __device__ constexpr Array() {}
+
     __host__ __device__ static constexpr index_t Size() { return 0; }
 };
 

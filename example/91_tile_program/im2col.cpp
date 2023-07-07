@@ -195,13 +195,13 @@ struct Im2Col
         const auto iGemmM = ps.read_first_lane(i_gemmm_gemmk[0]) * kMPerTile;
 
         // FIXME: use strategy to generate
-        constexpr auto src_block_dstr = make_static_block_tensor_distribution(
-            Sequence<1>{},
-            make_tuple(Sequence<2, 4, 16>{}, Sequence<4, 8>{}),
-            Tuple<Sequence<1>, Sequence<1, 2>>{},
-            Tuple<Sequence<1>, Sequence<2, 0>>{},
-            Sequence<1, 2>{},
-            Sequence<0, 1>{});
+        constexpr auto src_block_dstr =
+            make_static_block_tensor_distribution(Sequence<1>{},
+                                                  Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>{},
+                                                  Tuple<Sequence<1>, Sequence<1, 2>>{},
+                                                  Tuple<Sequence<1>, Sequence<2, 0>>{},
+                                                  Sequence<1, 2>{},
+                                                  Sequence<0, 1>{});
 
         // FIXME: make dst's block distribution different from src's
         constexpr auto dst_block_dstr = src_block_dstr;
