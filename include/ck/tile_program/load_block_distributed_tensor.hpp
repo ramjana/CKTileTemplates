@@ -40,10 +40,10 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
 
     constexpr auto block_dstr = BlockTensorDstr{};
 
-    constexpr index_t NDimY = YIndex::Size();
+    constexpr index_t NDimP = BlockTensorDstr::GetNumOfDimensionP();
+    constexpr index_t NDimY = BlockTensorDstr::GetNumOfDimensionY();
 
-    static_assert(NDimY == BlockTensorDstr{}.GetYs2DidDescriptor().GetNumOfDimension() &&
-                      NDimY == sizeof...(YSliceLengths),
+    static_assert(NDimY == YIndex::Size() && NDimY == sizeof...(YSliceLengths),
                   "wrong! inconsistent # of dimension");
 
     static_assert(BlockWindow::HasStaticBlockTensorDistribution(),
@@ -97,9 +97,9 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
     static_assert(num_access > 0, "wrong! num_access should be larger than 0");
 
     // move to slice origin
-    const auto wid_lid_ys_slice_origin = container_concat(Array<index_t, 2>{0, 0}, ys_slice_origin);
+    const auto ps_ys_slice_origin = container_concat(Array<index_t, NDimP>{0}, ys_slice_origin);
 
-    block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(wid_lid_ys_slice_origin);
+    block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(ps_ys_slice_origin);
 
     // loop over thread tensor space [y0, y1, ...]
     static_for<0, num_access, 1>{}([&](auto iAccess) {
@@ -121,9 +121,9 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
                 },
                 Number<NDimY>{});
 
-            constexpr index_t did = block_dstr.GetYs2DidDescriptor().CalculateOffset(idx_ys);
+            constexpr index_t d = block_dstr.GetYs2DDescriptor().CalculateOffset(idx_ys);
 
-            thread_buf.template At<did>() = vec.template AsType<DataType>()[j];
+            thread_buf.template At<d>() = vec.template AsType<DataType>()[j];
         });
 
         // move thread coordinate
@@ -131,11 +131,9 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
         {
             constexpr auto idx_diff_ys = SFC_Ys::GetForwardStep(iAccess);
 
-            constexpr auto idx_diff_wid_lid_ys =
-                container_concat(Array<index_t, 2>{0, 0}, idx_diff_ys);
+            constexpr auto idx_diff_ps_ys = container_concat(Array<index_t, NDimP>{0}, idx_diff_ys);
 
-            block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(
-                idx_diff_wid_lid_ys);
+            block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_ps_ys);
         }
     });
 
@@ -143,14 +141,14 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
     {
         constexpr auto idx_diff_ys = SFC_Ys::GetStepBetween(Number<num_access - 1>{}, Number<0>{});
 
-        constexpr auto idx_diff_wid_lid_ys = container_concat(Array<index_t, 2>{0, 0}, idx_diff_ys);
+        constexpr auto idx_diff_ps_ys = container_concat(Array<index_t, NDimP>{0}, idx_diff_ys);
 
-        block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_wid_lid_ys);
+        block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_ps_ys);
     }
 
     // move back to origin
-    block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(MultiIndex<NDimY + 2>{0} -
-                                                                         wid_lid_ys_slice_origin);
+    block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(
+        MultiIndex<NDimP + NDimY>{0} - ps_ys_slice_origin);
 
     return thread_buf;
 }
@@ -186,14 +184,14 @@ load_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& 
 
     constexpr auto block_dstr = BlockTensorDstr{};
 
-    constexpr index_t NDimY = block_dstr.GetYs2DidDescriptor().GetNumOfDimension();
+    constexpr index_t NDimY = block_dstr.GetYs2DDescriptor().GetNumOfDimension();
 
     auto block_dstr_tensor = make_static_block_distributed_tensor<DataType>(block_dstr);
 
     block_dstr_tensor.GetThreadBuffer() = detail::load_sliced_thread_data_from_block_tensor_window(
         block_tensor_window,
         MultiIndex<NDimY>{0},
-        to_sequence(block_dstr.GetYs2DidDescriptor().GetLengths()));
+        to_sequence(block_dstr.GetYs2DDescriptor().GetLengths()));
 
     return block_dstr_tensor;
 }

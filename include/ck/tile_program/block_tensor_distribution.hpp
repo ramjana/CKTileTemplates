@@ -31,31 +31,24 @@ __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t
 // TODO: reimplement as Hierachical-Distribution
 template <index_t... RsLengths,
           typename... HsLengthss, // Tuple<Sequence<...>, ...>
-          index_t... DimsWid2RHsMajor,
-          index_t... DimsWid2RHsMinor,
-          index_t... DimsLid2RHsMajor,
-          index_t... DimsLid2RHsMinor,
-          index_t... DimsYs2RHsMajor,
-          index_t... DimsYs2RHsMinor>
+          typename Ps2RHssMajor,
+          typename Ps2RHssMinor,
+          index_t... Ys2RHsMajor,
+          index_t... Ys2RHsMinor>
 __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
     //
     Sequence<RsLengths...>,
     //
     Tuple<HsLengthss...>,
     //
-    Sequence<DimsWid2RHsMajor...>,
-    Sequence<DimsWid2RHsMinor...>,
+    Ps2RHssMajor,
+    Ps2RHssMinor,
     //
-    Sequence<DimsLid2RHsMajor...>,
-    Sequence<DimsLid2RHsMinor...>,
-    //
-    Sequence<DimsYs2RHsMajor...>,
-    Sequence<DimsYs2RHsMinor...>)
+    Sequence<Ys2RHsMajor...>,
+    Sequence<Ys2RHsMinor...>)
 {
-    STATIC_ASSERT(sizeof...(DimsWid2RHsMajor) == sizeof...(DimsWid2RHsMinor) &&
-                      sizeof...(DimsLid2RHsMajor) == sizeof...(DimsLid2RHsMinor) &&
-                      sizeof...(DimsYs2RHsMajor) == sizeof...(DimsYs2RHsMinor),
-                  "");
+    static_assert(Ps2RHssMajor::Size() == Ps2RHssMinor::Size(), "wrong!");
+    static_assert(sizeof...(Ys2RHsMajor) == sizeof...(Ys2RHsMinor), "wrong!");
 
     constexpr index_t kMaxNumTransforms = 20;
     constexpr index_t kMaxMetaDataSize  = 128;
@@ -69,12 +62,12 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
 
     // window Adaptor
     //   bottom dims [x0, x1, x2, ...]
-    //   top dims [wid, lid, y0, y1, ...]
+    //   top dims [p0, p1, ..., y0, y1, ...]
     constexpr index_t ndim_x = sizeof...(HsLengthss);
 
     // Dim Ids: [idim_x_major, idim_x_minor] to [idim_hidden]
-    Array<Array<index_t, kMaxNumDim>, ndim_x + 1> dims_rh_major_rh_minor_to_hidden_ids;
-    Array<Array<index_t, kMaxNumDim>, ndim_x + 1> dims_rh_major_rh_minor_to_hidden_lengths;
+    Array<Array<index_t, kMaxNumDim>, ndim_x + 1> rh_major_rh_minor_to_hidden_ids;
+    Array<Array<index_t, kMaxNumDim>, ndim_x + 1> rh_major_rh_minor_to_hidden_lengths;
 
     auto trans = Array<Tuple<Name, MetaData, NumDim, Dims, NumDim, Dims>, kMaxNumTransforms>{};
 
@@ -97,19 +90,19 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
 
         for(index_t i = 0; i < ndim_r_minor; ++i)
         {
-            dims_rh_major_rh_minor_to_hidden_ids(0)(i)     = hidden_dim_cnt;
-            dims_rh_major_rh_minor_to_hidden_lengths(0)(i) = r_minor_lengths[i];
+            rh_major_rh_minor_to_hidden_ids(0)(i)     = hidden_dim_cnt;
+            rh_major_rh_minor_to_hidden_lengths(0)(i) = r_minor_lengths[i];
 
             hidden_dim_cnt++;
         }
     };
 
-    // these are Unmerge transforms
+    // these are Unmerge transforms for X dimesions
     static_for<0, ndim_x, 1>{}([&trans,
                                 &num_tran,
                                 &hidden_dim_cnt,
-                                &dims_rh_major_rh_minor_to_hidden_ids,
-                                &dims_rh_major_rh_minor_to_hidden_lengths](auto idim_x) {
+                                &rh_major_rh_minor_to_hidden_ids,
+                                &rh_major_rh_minor_to_hidden_lengths](auto idim_x) {
         constexpr auto h_minor_lengths = type_pack_element<idim_x, HsLengthss...>{};
 
         constexpr index_t ndim_h_minor = h_minor_lengths.Size();
@@ -124,30 +117,40 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
 
         for(index_t i = 0; i < ndim_h_minor; ++i)
         {
-            dims_rh_major_rh_minor_to_hidden_ids(idim_x + 1)(i)     = hidden_dim_cnt;
-            dims_rh_major_rh_minor_to_hidden_lengths(idim_x + 1)(i) = h_minor_lengths[i];
+            rh_major_rh_minor_to_hidden_ids(idim_x + 1)(i)     = hidden_dim_cnt;
+            rh_major_rh_minor_to_hidden_lengths(idim_x + 1)(i) = h_minor_lengths[i];
 
             hidden_dim_cnt++;
         }
     });
 
-    // transform: wid
-    index_t hidden_dim_id_wid = hidden_dim_cnt++;
+    // transform: P dimensions
+    constexpr index_t ndim_p = Ps2RHssMajor::Size();
 
-    {
-        constexpr index_t ndim_low           = sizeof...(DimsWid2RHsMajor);
-        constexpr auto dims_wid_to_rhs_major = Sequence<DimsWid2RHsMajor...>{};
-        constexpr auto dims_wid_to_rhs_minor = Sequence<DimsWid2RHsMinor...>{};
+    Dims hidden_dim_id_ps;
+
+    static_for<0, ndim_p, 1>{}([&](auto iDimP) {
+        //
+        index_t hidden_dim_id_p = hidden_dim_cnt++;
+
+        hidden_dim_id_ps(iDimP) = hidden_dim_id_p;
+
+        constexpr auto p2RHsMajor = Ps2RHssMajor{}[iDimP];
+        constexpr auto p2RHsMinor = Ps2RHssMinor{}[iDimP];
+
+        static_assert(p2RHsMajor.Size() == p2RHsMinor.Size(), "wrong!");
+
+        constexpr index_t ndim_low = p2RHsMajor.Size();
 
         Dims low_dims;
         Lengths low_lengths;
 
         for(index_t i = 0; i < ndim_low; ++i)
         {
-            index_t rh_major = dims_wid_to_rhs_major[i];
-            index_t rh_minor = dims_wid_to_rhs_minor[i];
-            low_dims(i)      = dims_rh_major_rh_minor_to_hidden_ids[rh_major][rh_minor];
-            low_lengths(i)   = dims_rh_major_rh_minor_to_hidden_lengths[rh_major][rh_minor];
+            index_t rh_major = p2RHsMajor[i];
+            index_t rh_minor = p2RHsMinor[i];
+            low_dims(i)      = rh_major_rh_minor_to_hidden_ids[rh_major][rh_minor];
+            low_lengths(i)   = rh_major_rh_minor_to_hidden_lengths[rh_major][rh_minor];
         }
 
         trans(num_tran++) = {IndexTransformEnum::Merge,
@@ -155,72 +158,45 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
                              NumDim{ndim_low},
                              low_dims,
                              NumDim{1},
-                             Dims{hidden_dim_id_wid}};
-    }
-
-    // transform: lid
-    index_t hidden_dim_id_lid = hidden_dim_cnt++;
-
-    {
-        constexpr index_t ndim_low           = sizeof...(DimsLid2RHsMinor);
-        constexpr auto dims_lid_to_rhs_major = Sequence<DimsLid2RHsMajor...>{};
-        constexpr auto dims_lid_to_rhs_minor = Sequence<DimsLid2RHsMinor...>{};
-
-        Dims low_dims;
-        Lengths low_lengths;
-
-        for(index_t i = 0; i < ndim_low; ++i)
-        {
-            index_t rh_major = dims_lid_to_rhs_major[i];
-            index_t rh_minor = dims_lid_to_rhs_minor[i];
-            low_dims(i)      = dims_rh_major_rh_minor_to_hidden_ids[rh_major][rh_minor];
-            low_lengths(i)   = dims_rh_major_rh_minor_to_hidden_lengths[rh_major][rh_minor];
-        }
-
-        trans(num_tran++) = {IndexTransformEnum::Merge,
-                             MetaData{to_array<index_t, ndim_low>(low_lengths)},
-                             NumDim{ndim_low},
-                             low_dims,
-                             NumDim{1},
-                             Dims{hidden_dim_id_lid}};
-    }
+                             Dims{hidden_dim_id_p}};
+    });
 
     constexpr index_t ndim_bottom = ndim_x;
 
     constexpr auto bottom_dim_ids = make_sequential_index<kMaxNumDim>(0, ndim_bottom);
 
-    constexpr auto dims_ys_to_rhs_major = Sequence<DimsYs2RHsMajor...>{};
-    constexpr auto dims_ys_to_rhs_minor = Sequence<DimsYs2RHsMinor...>{};
+    constexpr auto ys_to_rhs_major = Sequence<Ys2RHsMajor...>{};
+    constexpr auto ys_to_rhs_minor = Sequence<Ys2RHsMinor...>{};
 
-    constexpr index_t ndim_y   = sizeof...(DimsYs2RHsMajor);
-    constexpr index_t ndim_top = 2 + ndim_y;
+    constexpr index_t ndim_y   = sizeof...(Ys2RHsMajor);
+    constexpr index_t ndim_top = ndim_p + ndim_y;
 
-    auto top_dim_ids = Dims{hidden_dim_id_wid, hidden_dim_id_lid};
+    auto top_dim_ids = hidden_dim_id_ps;
 
     {
         for(index_t i = 0; i < ndim_y; ++i)
         {
-            index_t rh_major   = dims_ys_to_rhs_major[i];
-            index_t rh_minor   = dims_ys_to_rhs_minor[i];
-            top_dim_ids(2 + i) = dims_rh_major_rh_minor_to_hidden_ids[rh_major][rh_minor];
+            index_t rh_major        = ys_to_rhs_major[i];
+            index_t rh_minor        = ys_to_rhs_minor[i];
+            top_dim_ids(ndim_p + i) = rh_major_rh_minor_to_hidden_ids[rh_major][rh_minor];
         }
     }
 
     //
-    const auto wid_lid_ys_to_xs_adaptor_encoding =
+    const auto ps_ys_to_xs_adaptor_encoding =
         make_tuple(trans, num_tran, bottom_dim_ids, ndim_bottom, top_dim_ids, ndim_top);
 
-    // descriptor: [y0, y1, ...] to [did]
+    // descriptor: [y0, y1, ...] to [d]
     Lengths y_lengths;
-    index_t did_length = 1;
+    index_t d_length = 1;
 
     for(index_t i = 0; i < ndim_y; ++i)
     {
-        index_t rh_major = dims_ys_to_rhs_major[i];
-        index_t rh_minor = dims_ys_to_rhs_minor[i];
-        index_t y_length = dims_rh_major_rh_minor_to_hidden_lengths[rh_major][rh_minor];
+        index_t rh_major = ys_to_rhs_major[i];
+        index_t rh_minor = ys_to_rhs_minor[i];
+        index_t y_length = rh_major_rh_minor_to_hidden_lengths[rh_major][rh_minor];
         y_lengths(i)     = y_length;
-        did_length *= y_length;
+        d_length *= y_length;
     }
 
     auto tran = make_tuple(IndexTransformEnum::UnMerge,
@@ -230,60 +206,51 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
                            NumDim{ndim_y},
                            make_sequential_index<kMaxNumDim>(1, ndim_y + 1));
 
-    const auto ys_to_did_adaptor_encoding = make_tuple(
+    const auto ys_to_d_adaptor_encoding = make_tuple(
         make_tuple(tran), 1, Dims{0}, 1, make_sequential_index<kMaxNumDim>(1, ndim_y + 1), ndim_y);
 
-    return make_tuple(wid_lid_ys_to_xs_adaptor_encoding, ys_to_did_adaptor_encoding, did_length);
+    return make_tuple(ps_ys_to_xs_adaptor_encoding, ys_to_d_adaptor_encoding, d_length);
 }
 
 } // namespace detail
 
-template <typename WidLidYs2XsAdaptor_, typename Ys2DidDescriptor_>
+template <typename PsYs2XsAdaptor_, typename Ys2DDescriptor_>
 struct BlockTensorDistribution
 {
-    using WidLidYs2XsAdaptor = remove_cvref_t<WidLidYs2XsAdaptor_>;
-    using Ys2DidDescriptor   = remove_cvref_t<Ys2DidDescriptor_>;
+    using PsYs2XsAdaptor = remove_cvref_t<PsYs2XsAdaptor_>;
+    using Ys2DDescriptor = remove_cvref_t<Ys2DDescriptor_>;
 
-    WidLidYs2XsAdaptor wid_lid_ys_to_xs_;
-    Ys2DidDescriptor ys_to_did_;
+    static constexpr index_t NDimX = PsYs2XsAdaptor::GetNumOfBottomDimension();
+    static constexpr index_t NDimY = Ys2DDescriptor::GetNumOfTopDimension();
+    static constexpr index_t NDimP = PsYs2XsAdaptor::GetNumOfTopDimension() - NDimY;
+
+    PsYs2XsAdaptor ps_ys_to_xs_;
+    Ys2DDescriptor ys_to_d_;
+
+    __host__ __device__ static constexpr index_t GetNumOfDimensionX() { return NDimX; }
+    __host__ __device__ static constexpr index_t GetNumOfDimensionY() { return NDimY; }
+    __host__ __device__ static constexpr index_t GetNumOfDimensionP() { return NDimP; }
 
     __host__ __device__ constexpr auto GetLengths() const
     {
-        wid_lid_ys_to_xs_.GetBottomDimensionLengths();
+        ps_ys_to_xs_.GetBottomDimensionLengths();
     }
 
-    __host__ __device__ constexpr const auto& GetWidLidYs2XsAdaptor() const
-    {
-        return wid_lid_ys_to_xs_;
-    }
+    __host__ __device__ constexpr const auto& GetPsYs2XsAdaptor() const { return ps_ys_to_xs_; }
 
-    __host__ __device__ constexpr const auto& GetYs2DidDescriptor() const { return ys_to_did_; }
-
-    __device__ auto CalculateThreadWidLidYsOrigin() const
-    {
-        constexpr index_t ndim = WidLidYs2XsAdaptor::GetNumOfTopDimension();
-
-        Array<index_t, ndim> idx{get_warp_id(), get_lane_id()};
-
-        for(index_t i = 2; i < ndim; ++i)
-        {
-            idx(i) = 0;
-        }
-
-        return idx;
-    }
+    __host__ __device__ constexpr const auto& GetYs2DDescriptor() const { return ys_to_d_; }
 
     __host__ __device__ static constexpr bool IsStatic()
     {
-        return WidLidYs2XsAdaptor::IsStatic() && Ys2DidDescriptor::IsStatic();
+        return PsYs2XsAdaptor::IsStatic() && Ys2DDescriptor::IsStatic();
     }
 
     __host__ __device__ void Print() const
     {
         printf("{");
         printf("BlockTensorDistribution, ");
-        wid_lid_ys_to_xs_.Print();
-        ys_to_did_.Print();
+        ps_ys_to_xs_.Print();
+        ys_to_d_.Print();
         printf("}");
     }
 };
@@ -291,105 +258,109 @@ struct BlockTensorDistribution
 // this returns a constexpr BlockTensorDistribution
 template <index_t... RsLengths,
           typename... HsLengthss, // Tuple<Sequence<...>, ...>
-          index_t... DimsWid2RHsMajor,
-          index_t... DimsWid2RHsMinor,
-          index_t... DimsLid2RHsMajor,
-          index_t... DimsLid2RHsMinor,
-          index_t... DimsYs2RHsMajor,
-          index_t... DimsYs2RHsMinor>
+          index_t... Wid2RHsMajor,
+          index_t... Wid2RHsMinor,
+          index_t... Lid2RHsMajor,
+          index_t... Lid2RHsMinor,
+          index_t... Ys2RHsMajor,
+          index_t... Ys2RHsMinor>
 __host__ __device__ constexpr auto make_block_tensor_distribution(
     //
     Sequence<RsLengths...>,
     //
     Tuple<HsLengthss...>,
     //
-    Sequence<DimsWid2RHsMajor...>,
-    Sequence<DimsWid2RHsMinor...>,
+    Sequence<Wid2RHsMajor...>,
+    Sequence<Wid2RHsMinor...>,
     //
-    Sequence<DimsLid2RHsMajor...>,
-    Sequence<DimsLid2RHsMinor...>,
+    Sequence<Lid2RHsMajor...>,
+    Sequence<Lid2RHsMinor...>,
     //
-    Sequence<DimsYs2RHsMajor...>,
-    Sequence<DimsYs2RHsMinor...>)
+    Sequence<Ys2RHsMajor...>,
+    Sequence<Ys2RHsMinor...>)
 {
+    // FIXME
+    using Ps2RHssMajor = Tuple<Sequence<Wid2RHsMajor...>, Sequence<Lid2RHsMajor...>>;
+    using Ps2RHssMinor = Tuple<Sequence<Wid2RHsMinor...>, Sequence<Lid2RHsMinor...>>;
+
     constexpr auto encode =
         detail::make_block_tensor_distribution_encoding(Sequence<RsLengths...>{},
                                                         Tuple<HsLengthss...>{},
-                                                        Sequence<DimsWid2RHsMajor...>{},
-                                                        Sequence<DimsWid2RHsMinor...>{},
-                                                        Sequence<DimsLid2RHsMajor...>{},
-                                                        Sequence<DimsLid2RHsMinor...>{},
-                                                        Sequence<DimsYs2RHsMajor...>{},
-                                                        Sequence<DimsYs2RHsMinor...>{});
+                                                        Ps2RHssMajor{},
+                                                        Ps2RHssMinor{},
+                                                        Sequence<Ys2RHsMajor...>{},
+                                                        Sequence<Ys2RHsMinor...>{});
 
-    constexpr auto encoded_wid_lid_ys_to_xs_adaptor = encode.template At<0>();
-    constexpr auto encoded_ys_to_did_adaptor        = encode.template At<1>();
-    constexpr index_t did_length                    = encode.template At<2>();
+    constexpr auto encoded_ps_ys_to_xs_adaptor = encode.template At<0>();
+    constexpr auto encoded_ys_to_d_adaptor     = encode.template At<1>();
+    constexpr index_t d_length                 = encode.template At<2>();
 
-    constexpr auto wid_lid_ys_to_xs_adaptor =
-        CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_wid_lid_ys_to_xs_adaptor);
+    constexpr auto ps_ys_to_xs_adaptor =
+        CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ps_ys_to_xs_adaptor);
 
-    constexpr auto ys_to_did_adaptor =
-        CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ys_to_did_adaptor);
+    constexpr auto ys_to_d_adaptor =
+        CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ys_to_d_adaptor);
 
-    constexpr auto ys_to_did_descriptor =
-        make_tensor_descriptor_from_adaptor(ys_to_did_adaptor, did_length);
+    constexpr auto ys_to_d_descriptor =
+        make_tensor_descriptor_from_adaptor(ys_to_d_adaptor, d_length);
 
-    return BlockTensorDistribution<remove_cvref_t<decltype(wid_lid_ys_to_xs_adaptor)>,
-                                   remove_cvref_t<decltype(ys_to_did_descriptor)>>{
-        wid_lid_ys_to_xs_adaptor, ys_to_did_descriptor};
+    return BlockTensorDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
+                                   remove_cvref_t<decltype(ys_to_d_descriptor)>>{
+        ps_ys_to_xs_adaptor, ys_to_d_descriptor};
 }
 
 // this returns a static BlockTensorDistribution
 template <index_t... RsLengths,
           typename... HsLengthss, // Tuple<Sequence<...>, ...>
-          index_t... DimsWid2RHsMajor,
-          index_t... DimsWid2RHsMinor,
-          index_t... DimsLid2RHsMajor,
-          index_t... DimsLid2RHsMinor,
-          index_t... DimsYs2RHsMajor,
-          index_t... DimsYs2RHsMinor>
+          index_t... Wid2RHsMajor,
+          index_t... Wid2RHsMinor,
+          index_t... Lid2RHsMajor,
+          index_t... Lid2RHsMinor,
+          index_t... Ys2RHsMajor,
+          index_t... Ys2RHsMinor>
 __host__ __device__ constexpr auto make_static_block_tensor_distribution(
     //
     Sequence<RsLengths...>,
     //
     Tuple<HsLengthss...>,
     //
-    Sequence<DimsWid2RHsMajor...>,
-    Sequence<DimsWid2RHsMinor...>,
+    Sequence<Wid2RHsMajor...>,
+    Sequence<Wid2RHsMinor...>,
     //
-    Sequence<DimsLid2RHsMajor...>,
-    Sequence<DimsLid2RHsMinor...>,
+    Sequence<Lid2RHsMajor...>,
+    Sequence<Lid2RHsMinor...>,
     //
-    Sequence<DimsYs2RHsMajor...>,
-    Sequence<DimsYs2RHsMinor...>)
+    Sequence<Ys2RHsMajor...>,
+    Sequence<Ys2RHsMinor...>)
 {
+    // FIXME
+    using Ps2RHssMajor = Tuple<Sequence<Wid2RHsMajor...>, Sequence<Lid2RHsMajor...>>;
+    using Ps2RHssMinor = Tuple<Sequence<Wid2RHsMinor...>, Sequence<Lid2RHsMinor...>>;
+
     constexpr auto encode =
         detail::make_block_tensor_distribution_encoding(Sequence<RsLengths...>{},
                                                         Tuple<HsLengthss...>{},
-                                                        Sequence<DimsWid2RHsMajor...>{},
-                                                        Sequence<DimsWid2RHsMinor...>{},
-                                                        Sequence<DimsLid2RHsMajor...>{},
-                                                        Sequence<DimsLid2RHsMinor...>{},
-                                                        Sequence<DimsYs2RHsMajor...>{},
-                                                        Sequence<DimsYs2RHsMinor...>{});
+                                                        Ps2RHssMajor{},
+                                                        Ps2RHssMinor{},
+                                                        Sequence<Ys2RHsMajor...>{},
+                                                        Sequence<Ys2RHsMinor...>{});
 
-    constexpr auto encoded_wid_lid_ys_to_xs_adaptor = encode.template At<0>();
-    constexpr auto encoded_ys_to_did_adaptor        = encode.template At<1>();
-    constexpr index_t did_length                    = encode.template At<2>();
+    constexpr auto encoded_ps_ys_to_xs_adaptor = encode.template At<0>();
+    constexpr auto encoded_ys_to_d_adaptor     = encode.template At<1>();
+    constexpr index_t d_length                 = encode.template At<2>();
 
-    constexpr auto wid_lid_ys_to_xs_adaptor =
-        CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(encoded_wid_lid_ys_to_xs_adaptor);
+    constexpr auto ps_ys_to_xs_adaptor =
+        CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ps_ys_to_xs_adaptor);
 
-    constexpr auto ys_to_did_adaptor =
-        CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ys_to_did_adaptor);
+    constexpr auto ys_to_d_adaptor =
+        CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ys_to_d_adaptor);
 
-    constexpr auto ys_to_did_descriptor =
-        make_tensor_descriptor_from_adaptor(ys_to_did_adaptor, Number<did_length>{});
+    constexpr auto ys_to_d_descriptor =
+        make_tensor_descriptor_from_adaptor(ys_to_d_adaptor, Number<d_length>{});
 
-    return BlockTensorDistribution<remove_cvref_t<decltype(wid_lid_ys_to_xs_adaptor)>,
-                                   remove_cvref_t<decltype(ys_to_did_descriptor)>>{
-        wid_lid_ys_to_xs_adaptor, ys_to_did_descriptor};
+    return BlockTensorDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
+                                   remove_cvref_t<decltype(ys_to_d_descriptor)>>{
+        ps_ys_to_xs_adaptor, ys_to_d_descriptor};
 }
 
 } // namespace block

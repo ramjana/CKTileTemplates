@@ -38,9 +38,10 @@ __device__ void store_block_tile(
     constexpr auto block_dstr = BlockTensorDstr{};
 
     constexpr auto thread_tensor_lengths_ys =
-        to_sequence(block_dstr.GetYs2DidDescriptor().GetLengths());
+        to_sequence(block_dstr.GetYs2DDescriptor().GetLengths());
 
-    constexpr index_t ndim_ys = thread_tensor_lengths_ys.Size();
+    constexpr index_t NDimP = BlockTensorDstr::GetNumOfDimensionP();
+    constexpr index_t NDimY = BlockTensorDstr::GetNumOfDimensionY();
 
     constexpr auto tmp = []() {
         const auto [ys_vector_lengths, ys_vector_strides] =
@@ -49,7 +50,7 @@ __device__ void store_block_tile(
         index_t VectorDimY      = 0;
         index_t ScalarPerVector = 1;
 
-        for(index_t i = 0; i < ndim_ys; ++i)
+        for(index_t i = 0; i < NDimY; ++i)
         {
             if(ys_vector_strides[i] == 1 && ys_vector_lengths[i] > ScalarPerVector)
             {
@@ -65,12 +66,12 @@ __device__ void store_block_tile(
     constexpr index_t ScalarPerVector = tmp.template At<1>();
 
     // FIXME:
-    using DimAccessOrder = typename arithmetic_sequence_gen<0, ndim_ys, 1>::type;
+    using DimAccessOrder = typename arithmetic_sequence_gen<0, NDimY, 1>::type;
 
     constexpr auto scalars_per_access_arr = generate_array(
-        [&](auto i) { return (i == VectorDimY) ? ScalarPerVector : 1; }, Number<ndim_ys>{});
+        [&](auto i) { return (i == VectorDimY) ? ScalarPerVector : 1; }, Number<NDimY>{});
 
-    constexpr auto scalars_per_access = TO_SEQUENCE(scalars_per_access_arr, ndim_ys);
+    constexpr auto scalars_per_access = TO_SEQUENCE(scalars_per_access_arr, NDimY);
 
     using vector_type_t = vector_type_maker_t<DataType, ScalarPerVector>;
     using vector_t      = typename vector_type_t::type;
@@ -96,12 +97,12 @@ __device__ void store_block_tile(
                 [&](auto jj) {
                     return jj == VectorDimY ? (idx_ys_start[jj] + j) : idx_ys_start[jj];
                 },
-                Number<ndim_ys>{});
+                Number<NDimY>{});
 
-            constexpr index_t did = block_dstr.GetYs2DidDescriptor().CalculateOffset(idx_ys);
+            constexpr index_t d = block_dstr.GetYs2DDescriptor().CalculateOffset(idx_ys);
 
             vec.template AsType<DataType>()(j) =
-                block_dstr_tensor.GetThreadBuffer().template At<did>();
+                block_dstr_tensor.GetThreadBuffer().template At<d>();
         });
 
         const vector_t vec_value = vec.template AsType<vector_t>().template At<0>();
@@ -115,11 +116,9 @@ __device__ void store_block_tile(
         {
             constexpr auto idx_diff_ys = SFC_Ys::GetForwardStep(iAccess);
 
-            constexpr auto idx_diff_wid_lid_ys =
-                container_concat(Array<index_t, 2>{0, 0}, idx_diff_ys);
+            constexpr auto idx_diff_ps_ys = container_concat(Array<index_t, NDimP>{0}, idx_diff_ys);
 
-            block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(
-                idx_diff_wid_lid_ys);
+            block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_ps_ys);
         }
     });
 
@@ -127,9 +126,9 @@ __device__ void store_block_tile(
     {
         constexpr auto idx_diff_ys = SFC_Ys::GetStepBetween(Number<num_access - 1>{}, Number<0>{});
 
-        constexpr auto idx_diff_wid_lid_ys = container_concat(Array<index_t, 2>{0, 0}, idx_diff_ys);
+        constexpr auto idx_diff_ps_ys = container_concat(Array<index_t, NDimP>{0}, idx_diff_ys);
 
-        block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_wid_lid_ys);
+        block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_ps_ys);
     }
 }
 

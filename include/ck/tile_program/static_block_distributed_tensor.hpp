@@ -23,7 +23,7 @@ struct StaticBlockDistributedTensor
                   "wrong! StaticBlockDistribution should be known at compile tile");
 
     using ThreadTensorDesc =
-        remove_cvref_t<decltype(StaticBlockDistribution{}.GetYs2DidDescriptor())>;
+        remove_cvref_t<decltype(StaticBlockDistribution{}.GetYs2DDescriptor())>;
 
     static constexpr index_t kThreadElementSpaceSize = ThreadTensorDesc{}.GetElementSpaceSize();
 

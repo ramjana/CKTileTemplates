@@ -18,7 +18,7 @@ struct BlockTensorWindow
     using BottomTensorView = remove_reference_t<BottomTensorView_>;
     using BlockTensorDstr  = remove_cvref_t<BlockTensorDistribution_>;
 
-    using WindowAdaptor    = typename BlockTensorDstr::WidLidYs2XsAdaptor;
+    using WindowAdaptor    = typename BlockTensorDstr::PsYs2XsAdaptor;
     using BottomTensorDesc = typename BottomTensorView::TensorDesc;
 
     using DataType = typename BottomTensorView::DataType;
@@ -58,9 +58,9 @@ struct BlockTensorWindow
           block_window_origin_{block_window_origin},
           bottom_tensor_thread_coord_{},
           block_tensor_dstr_{block_tensor_distribution},
-          window_adaptor_thread_coord_{make_tensor_adaptor_coordinate(
-              block_tensor_distribution.GetWidLidYs2XsAdaptor(),
-              block_tensor_distribution.CalculateThreadWidLidYsOrigin())}
+          window_adaptor_thread_coord_{
+              make_tensor_adaptor_coordinate(block_tensor_distribution.GetPsYs2XsAdaptor(),
+                                             AdaptorTopIndex{get_warp_id(), get_lane_id(), 0})}
     {
         BottomTensorIndex bottom_tensor_thread_origin_idx;
 
@@ -102,12 +102,11 @@ struct BlockTensorWindow
     }
 
     // move thread's window adaptor coordiante
-    // [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
+    // [p0, p1, ..., y0, y1, ...] ==> [x0, x1, ...]
     __device__ void MoveWindowAdaptorThreadCoordinate(const AdaptorTopIndex& idx_diff_adaptor)
     {
-        move_tensor_adaptor_coordinate(block_tensor_dstr_.GetWidLidYs2XsAdaptor(),
-                                       window_adaptor_thread_coord_,
-                                       idx_diff_adaptor);
+        move_tensor_adaptor_coordinate(
+            block_tensor_dstr_.GetPsYs2XsAdaptor(), window_adaptor_thread_coord_, idx_diff_adaptor);
     }
 
     // move thread's botom tensor coordiante
@@ -120,13 +119,13 @@ struct BlockTensorWindow
     }
 
     // move thread's window adaptor coordinate and bottom tensor coordinate
-    // [wid, lid, y0, y1, ...] ==> [x0, x1, ...] ==> [x0', x1', ...] ==> [offset]
+    // [p0, p1, ..., y0, y1, ...] ==> [x0, x1, ...] ==> [x0', x1', ...] ==> [offset]
     __device__ void
     MoveWindowAdaptorAndBottomTensorThreadCoordinate(const AdaptorTopIndex& idx_diff_adaptor_top)
     {
         Array<index_t, NDimBottomTensor> idx_diff_adaptor_bottom;
 
-        move_tensor_adaptor_coordinate(block_tensor_dstr_.GetWidLidYs2XsAdaptor(),
+        move_tensor_adaptor_coordinate(block_tensor_dstr_.GetPsYs2XsAdaptor(),
                                        window_adaptor_thread_coord_,
                                        idx_diff_adaptor_top,
                                        idx_diff_adaptor_bottom);
@@ -147,7 +146,7 @@ struct BlockTensorWindow
         const auto window_adaptor_bottom_dim_vector_lengths = bottom_tensor_top_dim_vector_lengths;
         const auto window_adaptor_bottom_dim_vector_strides = bottom_tensor_top_dim_vector_strides;
 
-        // window adaptor [wid, lid, y0, y1, ...]
+        // window adaptor [p0, p1, ..., y0, y1, ...]
         Array<index_t, WindowAdaptor::GetNumOfHiddenDimension()> window_adaptor_vector_lengths{-1};
         Array<index_t, WindowAdaptor::GetNumOfHiddenDimension()> window_adaptor_vector_strides{-1};
 
@@ -160,17 +159,18 @@ struct BlockTensorWindow
                              window_adaptor_bottom_dims,
                              window_adaptor_bottom_dim_vector_strides);
 
-        const auto [window_adaptor_wid_lid_ys_vector_lengths,
-                    window_adaptor_wid_lid_ys_vector_strides] =
+        const auto [window_adaptor_ps_ys_vector_lengths, window_adaptor_ps_ys_vector_strides] =
             WindowAdaptor{}.GetTopDimensionSafeVectorLengthStrides(window_adaptor_vector_lengths,
                                                                    window_adaptor_vector_strides);
 
         // [y0, y1, ...]
         constexpr auto y_dims =
-            typename arithmetic_sequence_gen<2, NDimWindowAdaptorTop, 1>::type{};
+            typename arithmetic_sequence_gen<BlockTensorDstr::GetNumOfDimensionP(),
+                                             NDimWindowAdaptorTop,
+                                             1>::type{};
 
-        return make_tuple(get_container_subset(window_adaptor_wid_lid_ys_vector_lengths, y_dims),
-                          get_container_subset(window_adaptor_wid_lid_ys_vector_strides, y_dims));
+        return make_tuple(get_container_subset(window_adaptor_ps_ys_vector_lengths, y_dims),
+                          get_container_subset(window_adaptor_ps_ys_vector_strides, y_dims));
     }
 
     // this is the bottom tensor view
@@ -184,8 +184,8 @@ struct BlockTensorWindow
     BottomTensorCoord bottom_tensor_thread_coord_;
 
     // Block tensor distribution, which contains:
-    //   1. adaptor for window: [wid, lid, y0, y1, ...] ==> [x0, x1, ...]
-    //   2. thread descriptor for thread tensor in register: [y0, y1, ...] ==> [did]
+    //   1. adaptor for window: [p0, p1, ..., y0, y1, ...] ==> [x0, x1, ...]
+    //   2. thread descriptor for thread tensor in register: [y0, y1, ...] ==> [d]
     BlockTensorDstr block_tensor_dstr_;
 
     //    thread window coordinate
