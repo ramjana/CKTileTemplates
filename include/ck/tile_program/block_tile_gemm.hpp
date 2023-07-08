@@ -8,96 +8,11 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tile_program/block_tensor_distribution.hpp"
+#include "ck/tile_program/warp_gemm.hpp"
 
 namespace ck {
 namespace tile_program {
 namespace block {
-
-struct WarpGemm
-{
-};
-
-struct WarpGemmMfmaF16F16F32M32N32K8 : public WarpGemm
-{
-    using ADataType = ck::half_t;
-    using BDataType = ck::half_t;
-    using CDataType = float;
-
-    static constexpr index_t AMLane     = 32;
-    static constexpr index_t BNLane     = 32;
-    static constexpr index_t ABKLane    = 2;
-    static constexpr index_t ABKPerLane = 4;
-
-    static constexpr index_t CMLane     = 2;
-    static constexpr index_t CNLane     = 32;
-    static constexpr index_t CM0PerLane = 4;
-    static constexpr index_t CM1PerLane = 4;
-
-    using AWarpDstrEncoding =
-        StaticTensorDistributionEncoding<Sequence<>,
-                                         Tuple<Sequence<AMLane>, Sequence<ABKLane, ABKPerLane>>,
-                                         Tuple<Sequence<2, 1>>,
-                                         Tuple<Sequence<0, 0>>,
-                                         Sequence<2>,
-                                         Sequence<1>>;
-
-    using BWarpDstrEncoding =
-        StaticTensorDistributionEncoding<Sequence<>,
-                                         Tuple<Sequence<BNLane>, Sequence<ABKLane, ABKPerLane>>,
-                                         Tuple<Sequence<2, 1>>,
-                                         Tuple<Sequence<0, 0>>,
-                                         Sequence<2>,
-                                         Sequence<1>>;
-
-    using CWarpDstrEncoding = StaticTensorDistributionEncoding<
-        Sequence<>,
-        Tuple<Sequence<CM0PerLane, CMLane, CM1PerLane>, Sequence<CNLane>>,
-        Tuple<Sequence<1, 2>>,
-        Tuple<Sequence<1, 0>>,
-        Sequence<1, 1>,
-        Sequence<0, 2>>;
-
-    using AWarpDstr =
-        remove_cvref_t<decltype(make_static_block_tensor_distribution(AWarpDstrEncoding{}))>;
-
-    using BWarpDstr =
-        remove_cvref_t<decltype(make_static_block_tensor_distribution(BWarpDstrEncoding{}))>;
-
-    using CWarpDstr =
-        remove_cvref_t<decltype(make_static_block_tensor_distribution(CWarpDstrEncoding{}))>;
-
-    using AWarpTensor = StaticBlockDistributedTensor<ADataType, AWarpDstr>;
-    using BWarpTensor = StaticBlockDistributedTensor<BDataType, BWarpDstr>;
-    using CWarpTensor = StaticBlockDistributedTensor<CDataType, CWarpDstr>;
-
-    __device__ void operator()(CWarpTensor& c, const AWarpTensor& a, const BWarpTensor& b) const
-    {
-        using AVec = typename vector_type<ADataType, AWarpTensor::GetThreadBufferSize()>::type;
-        using BVec = typename vector_type<BDataType, BWarpTensor::GetThreadBufferSize()>::type;
-        using CVec = typename vector_type<CDataType, CWarpTensor::GetThreadBufferSize()>::type;
-
-        constexpr auto I0 = Number<0>{};
-
-        const auto a_vec = a.GetThreadBuffer().template GetAsType<AVec>(I0);
-        const auto b_vec = b.GetThreadBuffer().template GetAsType<BVec>(I0);
-        auto c_vec       = c.GetThreadBuffer().template GetAsType<CVec>(I0);
-
-        c_vec = __builtin_amdgcn_mfma_f32_32x32x8f16(a_vec, b_vec, c_vec, 0, 0, 0);
-
-        c.GetThreadBuffer().template SetAsType<CVec>(I0, c_vec);
-    }
-
-    __device__ auto operator()(const AWarpTensor& a, const BWarpTensor& b) const
-    {
-        CWarpTensor c;
-
-        c.Initialize(0);
-
-        operator()(c, a, b);
-
-        return c;
-    }
-};
 
 template <typename CBlockTensor, typename ABlockWindowTmp, typename BBlockWindowTmp>
 __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
@@ -108,36 +23,36 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MXdlPerWarp = 2;
-    constexpr index_t NXdlPerWarp = 2;
-    constexpr index_t KXdlPerWarp = 4;
+    constexpr index_t MIterPerWarp = 2;
+    constexpr index_t NIterPerWarp = 2;
+    constexpr index_t KIterPerWarp = 4;
 
-    constexpr auto a_block_outer_dstr_encoding =
-        StaticTensorDistributionEncoding<Sequence<NWarp>,
-                                         Tuple<Sequence<MXdlPerWarp, MWarp>, Sequence<KXdlPerWarp>>,
-                                         Tuple<Sequence<1, 0>>,
-                                         Tuple<Sequence<1, 0>>,
-                                         Sequence<1, 2>,
-                                         Sequence<0, 0>>{};
+    constexpr auto a_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
+        Sequence<NWarp>,
+        Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<KIterPerWarp>>,
+        Tuple<Sequence<1, 0>>,
+        Tuple<Sequence<1, 0>>,
+        Sequence<1, 2>,
+        Sequence<0, 0>>{};
 
-    constexpr auto b_block_outer_dstr_encoding =
-        StaticTensorDistributionEncoding<Sequence<MWarp>,
-                                         Tuple<Sequence<NXdlPerWarp, NWarp>, Sequence<KXdlPerWarp>>,
-                                         Tuple<Sequence<0, 1>>,
-                                         Tuple<Sequence<0, 1>>,
-                                         Sequence<1, 2>,
-                                         Sequence<0, 0>>{};
+    constexpr auto b_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
+        Sequence<MWarp>,
+        Tuple<Sequence<NIterPerWarp, NWarp>, Sequence<KIterPerWarp>>,
+        Tuple<Sequence<0, 1>>,
+        Tuple<Sequence<0, 1>>,
+        Sequence<1, 2>,
+        Sequence<0, 0>>{};
 
     constexpr auto c_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
         Sequence<>,
-        Tuple<Sequence<MXdlPerWarp, MWarp>, Sequence<NXdlPerWarp, NWarp>>,
+        Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<NIterPerWarp, NWarp>>,
         Tuple<Sequence<1, 2>>,
         Tuple<Sequence<1, 1>>,
         Sequence<1, 2>,
         Sequence<0, 0>>{};
 
     //
-    using WG = WarpGemmMfmaF16F16F32M32N32K8;
+    using WG = ck::tile_program::warp::WarpGemmMfmaF16F16F32M32N32K8;
 
     constexpr auto a_block_dstr_encode =
         embed_tensor_distribution_encoding(a_block_outer_dstr_encoding, WG::AWarpDstrEncoding{});
@@ -165,46 +80,52 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
                                             b_block_window_tmp.GetBlockWindowOrigin(),
                                             b_block_dstr);
 
+    constexpr auto a_warp_y_lengths = to_sequence(WG::AWarpDstr{}.GetYs2DDescriptor().GetLengths());
+    constexpr auto b_warp_y_lengths = to_sequence(WG::BWarpDstr{}.GetYs2DDescriptor().GetLengths());
+    constexpr auto c_warp_y_lengths = to_sequence(WG::CWarpDstr{}.GetYs2DDescriptor().GetLengths());
+
     // hot loop:
-    static_for<0, KXdlPerWarp, 1>{}([&](auto kIter) {
-        static_for<0, MXdlPerWarp, 1>{}([&](auto mIter) {
-            // read A warp tensor
+    static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
+        static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
+            // read A warp tensor from A block window
             WG::AWarpTensor a_warp_tensor;
 
             a_warp_tensor.GetThreadBuffer() =
                 detail::load_sliced_thread_data_from_block_tensor_window(
                     a_block_window,
-                    MultiIndex<3>{mIter, kIter, 0},
-                    Sequence<1, 1, WG::ABKPerLane>{});
+                    MultiIndex<2 + WG::AWarpDstr::NDimY>{mIter, kIter, 0},
+                    merge_sequences(Sequence<1, 1>{}, a_warp_y_lengths));
 
-            static_for<0, NXdlPerWarp, 1>{}([&](auto nIter) {
-                // read B warp tensor
+            static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
+                // read B warp tensor from B Block window
                 WG::BWarpTensor b_warp_tensor;
 
                 b_warp_tensor.GetThreadBuffer() =
                     detail::load_sliced_thread_data_from_block_tensor_window(
                         b_block_window,
-                        MultiIndex<3>{nIter, kIter, 0},
-                        Sequence<1, 1, WG::ABKPerLane>{});
+                        MultiIndex<2 + WG::BWarpDstr::NDimY>{nIter, kIter, 0},
+                        merge_sequences(Sequence<1, 1>{}, b_warp_y_lengths));
 
                 // read C warp tensor from C block tensor
                 WG::CWarpTensor c_warp_tensor;
 
+                constexpr auto c_warp_y_index_zeros =
+                    uniform_sequence_gen_t<WG::CWarpDstr::NDimY, 0>{};
+
                 c_warp_tensor.SetSlicedThreadData(
-                    Sequence<0, 0>{},
-                    Sequence<WG::CM0PerLane, WG::CM1PerLane>{},
+                    c_warp_y_index_zeros,
+                    c_warp_y_lengths,
                     c_block_tensor.GetSlicedThreadData(
-                        Sequence<mIter, nIter, 0, 0>{},
-                        Sequence<1, 1, WG::CM0PerLane, WG::CM1PerLane>{}));
+                        merge_sequences(Sequence<mIter, nIter>{}, c_warp_y_index_zeros),
+                        merge_sequences(Sequence<1, 1>{}, c_warp_y_lengths)));
 
                 WG{}(c_warp_tensor, a_warp_tensor, b_warp_tensor);
 
                 // write C warp tensor into C block tensor
                 c_block_tensor.SetSlicedThreadData(
-                    Sequence<mIter, nIter, 0, 0>{},
-                    Sequence<1, 1, WG::CM0PerLane, WG::CM1PerLane>{},
-                    c_warp_tensor.GetSlicedThreadData(Sequence<0, 0>{},
-                                                      Sequence<WG::CM0PerLane, WG::CM1PerLane>{}));
+                    merge_sequences(Sequence<mIter, nIter>{}, c_warp_y_index_zeros),
+                    merge_sequences(Sequence<1, 1>{}, c_warp_y_lengths),
+                    c_warp_tensor.GetSlicedThreadData(Sequence<0, 0>{}, c_warp_y_lengths));
             });
         });
     });
@@ -218,19 +139,19 @@ __host__ __device__ auto block_tile_gemm(const ABlockWindow& a_block_window,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MXdlPerWarp = 2;
-    constexpr index_t NXdlPerWarp = 2;
+    constexpr index_t MIterPerWarp = 2;
+    constexpr index_t NIterPerWarp = 2;
 
     constexpr auto c_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
         Sequence<>,
-        Tuple<Sequence<MXdlPerWarp, MWarp>, Sequence<NXdlPerWarp, NWarp>>,
+        Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<NIterPerWarp, NWarp>>,
         Tuple<Sequence<1, 2>>,
         Tuple<Sequence<1, 1>>,
         Sequence<1, 2>,
         Sequence<0, 0>>{};
 
     //
-    using WG = WarpGemmMfmaF16F16F32M32N32K8;
+    using WG = ck::tile_program::warp::WarpGemmMfmaF16F16F32M32N32K8;
 
     using CDataType = typename WG::CDataType;
 

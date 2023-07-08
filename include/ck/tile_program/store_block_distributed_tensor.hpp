@@ -12,7 +12,6 @@
 
 namespace ck {
 namespace tile_program {
-namespace block {
 
 // FIXME: host dummy function for tile program
 template <typename BottomTensorView_, typename BlockTensorDistribution_, typename DataType_>
@@ -132,6 +131,5 @@ __device__ void store_block_tile(
     }
 }
 
-} // namespace block
 } // namespace tile_program
 } // namespace ck

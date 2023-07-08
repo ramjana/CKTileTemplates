@@ -10,7 +10,6 @@
 
 namespace ck {
 namespace tile_program {
-namespace block {
 
 namespace detail {
 
@@ -28,7 +27,6 @@ __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t
 }
 
 // this returns a constexpr encoding of BlockTensorDistribution
-// TODO: reimplement as Hierachical-Distribution
 template <typename StaticTensorDistributionEncoding_>
 __host__ __device__ constexpr auto
     make_adaptor_encoding_for_tensor_distribution(StaticTensorDistributionEncoding_)
@@ -426,6 +424,5 @@ __host__ __device__ constexpr auto
         ps_ys_to_xs_adaptor, ys_to_d_descriptor};
 }
 
-} // namespace block
 } // namespace tile_program
 } // namespace ck

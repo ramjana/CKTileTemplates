@@ -12,7 +12,6 @@
 
 namespace ck {
 namespace tile_program {
-namespace block {
 
 // detail used by tile-programming APIs(), not supposed to be used directly
 namespace detail {
@@ -196,6 +195,5 @@ load_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& 
     return block_dstr_tensor;
 }
 
-} // namespace block
 } // namespace tile_program
 } // namespace ck

@@ -11,7 +11,6 @@
 
 namespace ck {
 namespace tile_program {
-namespace block {
 
 template <typename DataType_, typename StaticBlockDistribution_>
 struct StaticBlockDistributedTensor
@@ -47,6 +46,10 @@ struct StaticBlockDistributedTensor
     __host__ __device__ auto GetSlicedThreadData(Sequence<YSliceOrigins...>,
                                                  Sequence<YSliceLengths...>) const
     {
+        static_assert(sizeof...(YSliceOrigins) == StaticBlockDistribution::NDimY &&
+                          sizeof...(YSliceLengths) == StaticBlockDistribution::NDimY,
+                      "wrong!");
+
         constexpr auto sliced_thread_tensor_desc =
             make_naive_tensor_descriptor_packed(make_tuple(YSliceLengths...));
 
@@ -72,6 +75,10 @@ struct StaticBlockDistributedTensor
         Sequence<YSliceLengths...>,
         const StaticBuffer<AddressSpaceEnum::Vgpr, DataType, NSlicedData, true>& sliced_thread_data)
     {
+        static_assert(sizeof...(YSliceOrigins) == StaticBlockDistribution::NDimY &&
+                          sizeof...(YSliceLengths) == StaticBlockDistribution::NDimY,
+                      "wrong!");
+
         constexpr auto sliced_thread_tensor_desc =
             make_naive_tensor_descriptor_packed(make_tuple(YSliceLengths...));
 
@@ -95,6 +102,5 @@ make_static_block_distributed_tensor(const StaticBlockDistribution&)
                                         remove_cvref_t<StaticBlockDistribution>>{};
 }
 
-} // namespace block
 } // namespace tile_program
 } // namespace ck

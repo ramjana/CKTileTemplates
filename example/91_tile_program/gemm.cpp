@@ -87,6 +87,7 @@ struct Gemm
                                         CElementWiseOperation /* c_op */)
     {
         using namespace ck;
+        using namespace ck::tile_program;
         using namespace ck::tile_program::block;
 
         __shared__ char p_shared_char[GetStaticLdsSize()];
@@ -215,27 +216,6 @@ struct Gemm
         auto c_dram_window = make_block_window(c_dram_grid, {iM, iN}, c_block_distr);
 
         store_block_tile(c_dram_window, c_block_tile);
-
-#if 0
-        //
-        constexpr auto inner_dstr = TensorPartitionEncoding<Sequence<>,
-                                                          Tuple<Sequence<32>, Sequence<2, 4>>,
-                                                          Tuple<Sequence<2, 1>>,
-                                                          Tuple<Sequence<0, 0>>,
-                                                          Sequence<2>,
-                                                          Sequence<1>>{};
-
-        constexpr auto outer_dstr = TensorPartitionEncoding<Sequence<2>,
-                                                          Tuple<Sequence<2, 2>, Sequence<4>>,
-                                                          Tuple<Sequence<0, 1>>,
-                                                          Tuple<Sequence<0, 1>>,
-                                                          Sequence<1, 2>,
-                                                          Sequence<0, 0>>{};
-
-        constexpr auto dstr = embed_tensor_partition(outer_dstr, inner_dstr);
-
-        dstr.foo();
-#endif
     }
 };
 

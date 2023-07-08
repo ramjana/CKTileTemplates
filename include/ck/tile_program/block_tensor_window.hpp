@@ -10,7 +10,6 @@
 
 namespace ck {
 namespace tile_program {
-namespace block {
 
 template <typename BottomTensorView_, typename BlockTensorDistribution_>
 struct BlockTensorWindow
@@ -217,6 +216,5 @@ __device__ void move_block_window(BlockTensorWindow_& window,
     window.MoveBottomTensorThreadCoordinate(step);
 }
 
-} // namespace block
 } // namespace tile_program
 } // namespace ck
