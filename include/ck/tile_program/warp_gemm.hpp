@@ -13,49 +13,18 @@ namespace ck {
 namespace tile_program {
 namespace warp {
 
+template <typename WarpGemmAttribute_>
 struct WarpGemm
 {
-};
+    using WarpGemmAttribute = remove_cvref_t<WarpGemmAttribute_>;
 
-struct WarpGemmMfmaF16F16F32M32N32K8 : public WarpGemm
-{
-    using ADataType = ck::half_t;
-    using BDataType = ck::half_t;
-    using CDataType = float;
+    using ADataType = typename WarpGemmAttribute::ADataType;
+    using BDataType = typename WarpGemmAttribute::BDataType;
+    using CDataType = typename WarpGemmAttribute::CDataType;
 
-    static constexpr index_t AMLane     = 32;
-    static constexpr index_t BNLane     = 32;
-    static constexpr index_t ABKLane    = 2;
-    static constexpr index_t ABKPerLane = 4;
-
-    static constexpr index_t CMLane     = 2;
-    static constexpr index_t CNLane     = 32;
-    static constexpr index_t CM0PerLane = 4;
-    static constexpr index_t CM1PerLane = 4;
-
-    using AWarpDstrEncoding =
-        StaticTensorDistributionEncoding<Sequence<>,
-                                         Tuple<Sequence<AMLane>, Sequence<ABKLane, ABKPerLane>>,
-                                         Tuple<Sequence<2, 1>>,
-                                         Tuple<Sequence<0, 0>>,
-                                         Sequence<2>,
-                                         Sequence<1>>;
-
-    using BWarpDstrEncoding =
-        StaticTensorDistributionEncoding<Sequence<>,
-                                         Tuple<Sequence<BNLane>, Sequence<ABKLane, ABKPerLane>>,
-                                         Tuple<Sequence<2, 1>>,
-                                         Tuple<Sequence<0, 0>>,
-                                         Sequence<2>,
-                                         Sequence<1>>;
-
-    using CWarpDstrEncoding = StaticTensorDistributionEncoding<
-        Sequence<>,
-        Tuple<Sequence<CM0PerLane, CMLane, CM1PerLane>, Sequence<CNLane>>,
-        Tuple<Sequence<1, 2>>,
-        Tuple<Sequence<1, 0>>,
-        Sequence<1, 1>,
-        Sequence<0, 2>>;
+    using AWarpDstrEncoding = typename WarpGemmAttribute::AWarpDstrEncoding;
+    using BWarpDstrEncoding = typename WarpGemmAttribute::BWarpDstrEncoding;
+    using CWarpDstrEncoding = typename WarpGemmAttribute::CWarpDstrEncoding;
 
     using AWarpDstr =
         remove_cvref_t<decltype(make_static_block_tensor_distribution(AWarpDstrEncoding{}))>;
@@ -82,7 +51,8 @@ struct WarpGemmMfmaF16F16F32M32N32K8 : public WarpGemm
         const auto b_vec = b.GetThreadBuffer().template GetAsType<BVec>(I0);
         auto c_vec       = c.GetThreadBuffer().template GetAsType<CVec>(I0);
 
-        c_vec = __builtin_amdgcn_mfma_f32_32x32x8f16(a_vec, b_vec, c_vec, 0, 0, 0);
+        // c_vec += a_vec * b_vec
+        WarpGemmAttribute{}(c_vec, a_vec, b_vec);
 
         c.GetThreadBuffer().template SetAsType<CVec>(I0, c_vec);
     }
@@ -91,9 +61,19 @@ struct WarpGemmMfmaF16F16F32M32N32K8 : public WarpGemm
     {
         CWarpTensor c;
 
-        c.Initialize(0);
+        using AVec = typename vector_type<ADataType, AWarpTensor::GetThreadBufferSize()>::type;
+        using BVec = typename vector_type<BDataType, BWarpTensor::GetThreadBufferSize()>::type;
+        using CVec = typename vector_type<CDataType, CWarpTensor::GetThreadBufferSize()>::type;
 
-        operator()(c, a, b);
+        constexpr auto I0 = Number<0>{};
+
+        const auto a_vec = a.GetThreadBuffer().template GetAsType<AVec>(I0);
+        const auto b_vec = b.GetThreadBuffer().template GetAsType<BVec>(I0);
+
+        // c_vec = a_vec * b_vec
+        auto c_vec = WarpGemmAttribute{}(a_vec, b_vec);
+
+        c.GetThreadBuffer().template SetAsType<CVec>(I0, c_vec);
 
         return c;
     }

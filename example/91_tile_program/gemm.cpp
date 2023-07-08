@@ -42,7 +42,11 @@ void reference_gemm(const Tensor<ADataType>& a_m_k,
             v_acc += ck::type_convert<AccDataType>(v_a) * ck::type_convert<AccDataType>(v_b);
         }
 
+#if 1
         c_m_n(m, n) = ck::type_convert<CDataType>(v_acc);
+#else
+        c_m_n(m, n)        = ck::type_convert<CDataType>(v_acc) - 1;
+#endif
     };
 
     make_ParallelTensorFunctor(f_mk_kn_mn,

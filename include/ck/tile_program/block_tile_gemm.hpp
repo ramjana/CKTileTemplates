@@ -9,10 +9,22 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tile_program/block_tensor_distribution.hpp"
 #include "ck/tile_program/warp_gemm.hpp"
+#include "ck/tile_program/warp_gemm_attribute_mfma.hpp"
+#include "ck/tile_program/warp_gemm_attribute_mfma_impl.hpp"
 
 namespace ck {
 namespace tile_program {
 namespace block {
+
+#if 1
+using WarpGemmMfmaF16F16F32M32N32K8 =
+    ck::tile_program::warp::WarpGemm<ck::tile_program::warp::WarpGemmAtrributeMfma<
+        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
+
+using WarpGemmMfmaF16F16F32M16N16K16 =
+    ck::tile_program::warp::WarpGemm<ck::tile_program::warp::WarpGemmAtrributeMfma<
+        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>;
+#endif
 
 template <typename CBlockTensor, typename ABlockWindowTmp, typename BBlockWindowTmp>
 __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
@@ -20,12 +32,25 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
                                 const BBlockWindowTmp& b_block_window_tmp)
 {
     // FIXME: use heuristic to choose paramters and WarpGEMM
+#if 0
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
     constexpr index_t MIterPerWarp = 2;
     constexpr index_t NIterPerWarp = 2;
     constexpr index_t KIterPerWarp = 4;
+
+    using WG = WarpGemmMfmaF16F16F32M32N32K8;
+#else
+    constexpr index_t MWarp = 2;
+    constexpr index_t NWarp = 2;
+
+    constexpr index_t MIterPerWarp = 4;
+    constexpr index_t NIterPerWarp = 4;
+    constexpr index_t KIterPerWarp = 2;
+
+    using WG                = WarpGemmMfmaF16F16F32M16N16K16;
+#endif
 
     constexpr auto a_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
         Sequence<NWarp>,
@@ -50,9 +75,6 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
         Tuple<Sequence<1, 1>>,
         Sequence<1, 2>,
         Sequence<0, 0>>{};
-
-    //
-    using WG = ck::tile_program::warp::WarpGemmMfmaF16F16F32M32N32K8;
 
     constexpr auto a_block_dstr_encode =
         embed_tensor_distribution_encoding(a_block_outer_dstr_encoding, WG::AWarpDstrEncoding{});
@@ -119,6 +141,7 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
                         merge_sequences(Sequence<mIter, nIter>{}, c_warp_y_index_zeros),
                         merge_sequences(Sequence<1, 1>{}, c_warp_y_lengths)));
 
+                // warp GEMM
                 WG{}(c_warp_tensor, a_warp_tensor, b_warp_tensor);
 
                 // write C warp tensor into C block tensor
@@ -136,11 +159,23 @@ __host__ __device__ auto block_tile_gemm(const ABlockWindow& a_block_window,
                                          const BBlockWindow& b_block_window)
 {
     // FIXME: use heuristic to choose paramters and WarpGEMM
+#if 0
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
     constexpr index_t MIterPerWarp = 2;
     constexpr index_t NIterPerWarp = 2;
+
+    using WG = WarpGemmMfmaF16F16F32M32N32K8;
+#else
+    constexpr index_t MWarp = 2;
+    constexpr index_t NWarp = 2;
+
+    constexpr index_t MIterPerWarp = 4;
+    constexpr index_t NIterPerWarp = 4;
+
+    using WG = WarpGemmMfmaF16F16F32M16N16K16;
+#endif
 
     constexpr auto c_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
         Sequence<>,
@@ -150,15 +185,12 @@ __host__ __device__ auto block_tile_gemm(const ABlockWindow& a_block_window,
         Sequence<1, 2>,
         Sequence<0, 0>>{};
 
-    //
-    using WG = ck::tile_program::warp::WarpGemmMfmaF16F16F32M32N32K8;
-
-    using CDataType = typename WG::CDataType;
-
     constexpr auto c_block_dstr_encode =
         embed_tensor_distribution_encoding(c_block_outer_dstr_encoding, WG::CWarpDstrEncoding{});
 
     constexpr auto c_block_dstr = make_static_block_tensor_distribution(c_block_dstr_encode);
+
+    using CDataType = typename WG::CDataType;
 
     auto c_block_tensor = make_static_block_distributed_tensor<CDataType>(c_block_dstr);
 
