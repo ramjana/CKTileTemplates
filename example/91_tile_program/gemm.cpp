@@ -42,11 +42,7 @@ void reference_gemm(const Tensor<ADataType>& a_m_k,
             v_acc += ck::type_convert<AccDataType>(v_a) * ck::type_convert<AccDataType>(v_b);
         }
 
-#if 1
         c_m_n(m, n) = ck::type_convert<CDataType>(v_acc);
-#else
-        c_m_n(m, n)        = ck::type_convert<CDataType>(v_acc) - 1;
-#endif
     };
 
     make_ParallelTensorFunctor(f_mk_kn_mn,
@@ -184,9 +180,9 @@ struct Gemm
         auto b_lds_gemm_window = b_copy_lds_window;
 
         // C tile
-        auto c_block_tile = decltype(block_tile_gemm(a_lds_gemm_window, b_lds_gemm_window)){};
+        auto acc_block_tile = decltype(block_tile_gemm(a_lds_gemm_window, b_lds_gemm_window)){};
 
-        block_tile_elementwise([](auto& c) { c = 0; }, c_block_tile);
+        block_tile_elementwise([](auto& acc) { acc = 0; }, acc_block_tile);
 
         index_t iK = 0;
 
@@ -200,7 +196,7 @@ struct Gemm
 
             ps.block_sync_lds();
 
-            block_tile_gemm(c_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+            block_tile_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
 
             ps.block_sync_lds();
 
@@ -211,7 +207,14 @@ struct Gemm
         } while(iK < K);
 
         // FIXME
-        constexpr auto c_block_distr = c_block_tile.GetBlockDistribution();
+        constexpr auto c_block_distr = acc_block_tile.GetBlockDistribution();
+
+        auto c_block_tile = make_static_block_distributed_tensor<CDataType>(c_block_distr);
+
+        block_tile_elementwise(
+            [](auto& c, const auto& acc) { c = ck::type_convert<CDataType>(acc); },
+            c_block_tile,
+            acc_block_tile);
 
         // store C
         auto c_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
@@ -226,7 +229,7 @@ struct Gemm
 int main()
 {
     using ABDataType = ck::half_t;
-    using CDataType  = float;
+    using CDataType  = ck::half_t;
 
     ck::index_t M = 4096;
     ck::index_t N = 4096;
