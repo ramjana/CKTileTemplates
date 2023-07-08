@@ -144,13 +144,13 @@ struct Gemm
 
         // A copy
         // FIXME
-        constexpr auto a_copy_dram_window_dstr =
-            make_static_block_tensor_distribution(Sequence<1>{},
-                                                  Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>{},
-                                                  Tuple<Sequence<1>, Sequence<1, 2>>{},
-                                                  Tuple<Sequence<1>, Sequence<2, 0>>{},
-                                                  Sequence<1, 2>{},
-                                                  Sequence<0, 1>{});
+        constexpr auto a_copy_dram_window_dstr = make_static_block_tensor_distribution(
+            StaticTensorDistributionEncoding<Sequence<1>,
+                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
+                                             Tuple<Sequence<1>, Sequence<1, 2>>,
+                                             Tuple<Sequence<1>, Sequence<2, 0>>,
+                                             Sequence<1, 2>,
+                                             Sequence<0, 1>>{});
 
         constexpr auto a_copy_lds_window_dstr = a_copy_dram_window_dstr;
 
@@ -160,13 +160,13 @@ struct Gemm
 
         // B copy
         // FIXME
-        constexpr auto b_copy_dram_window_dstr =
-            make_static_block_tensor_distribution(Sequence<1>{},
-                                                  Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>{},
-                                                  Tuple<Sequence<1>, Sequence<1, 2>>{},
-                                                  Tuple<Sequence<1>, Sequence<2, 0>>{},
-                                                  Sequence<1, 2>{},
-                                                  Sequence<0, 1>{});
+        constexpr auto b_copy_dram_window_dstr = make_static_block_tensor_distribution(
+            StaticTensorDistributionEncoding<Sequence<1>,
+                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
+                                             Tuple<Sequence<1>, Sequence<1, 2>>,
+                                             Tuple<Sequence<1>, Sequence<2, 0>>,
+                                             Sequence<1, 2>,
+                                             Sequence<0, 1>>{});
 
         constexpr auto b_copy_lds_window_dstr = b_copy_dram_window_dstr;
 
@@ -215,6 +215,27 @@ struct Gemm
         auto c_dram_window = make_block_window(c_dram_grid, {iM, iN}, c_block_distr);
 
         store_block_tile(c_dram_window, c_block_tile);
+
+#if 0
+        //
+        constexpr auto inner_dstr = TensorPartitionEncoding<Sequence<>,
+                                                          Tuple<Sequence<32>, Sequence<2, 4>>,
+                                                          Tuple<Sequence<2, 1>>,
+                                                          Tuple<Sequence<0, 0>>,
+                                                          Sequence<2>,
+                                                          Sequence<1>>{};
+
+        constexpr auto outer_dstr = TensorPartitionEncoding<Sequence<2>,
+                                                          Tuple<Sequence<2, 2>, Sequence<4>>,
+                                                          Tuple<Sequence<0, 1>>,
+                                                          Tuple<Sequence<0, 1>>,
+                                                          Sequence<1, 2>,
+                                                          Sequence<0, 0>>{};
+
+        constexpr auto dstr = embed_tensor_partition(outer_dstr, inner_dstr);
+
+        dstr.foo();
+#endif
     }
 };
 

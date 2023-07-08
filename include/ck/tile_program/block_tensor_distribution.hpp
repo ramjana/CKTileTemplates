@@ -29,26 +29,16 @@ __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t
 
 // this returns a constexpr encoding of BlockTensorDistribution
 // TODO: reimplement as Hierachical-Distribution
-template <index_t... RsLengths,
-          typename... HsLengthss, // Tuple<Sequence<...>, ...>
-          typename Ps2RHssMajor,  // Tuple<Sequence<...>, ...>
-          typename Ps2RHssMinor,  // Tuple<Sequence<...>, ...>
-          index_t... Ys2RHsMajor,
-          index_t... Ys2RHsMinor>
-__host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
-    //
-    Sequence<RsLengths...>,
-    //
-    Tuple<HsLengthss...>,
-    //
-    Ps2RHssMajor,
-    Ps2RHssMinor,
-    //
-    Sequence<Ys2RHsMajor...>,
-    Sequence<Ys2RHsMinor...>)
+template <typename StaticTensorDistributionEncoding_>
+__host__ __device__ constexpr auto
+    make_adaptor_encoding_for_tensor_distribution(StaticTensorDistributionEncoding_)
 {
-    static_assert(Ps2RHssMajor::Size() == Ps2RHssMinor::Size(), "wrong!");
-    static_assert(sizeof...(Ys2RHsMajor) == sizeof...(Ys2RHsMinor), "wrong!");
+    using RsLengths    = typename StaticTensorDistributionEncoding_::RsLengths;
+    using HsLengthss   = typename StaticTensorDistributionEncoding_::HsLengthss;
+    using Ps2RHssMajor = typename StaticTensorDistributionEncoding_::Ps2RHssMajor;
+    using Ps2RHssMinor = typename StaticTensorDistributionEncoding_::Ps2RHssMinor;
+    using Ys2RHsMajor  = typename StaticTensorDistributionEncoding_::Ys2RHsMajor;
+    using Ys2RHsMinor  = typename StaticTensorDistributionEncoding_::Ys2RHsMinor;
 
     constexpr index_t kMaxNumTransforms = 20;
     constexpr index_t kMaxMetaDataSize  = 128;
@@ -63,7 +53,7 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
     // window Adaptor
     //   bottom dims [x0, x1, x2, ...]
     //   top dims [p0, p1, ..., y0, y1, ...]
-    constexpr index_t ndim_x = sizeof...(HsLengthss);
+    constexpr index_t ndim_x = HsLengthss::Size();
 
     // Dim Ids: [idim_x_major, idim_x_minor] to [idim_hidden]
     Array<Array<index_t, kMaxNumDim>, ndim_x + 1> rh_major_rh_minor_to_hidden_ids;
@@ -76,9 +66,9 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
 
     // this is Replicate transform
     {
-        constexpr index_t ndim_r_minor = sizeof...(RsLengths);
+        constexpr index_t ndim_r_minor = RsLengths::Size();
 
-        constexpr auto r_minor_lengths = Sequence<RsLengths...>{};
+        constexpr auto r_minor_lengths = RsLengths{};
 
         trans(num_tran++) = {
             IndexTransformEnum::Replicate,
@@ -103,7 +93,7 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
                                 &hidden_dim_cnt,
                                 &rh_major_rh_minor_to_hidden_ids,
                                 &rh_major_rh_minor_to_hidden_lengths](auto idim_x) {
-        constexpr auto h_minor_lengths = type_pack_element<idim_x, HsLengthss...>{};
+        constexpr auto h_minor_lengths = tuple_element_t<idim_x, HsLengthss>{};
 
         constexpr index_t ndim_h_minor = h_minor_lengths.Size();
 
@@ -165,10 +155,10 @@ __host__ __device__ constexpr auto make_block_tensor_distribution_encoding(
 
     constexpr auto bottom_dim_ids = make_sequential_index<kMaxNumDim>(0, ndim_bottom);
 
-    constexpr auto ys_to_rhs_major = Sequence<Ys2RHsMajor...>{};
-    constexpr auto ys_to_rhs_minor = Sequence<Ys2RHsMinor...>{};
+    constexpr auto ys_to_rhs_major = Ys2RHsMajor{};
+    constexpr auto ys_to_rhs_minor = Ys2RHsMinor{};
 
-    constexpr index_t ndim_y   = sizeof...(Ys2RHsMajor);
+    constexpr index_t ndim_y   = Ys2RHsMajor::Size();
     constexpr index_t ndim_top = ndim_p + ndim_y;
 
     auto top_dim_ids = hidden_dim_id_ps;
@@ -255,32 +245,142 @@ struct BlockTensorDistribution
     }
 };
 
+template <typename RsLengths_,    // Sequence<...>
+          typename HsLengthss_,   // Tuple<Sequence<...>, ...>
+          typename Ps2RHssMajor_, // Tuple<Sequence<...>, ...>
+          typename Ps2RHssMinor_, // Tuple<Sequence<...>, ...>
+          typename Ys2RHsMajor_,  // Sequence<...>
+          typename Ys2RHsMinor_   // Sequence<...>
+          >
+struct StaticTensorDistributionEncoding
+{
+    using RsLengths    = remove_cvref_t<RsLengths_>;
+    using HsLengthss   = remove_cvref_t<HsLengthss_>;
+    using Ps2RHssMajor = remove_cvref_t<Ps2RHssMajor_>;
+    using Ps2RHssMinor = remove_cvref_t<Ps2RHssMinor_>;
+    using Ys2RHsMajor  = remove_cvref_t<Ys2RHsMajor_>;
+    using Ys2RHsMinor  = remove_cvref_t<Ys2RHsMinor_>;
+
+    static_assert(Ps2RHssMajor::Size() == Ps2RHssMinor::Size(), "wrong!");
+    static_assert(Ys2RHsMajor::Size() == Ys2RHsMinor::Size(), "wrong!");
+
+    static constexpr index_t NDimX = HsLengthss::Size();
+    static constexpr index_t NDimP = Ps2RHssMajor::Size();
+    static constexpr index_t NDimY = Ys2RHsMajor::Size();
+};
+
+template <typename OuterDstr, typename InnerDstr>
+__host__ __device__ constexpr auto embed_tensor_distribution_encoding(OuterDstr, InnerDstr)
+{
+    static_assert(OuterDstr::NDimX == InnerDstr::NDimX, "wrong!");
+
+    constexpr index_t NDimHMajor = OuterDstr::NDimX;
+
+    using RsLengths =
+        sequence_merge_t<typename OuterDstr::RsLengths, typename InnerDstr::RsLengths>;
+
+    constexpr auto hs_lengthss = generate_tuple(
+        [&](auto i) {
+            return merge_sequences(typename OuterDstr::HsLengthss{}[i],
+                                   typename InnerDstr::HsLengthss{}[i]);
+        },
+        Number<NDimHMajor>{});
+
+    //
+    constexpr auto rhs_major_2_ndim_outer_rhs_minor = [&]() {
+        Array<index_t, NDimHMajor + 1> rhs_major_2_ndim_outer_rhs_minor_;
+
+        // R dimension
+        rhs_major_2_ndim_outer_rhs_minor_(0) = OuterDstr::RsLengths::Size();
+
+        // Hs dimensions
+        static_for<0, NDimHMajor, 1>{}([&](auto i) {
+            rhs_major_2_ndim_outer_rhs_minor_(i + 1) = typename OuterDstr::HsLengthss{}[i].Size();
+        });
+
+        return rhs_major_2_ndim_outer_rhs_minor_;
+    }();
+
+    // Ps2RHssMinor
+    constexpr auto updated_inner_ps_2_rhss_minor = generate_tuple(
+        [&](auto p) {
+            constexpr auto inner_p_2_rhss_major = typename InnerDstr::Ps2RHssMajor{}[p];
+            constexpr auto inner_p_2_rhss_minor = typename InnerDstr::Ps2RHssMinor{}[p];
+
+            constexpr index_t ndim_tmp = inner_p_2_rhss_minor.Size();
+
+            constexpr auto updated_inner_p_2_rhss_minor = [&]() {
+                Array<index_t, ndim_tmp> updated_inner_p_2_rhss_minor_;
+
+                for(index_t i = 0; i < ndim_tmp; i++)
+                {
+                    index_t rh_major = inner_p_2_rhss_major[i];
+
+                    index_t ndim_outer_h_minor = rhs_major_2_ndim_outer_rhs_minor[rh_major];
+
+                    updated_inner_p_2_rhss_minor_(i) = inner_p_2_rhss_minor[i] + ndim_outer_h_minor;
+                }
+
+                return updated_inner_p_2_rhss_minor_;
+            }();
+
+            return TO_SEQUENCE(updated_inner_p_2_rhss_minor, ndim_tmp);
+        },
+        Number<InnerDstr::NDimP>{});
+
+    // Ys2RHsMinor
+    constexpr auto updated_inner_ys_2_rhs_minor = [&]() {
+        constexpr auto inner_ys_2_rhs_major = typename InnerDstr::Ys2RHsMajor{};
+        constexpr auto inner_ys_2_rhs_minor = typename InnerDstr::Ys2RHsMinor{};
+
+        constexpr index_t ndim_tmp = inner_ys_2_rhs_minor.Size();
+
+        constexpr auto updated_inner_ys_2_rhs_minor_ = [&]() {
+            Array<index_t, ndim_tmp> updated_inner_ys_2_rhs_minor__;
+
+            for(index_t i = 0; i < ndim_tmp; i++)
+            {
+                index_t rh_major = inner_ys_2_rhs_major[i];
+
+                index_t ndim_outer_h_minor = rhs_major_2_ndim_outer_rhs_minor[rh_major];
+
+                updated_inner_ys_2_rhs_minor__(i) = inner_ys_2_rhs_minor[i] + ndim_outer_h_minor;
+            }
+
+            return updated_inner_ys_2_rhs_minor__;
+        }();
+
+        return TO_SEQUENCE(updated_inner_ys_2_rhs_minor_, ndim_tmp);
+    }();
+
+    //
+    constexpr auto ps_2_rhss_major =
+        container_concat(typename OuterDstr::Ps2RHssMajor{}, typename InnerDstr::Ps2RHssMajor{});
+
+    constexpr auto ps_2_rhss_minor =
+        container_concat(typename OuterDstr::Ps2RHssMinor{}, updated_inner_ps_2_rhss_minor);
+
+    //
+    constexpr auto ys_2_rhs_major =
+        merge_sequences(typename OuterDstr::Ys2RHsMajor{}, typename InnerDstr::Ys2RHsMajor{});
+
+    constexpr auto ys_2_rhs_minor =
+        merge_sequences(typename OuterDstr::Ys2RHsMinor{}, updated_inner_ys_2_rhs_minor);
+
+    return StaticTensorDistributionEncoding<RsLengths,
+                                            remove_cvref_t<decltype(hs_lengthss)>,
+                                            remove_cvref_t<decltype(ps_2_rhss_major)>,
+                                            remove_cvref_t<decltype(ps_2_rhss_minor)>,
+                                            remove_cvref_t<decltype(ys_2_rhs_major)>,
+                                            remove_cvref_t<decltype(ys_2_rhs_minor)>>{};
+}
+
 // this returns a constexpr BlockTensorDistribution
-template <index_t... RsLengths,
-          typename... HsLengthss, // Tuple<Sequence<...>, ...>
-          typename Ps2RHssMajor,  // Tuple<Sequence<...>, ...>
-          typename Ps2RHssMinor,  // Tuple<Sequence<...>, ...>
-          index_t... Ys2RHsMajor,
-          index_t... Ys2RHsMinor>
-__host__ __device__ constexpr auto make_block_tensor_distribution(
-    //
-    Sequence<RsLengths...>,
-    //
-    Tuple<HsLengthss...>,
-    //
-    Ps2RHssMajor,
-    Ps2RHssMinor,
-    //
-    Sequence<Ys2RHsMajor...>,
-    Sequence<Ys2RHsMinor...>)
+template <typename StaticTensorDistributionEncoding_>
+__host__ __device__ constexpr auto make_block_tensor_distribution(StaticTensorDistributionEncoding_)
 {
     constexpr auto encode =
-        detail::make_block_tensor_distribution_encoding(Sequence<RsLengths...>{},
-                                                        Tuple<HsLengthss...>{},
-                                                        Ps2RHssMajor{},
-                                                        Ps2RHssMinor{},
-                                                        Sequence<Ys2RHsMajor...>{},
-                                                        Sequence<Ys2RHsMinor...>{});
+        detail::make_adaptor_encoding_for_tensor_distribution(StaticTensorDistributionEncoding_{});
 
     constexpr auto encoded_ps_ys_to_xs_adaptor = encode.template At<0>();
     constexpr auto encoded_ys_to_d_adaptor     = encode.template At<1>();
@@ -301,31 +401,12 @@ __host__ __device__ constexpr auto make_block_tensor_distribution(
 }
 
 // this returns a static BlockTensorDistribution
-template <index_t... RsLengths,
-          typename... HsLengthss, // Tuple<Sequence<...>, ...>
-          typename Ps2RHssMajor,  // Tuple<Sequence<...>, ...>
-          typename Ps2RHssMinor,  // Tuple<Sequence<...>, ...>
-          index_t... Ys2RHsMajor,
-          index_t... Ys2RHsMinor>
-__host__ __device__ constexpr auto make_static_block_tensor_distribution(
-    //
-    Sequence<RsLengths...>,
-    //
-    Tuple<HsLengthss...>,
-    //
-    Ps2RHssMajor,
-    Ps2RHssMinor,
-    //
-    Sequence<Ys2RHsMajor...>,
-    Sequence<Ys2RHsMinor...>)
+template <typename StaticTensorDistributionEncoding_>
+__host__ __device__ constexpr auto
+    make_static_block_tensor_distribution(StaticTensorDistributionEncoding_)
 {
     constexpr auto encode =
-        detail::make_block_tensor_distribution_encoding(Sequence<RsLengths...>{},
-                                                        Tuple<HsLengthss...>{},
-                                                        Ps2RHssMajor{},
-                                                        Ps2RHssMinor{},
-                                                        Sequence<Ys2RHsMajor...>{},
-                                                        Sequence<Ys2RHsMinor...>{});
+        detail::make_adaptor_encoding_for_tensor_distribution(StaticTensorDistributionEncoding_{});
 
     constexpr auto encoded_ps_ys_to_xs_adaptor = encode.template At<0>();
     constexpr auto encoded_ys_to_d_adaptor     = encode.template At<1>();

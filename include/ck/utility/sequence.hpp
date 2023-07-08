@@ -898,8 +898,8 @@ __host__ __device__ constexpr bool sequence_all_of(Seq, F f)
     return flag;
 }
 
-template <typename Sx, typename Sy>
-using sequence_merge_t = typename sequence_merge<Sx, Sy>::type;
+template <typename... Seqs>
+using sequence_merge_t = typename sequence_merge<Seqs...>::type;
 
 template <index_t NSize, index_t I>
 using uniform_sequence_gen_t = typename uniform_sequence_gen<NSize, I>::type;

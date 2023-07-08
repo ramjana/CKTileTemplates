@@ -33,32 +33,38 @@ struct WarpGemmMfmaF16F16F32M32N32K8 : public WarpGemm
     static constexpr index_t CM0PerLane = 4;
     static constexpr index_t CM1PerLane = 4;
 
-    // FIXME: implement hierarical distribution and then reimplement this
-    using AWarpDstr = decltype(make_static_block_tensor_distribution(
-        Sequence<>{},
-        Tuple<Sequence<AMLane>, Sequence<ABKLane, ABKPerLane>>{},
-        Tuple<Sequence<2, 1>>{},
-        Tuple<Sequence<0, 0>>{},
-        Sequence<2>{},
-        Sequence<1>{}));
+    using AWarpDstrEncoding =
+        StaticTensorDistributionEncoding<Sequence<>,
+                                         Tuple<Sequence<AMLane>, Sequence<ABKLane, ABKPerLane>>,
+                                         Tuple<Sequence<2, 1>>,
+                                         Tuple<Sequence<0, 0>>,
+                                         Sequence<2>,
+                                         Sequence<1>>;
 
-    // FIXME: implement hierarical distribution and then reimplement this
-    using BWarpDstr = decltype(make_static_block_tensor_distribution(
-        Sequence<>{},
-        Tuple<Sequence<BNLane>, Sequence<ABKLane, ABKPerLane>>{},
-        Tuple<Sequence<2, 1>>{},
-        Tuple<Sequence<0, 0>>{},
-        Sequence<2>{},
-        Sequence<1>{}));
+    using BWarpDstrEncoding =
+        StaticTensorDistributionEncoding<Sequence<>,
+                                         Tuple<Sequence<BNLane>, Sequence<ABKLane, ABKPerLane>>,
+                                         Tuple<Sequence<2, 1>>,
+                                         Tuple<Sequence<0, 0>>,
+                                         Sequence<2>,
+                                         Sequence<1>>;
 
-    // FIXME: implement hierarical distribution and then reimplement this
-    using CWarpDstr = decltype(make_static_block_tensor_distribution(
-        Sequence<>{},
-        Tuple<Sequence<CM0PerLane, CMLane, CM1PerLane>, Sequence<CNLane>>{},
-        Tuple<Sequence<1, 2>>{},
-        Tuple<Sequence<1, 0>>{},
-        Sequence<1, 1>{},
-        Sequence<0, 2>{}));
+    using CWarpDstrEncoding = StaticTensorDistributionEncoding<
+        Sequence<>,
+        Tuple<Sequence<CM0PerLane, CMLane, CM1PerLane>, Sequence<CNLane>>,
+        Tuple<Sequence<1, 2>>,
+        Tuple<Sequence<1, 0>>,
+        Sequence<1, 1>,
+        Sequence<0, 2>>;
+
+    using AWarpDstr =
+        remove_cvref_t<decltype(make_static_block_tensor_distribution(AWarpDstrEncoding{}))>;
+
+    using BWarpDstr =
+        remove_cvref_t<decltype(make_static_block_tensor_distribution(BWarpDstrEncoding{}))>;
+
+    using CWarpDstr =
+        remove_cvref_t<decltype(make_static_block_tensor_distribution(CWarpDstrEncoding{}))>;
 
     using AWarpTensor = StaticBlockDistributedTensor<ADataType, AWarpDstr>;
     using BWarpTensor = StaticBlockDistributedTensor<BDataType, BWarpDstr>;
@@ -106,37 +112,45 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
     constexpr index_t NXdlPerWarp = 2;
     constexpr index_t KXdlPerWarp = 4;
 
+    constexpr auto a_block_outer_dstr_encoding =
+        StaticTensorDistributionEncoding<Sequence<NWarp>,
+                                         Tuple<Sequence<MXdlPerWarp, MWarp>, Sequence<KXdlPerWarp>>,
+                                         Tuple<Sequence<1, 0>>,
+                                         Tuple<Sequence<1, 0>>,
+                                         Sequence<1, 2>,
+                                         Sequence<0, 0>>{};
+
+    constexpr auto b_block_outer_dstr_encoding =
+        StaticTensorDistributionEncoding<Sequence<MWarp>,
+                                         Tuple<Sequence<NXdlPerWarp, NWarp>, Sequence<KXdlPerWarp>>,
+                                         Tuple<Sequence<0, 1>>,
+                                         Tuple<Sequence<0, 1>>,
+                                         Sequence<1, 2>,
+                                         Sequence<0, 0>>{};
+
+    constexpr auto c_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
+        Sequence<>,
+        Tuple<Sequence<MXdlPerWarp, MWarp>, Sequence<NXdlPerWarp, NWarp>>,
+        Tuple<Sequence<1, 2>>,
+        Tuple<Sequence<1, 1>>,
+        Sequence<1, 2>,
+        Sequence<0, 0>>{};
+
+    //
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
 
-    // FIXME: create block dstr from existing wave dstr
-    constexpr auto a_block_dstr = make_static_block_tensor_distribution(
-        Sequence<NWarp>{},
-        Tuple<Sequence<MXdlPerWarp, MWarp, WG::AMLane>,
-              Sequence<KXdlPerWarp, WG::ABKLane, WG::ABKPerLane>>{},
-        Tuple<Sequence<1, 0>, Sequence<2, 1>>{},
-        Tuple<Sequence<1, 0>, Sequence<1, 2>>{},
-        Sequence<1, 2, 2>{},
-        Sequence<0, 0, 2>{});
+    constexpr auto a_block_dstr_encode =
+        embed_tensor_distribution_encoding(a_block_outer_dstr_encoding, WG::AWarpDstrEncoding{});
 
-    // FIXME: create block dstr from existing wave dstr
-    constexpr auto b_block_dstr = make_static_block_tensor_distribution(
-        Sequence<MWarp>{},
-        Tuple<Sequence<NXdlPerWarp, NWarp, WG::BNLane>,
-              Sequence<KXdlPerWarp, WG::ABKLane, WG::ABKPerLane>>{},
-        Tuple<Sequence<0, 1>, Sequence<2, 1>>{},
-        Tuple<Sequence<0, 1>, Sequence<1, 2>>{},
-        Sequence<1, 2, 2>{},
-        Sequence<0, 0, 2>{});
+    constexpr auto b_block_dstr_encode =
+        embed_tensor_distribution_encoding(b_block_outer_dstr_encoding, WG::BWarpDstrEncoding{});
 
-    // FIXME: create block dstr from existing wave dstr
-    constexpr auto c_block_dstr = make_static_block_tensor_distribution(
-        Sequence<>{},
-        Tuple<Sequence<MXdlPerWarp, MWarp, WG::CM0PerLane, WG::CMLane, WG::CM1PerLane>,
-              Sequence<NXdlPerWarp, NWarp, WG::CNLane>>{},
-        Tuple<Sequence<1, 2>, Sequence<1, 2>>{},
-        Tuple<Sequence<1, 1>, Sequence<3, 2>>{},
-        Sequence<1, 2, 1, 1>{},
-        Sequence<0, 0, 2, 4>{});
+    constexpr auto c_block_dstr_encode =
+        embed_tensor_distribution_encoding(c_block_outer_dstr_encoding, WG::CWarpDstrEncoding{});
+
+    constexpr auto a_block_dstr = make_static_block_tensor_distribution(a_block_dstr_encode);
+    constexpr auto b_block_dstr = make_static_block_tensor_distribution(b_block_dstr_encode);
+    constexpr auto c_block_dstr = make_static_block_tensor_distribution(c_block_dstr_encode);
 
     static_assert(is_same_v<remove_cvref_t<decltype(c_block_dstr)>,
                             remove_cvref_t<decltype(CBlockTensor::GetBlockDistribution())>>,
@@ -207,19 +221,23 @@ __host__ __device__ auto block_tile_gemm(const ABlockWindow& a_block_window,
     constexpr index_t MXdlPerWarp = 2;
     constexpr index_t NXdlPerWarp = 2;
 
+    constexpr auto c_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
+        Sequence<>,
+        Tuple<Sequence<MXdlPerWarp, MWarp>, Sequence<NXdlPerWarp, NWarp>>,
+        Tuple<Sequence<1, 2>>,
+        Tuple<Sequence<1, 1>>,
+        Sequence<1, 2>,
+        Sequence<0, 0>>{};
+
+    //
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
 
     using CDataType = typename WG::CDataType;
 
-    // FIXME: create block dstr from existing wave dstr
-    constexpr auto c_block_dstr = make_static_block_tensor_distribution(
-        Sequence<>{},
-        Tuple<Sequence<MXdlPerWarp, MWarp, WG::CM0PerLane, WG::CMLane, WG::CM1PerLane>,
-              Sequence<NXdlPerWarp, NWarp, WG::CNLane>>{},
-        Tuple<Sequence<1, 2>, Sequence<1, 2>>{},
-        Tuple<Sequence<1, 1>, Sequence<3, 2>>{},
-        Sequence<1, 2, 1, 1>{},
-        Sequence<0, 0, 2, 4>{});
+    constexpr auto c_block_dstr_encode =
+        embed_tensor_distribution_encoding(c_block_outer_dstr_encoding, WG::CWarpDstrEncoding{});
+
+    constexpr auto c_block_dstr = make_static_block_tensor_distribution(c_block_dstr_encode);
 
     auto c_block_tensor = make_static_block_distributed_tensor<CDataType>(c_block_dstr);
 
