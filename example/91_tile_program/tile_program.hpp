@@ -7,6 +7,7 @@
 
 #include "ck/ck.hpp"
 #include "ck/utility/common_header.hpp"
+#include "ck/host_utility/kernel_launch.hpp"
 #include "ck/tensor_description/tensor_descriptor.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 
@@ -114,14 +115,17 @@ struct ProgramServer
 };
 
 template <typename Server, typename Program, typename... Xs>
-__global__ void gpu_program_wrapper(Server server, Program f, Xs... xs)
+#if CK_USE_LAUNCH_BOUNDS
+__launch_bounds__(CK_MAX_THREAD_PER_BLOCK, CK_MIN_BLOCK_PER_CU)
+#endif
+    __global__ void gpu_program_wrapper(Server server, Program f, Xs... xs)
 {
     server.gpu_init();
     f(server, xs...);
 }
 
 template <typename Server, typename Program, typename... Xs>
-void launch(Server server, Program f, dim3 grid_dim, dim3 block_dim, Xs... xs)
+float launch(Server server, Program f, dim3 grid_dim, dim3 block_dim, Xs... xs)
 {
     server.cpu_init();
 
@@ -129,5 +133,16 @@ void launch(Server server, Program f, dim3 grid_dim, dim3 block_dim, Xs... xs)
 
     printf("meta data size %d\n", server.meta_data_.size_);
 
+#if 0
     gpu_program_wrapper<Server, Program><<<grid_dim, block_dim, 0, nullptr>>>(server, f, xs...);
+#else
+    return launch_and_time_kernel(StreamConfig{nullptr, true, 0},
+                                  gpu_program_wrapper<Server, Program, Xs...>,
+                                  grid_dim,
+                                  block_dim,
+                                  0,
+                                  server,
+                                  f,
+                                  xs...);
+#endif
 }

@@ -65,11 +65,62 @@ template <typename ADataType,
           ck::index_t kKPerBlock>
 struct Gemm
 {
-    // FIXME
+
+    __host__ __device__ static constexpr auto MakeALdsBlockDescriptor()
+    {
+        using namespace ck;
+#if 0
+        constexpr auto a_lds_block_desc =
+            make_naive_tensor_descriptor_packed(make_tuple(kMPerBlock, kKPerBlock), Number<32>{});
+#else
+        constexpr auto a_lds_block_desc_0 = make_naive_tensor_descriptor(
+            make_tuple(Number<kKPerBlock / 8>{}, Number<kMPerBlock>{}, Number<8>{}),
+            make_tuple(Number<(kMPerBlock + 1) * 8>{}, Number<8>{}, Number<1>{}),
+            Number<8>{},
+            Number<1>{});
+
+        constexpr auto a_lds_block_desc = transform_tensor_descriptor(
+            a_lds_block_desc_0,
+            make_tuple(make_pass_through_transform(kMPerBlock),
+                       make_merge_transform(make_tuple(kKPerBlock / 8, 8))),
+            make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
+            make_tuple(Sequence<0>{}, Sequence<1>{}));
+#endif
+
+        return a_lds_block_desc;
+    }
+
+    __host__ __device__ static constexpr auto MakeBLdsBlockDescriptor()
+    {
+        using namespace ck;
+#if 0
+        constexpr auto b_lds_block_desc =
+            make_naive_tensor_descriptor_packed(make_tuple(kNPerBlock, kKPerBlock), Number<32>{});
+#else
+        constexpr auto b_lds_block_desc_0 = make_naive_tensor_descriptor(
+            make_tuple(Number<kKPerBlock / 8>{}, Number<kNPerBlock>{}, Number<8>{}),
+            make_tuple(Number<(kNPerBlock + 1) * 8>{}, Number<8>{}, Number<1>{}),
+            Number<8>{},
+            Number<1>{});
+
+        constexpr auto b_lds_block_desc = transform_tensor_descriptor(
+            b_lds_block_desc_0,
+            make_tuple(make_pass_through_transform(kNPerBlock),
+                       make_merge_transform(make_tuple(kKPerBlock / 8, 8))),
+            make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
+            make_tuple(Sequence<0>{}, Sequence<1>{}));
+#endif
+
+        return b_lds_block_desc;
+    }
+
+    //
     __host__ __device__ static constexpr ck::index_t GetStaticLdsSize()
     {
-        return ck::math::integer_divide_ceil(sizeof(ADataType) * kMPerBlock * kKPerBlock, 16) * 16 +
-               sizeof(BDataType) * kNPerBlock * kKPerBlock;
+        return ck::math::integer_divide_ceil(
+                   sizeof(ADataType) * MakeALdsBlockDescriptor().GetElementSpaceSize(), 16) *
+                   16 +
+               sizeof(BDataType) * MakeBLdsBlockDescriptor().GetElementSpaceSize();
     }
 
     __host__ __device__ void operator()(ProgramServer& ps,
@@ -120,8 +171,7 @@ struct Gemm
 #endif
 
         // [allow optimization] allow different LDS layouts
-        constexpr auto a_lds_block_desc =
-            make_naive_tensor_descriptor_packed(make_tuple(kMPerBlock, kKPerBlock), Number<32>{});
+        constexpr auto a_lds_block_desc = MakeALdsBlockDescriptor();
 
         auto a_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_a_lds, a_lds_block_desc);
 
@@ -129,7 +179,7 @@ struct Gemm
         BDataType* p_b_lds = shared_memory.get_aligned_pointer(a_lds_byte);
 #else
         constexpr index_t a_lds_block_space_size_aligned =
-            math::integer_divide_ceil(a_lds_block_desc.GetElementSpaceSize() * sizeof(ADataType),
+            math::integer_divide_ceil(sizeof(ADataType) * a_lds_block_desc.GetElementSpaceSize(),
                                       16) *
             16;
 
@@ -138,8 +188,7 @@ struct Gemm
 #endif
 
         // [allow optimization] allow different LDS layouts
-        constexpr auto b_lds_block_desc =
-            make_naive_tensor_descriptor_packed(make_tuple(kNPerBlock, kKPerBlock), Number<32>{});
+        constexpr auto b_lds_block_desc = MakeBLdsBlockDescriptor();
 
         auto b_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_b_lds, b_lds_block_desc);
 
@@ -163,7 +212,7 @@ struct Gemm
         // FIXME
         constexpr auto b_copy_dram_window_dstr = make_static_block_tensor_distribution(
             StaticTensorDistributionEncoding<Sequence<1>,
-                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
+                                             Tuple<Sequence<4, 4, 16>, Sequence<4, 8>>,
                                              Tuple<Sequence<1>, Sequence<1, 2>>,
                                              Tuple<Sequence<1>, Sequence<2, 0>>,
                                              Sequence<1, 2>,
@@ -182,35 +231,82 @@ struct Gemm
         // C tile
         auto acc_block_tile = decltype(block_tile_gemm(a_lds_gemm_window, b_lds_gemm_window)){};
 
+        // prefetch
+        // global read 0
+        auto a_block_tile = load_block_tile(a_copy_dram_window);
+        auto b_block_tile = load_block_tile(b_copy_dram_window);
+
+        // move to 1
+        move_block_window(a_copy_dram_window, {0, kKPerBlock});
+        move_block_window(b_copy_dram_window, {0, kKPerBlock});
+
+        // Initialize C
         block_tile_elementwise([](auto& acc) { acc = 0; }, acc_block_tile);
+
+        // LDS write 0
+        store_block_tile(a_copy_lds_window, a_block_tile);
+        // global read 1
+        a_block_tile = load_block_tile(a_copy_dram_window);
+
+        // LDS write 0
+        store_block_tile(b_copy_lds_window, b_block_tile);
+        // global read 1
+        b_block_tile = load_block_tile(b_copy_dram_window);
 
         index_t iK = 0;
 
         do
         {
-            const auto a_block_tile = load_block_tile(a_copy_dram_window);
-            const auto b_block_tile = load_block_tile(b_copy_dram_window);
+            ps.block_sync_lds();
 
+            // GEMM i
+            block_tile_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+
+            ps.block_sync_lds();
+
+            // move to i + 2
+            move_block_window(a_copy_dram_window, {0, kKPerBlock});
+            move_block_window(b_copy_dram_window, {0, kKPerBlock});
+
+            // LDS write i + 1
+            store_block_tile(a_copy_lds_window, a_block_tile);
+            // global read i + 2
+            a_block_tile = load_block_tile(a_copy_dram_window);
+
+            // LDS write i + 1
+            store_block_tile(b_copy_lds_window, b_block_tile);
+            // global read i + 2
+            b_block_tile = load_block_tile(b_copy_dram_window);
+
+            iK += kKPerBlock;
+
+        } while(iK < K - 2 * kKPerBlock);
+
+        // tail
+        {
+            ps.block_sync_lds();
+
+            // GEMM num_loop - 2
+            block_tile_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+
+            ps.block_sync_lds();
+
+            // LDS write num_loop - 1
             store_block_tile(a_copy_lds_window, a_block_tile);
             store_block_tile(b_copy_lds_window, b_block_tile);
 
             ps.block_sync_lds();
 
+            // GEMM num_loop - 1
             block_tile_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
-
-            ps.block_sync_lds();
-
-            move_block_window(a_copy_dram_window, {0, kKPerBlock});
-            move_block_window(b_copy_dram_window, {0, kKPerBlock});
-
-            iK += kKPerBlock;
-        } while(iK < K);
+        }
 
         // FIXME
         constexpr auto c_block_distr = acc_block_tile.GetBlockDistribution();
 
         auto c_block_tile = make_static_block_distributed_tensor<CDataType>(c_block_distr);
 
+        // type convert
         block_tile_elementwise(
             [](auto& c, const auto& acc) { c = ck::type_convert<CDataType>(acc); },
             c_block_tile,
@@ -228,10 +324,11 @@ struct Gemm
 
 int main()
 {
-    using ABDataType = ck::half_t;
-    using CDataType  = ck::half_t;
+    using ADataType = ck::half_t;
+    using BDataType = ck::half_t;
+    using CDataType = ck::half_t;
 
-    ck::index_t M = 4096;
+    ck::index_t M = 3328;
     ck::index_t N = 4096;
     ck::index_t K = 4096;
 
@@ -245,26 +342,26 @@ int main()
     std::array<ck::index_t, 2> c_strides{N, 1};
 
     // host verify
-    Tensor<ABDataType> a_host(a_lengths, a_strides);
-    Tensor<ABDataType> b_host(b_lengths, b_strides);
+    Tensor<ADataType> a_host(a_lengths, a_strides);
+    Tensor<BDataType> b_host(b_lengths, b_strides);
     Tensor<CDataType> c_host_ref(c_lengths, c_strides);
     Tensor<CDataType> c_host_dev(c_lengths, c_strides);
 
-    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(a_host);
-    ck::utils::FillUniformDistributionIntegerValue<ABDataType>{-5.f, 5.f}(b_host);
+    ck::utils::FillUniformDistributionIntegerValue<ADataType>{-5.f, 5.f}(a_host);
+    ck::utils::FillUniformDistributionIntegerValue<BDataType>{-5.f, 5.f}(b_host);
 
     // reference gemm
-    reference_gemm<ABDataType, ABDataType, CDataType, float>(a_host, b_host, c_host_ref);
+    reference_gemm<ADataType, ADataType, CDataType, float>(a_host, b_host, c_host_ref);
 
-    DeviceMem a_buf(sizeof(ABDataType) * a_host.GetElementSpaceSize());
-    DeviceMem b_buf(sizeof(ABDataType) * b_host.GetElementSpaceSize());
+    DeviceMem a_buf(sizeof(ADataType) * a_host.GetElementSpaceSize());
+    DeviceMem b_buf(sizeof(BDataType) * b_host.GetElementSpaceSize());
     DeviceMem c_buf(sizeof(CDataType) * c_host_dev.GetElementSpaceSize());
 
     a_buf.ToDevice(a_host.mData.data());
     b_buf.ToDevice(b_host.mData.data());
 
     constexpr ck::index_t kGemmMPerBlock = 128;
-    constexpr ck::index_t kGemmNPerBlock = 128;
+    constexpr ck::index_t kGemmNPerBlock = 256;
     constexpr ck::index_t kGemmKPerBlock = 32;
 
     constexpr ck::index_t kBlockSize = 256;
@@ -272,35 +369,46 @@ int main()
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-    launch(ProgramServer{},
-           Gemm<ABDataType,
-                ABDataType,
-                CDataType,
-                ck::tensor_layout::gemm::RowMajor,
-                ck::tensor_layout::gemm::ColumnMajor,
-                ck::tensor_layout::gemm::RowMajor,
-                ck::tensor_operation::element_wise::PassThrough,
-                ck::tensor_operation::element_wise::PassThrough,
-                ck::tensor_operation::element_wise::PassThrough,
-                kGemmMPerBlock,
-                kGemmNPerBlock,
-                kGemmKPerBlock>{},
-           kGridSize,
-           kBlockSize,
-           static_cast<ABDataType*>(a_buf.GetDeviceBuffer()),
-           static_cast<ABDataType*>(b_buf.GetDeviceBuffer()),
-           static_cast<CDataType*>(c_buf.GetDeviceBuffer()),
-           M,
-           N,
-           K,
-           K,
-           K,
-           N,
-           ck::tensor_operation::element_wise::PassThrough{},
-           ck::tensor_operation::element_wise::PassThrough{},
-           ck::tensor_operation::element_wise::PassThrough{});
+    float ave_time = launch(ProgramServer{},
+                            Gemm<ADataType,
+                                 BDataType,
+                                 CDataType,
+                                 ck::tensor_layout::gemm::RowMajor,
+                                 ck::tensor_layout::gemm::ColumnMajor,
+                                 ck::tensor_layout::gemm::RowMajor,
+                                 ck::tensor_operation::element_wise::PassThrough,
+                                 ck::tensor_operation::element_wise::PassThrough,
+                                 ck::tensor_operation::element_wise::PassThrough,
+                                 kGemmMPerBlock,
+                                 kGemmNPerBlock,
+                                 kGemmKPerBlock>{},
+                            kGridSize,
+                            kBlockSize,
+                            static_cast<ADataType*>(a_buf.GetDeviceBuffer()),
+                            static_cast<BDataType*>(b_buf.GetDeviceBuffer()),
+                            static_cast<CDataType*>(c_buf.GetDeviceBuffer()),
+                            M,
+                            N,
+                            K,
+                            K,
+                            K,
+                            N,
+                            ck::tensor_operation::element_wise::PassThrough{},
+                            ck::tensor_operation::element_wise::PassThrough{},
+                            ck::tensor_operation::element_wise::PassThrough{});
 
     c_buf.FromDevice(c_host_dev.mData.data());
+
+    std::size_t flop = std::size_t(2) * M * N * K;
+    std::size_t num_btype =
+        sizeof(ADataType) * M * K + sizeof(BDataType) * K * N + sizeof(CDataType) * M * N;
+
+    float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
+
+    float gb_per_sec = num_btype / 1.E6 / ave_time;
+
+    std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
+              << std::endl;
 
     return ck::utils::check_err(c_host_dev, c_host_ref);
 }

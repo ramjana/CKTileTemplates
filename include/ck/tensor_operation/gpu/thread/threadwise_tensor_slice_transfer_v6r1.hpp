@@ -126,28 +126,21 @@ struct ThreadwiseTensorSliceTransfer_v6r1
             if constexpr(idx_1d.value != num_access - 1)
             {
                 constexpr auto forward_step = SpaceFillingCurve::GetForwardStep(idx_1d);
-                move_tensor_coordinate(
-                    src_desc, src_coord_, make_tensor_coordinate_step(src_desc, forward_step));
-                move_tensor_coordinate(
-                    dst_desc, dst_coord_, make_tensor_coordinate_step(dst_desc, forward_step));
+
+                move_tensor_coordinate(src_desc, src_coord_, forward_step);
+                move_tensor_coordinate(dst_desc, dst_coord_, forward_step);
             }
         });
 
         // move coordinate back to slice origin (or not)
         if constexpr(SrcResetCoordinateAfterRun)
         {
-            const auto src_reset_step =
-                make_tensor_coordinate_step(src_desc, GetCoordinateResetStep());
-
-            move_tensor_coordinate(src_desc, src_coord_, src_reset_step);
+            move_tensor_coordinate(src_desc, src_coord_, GetCoordinateResetStep());
         }
 
         if constexpr(DstResetCoordinateAfterRun)
         {
-            const auto dst_reset_step =
-                make_tensor_coordinate_step(dst_desc, GetCoordinateResetStep());
-
-            move_tensor_coordinate(dst_desc, dst_coord_, dst_reset_step);
+            move_tensor_coordinate(dst_desc, dst_coord_, GetCoordinateResetStep());
         }
     }
 
@@ -198,10 +191,7 @@ struct ThreadwiseTensorSliceTransfer_v6r1
                                            ? dst_slice_origin_step_idx
                                            : dst_slice_origin_step_idx + GetCoordinateResetStep();
 
-        // is it OK to construct a new step every time?
-        const auto adjusted_step = make_tensor_coordinate_step(dst_desc, adjusted_step_idx);
-
-        move_tensor_coordinate(dst_desc, dst_coord_, adjusted_step);
+        move_tensor_coordinate(dst_desc, dst_coord_, adjusted_step_idx);
     }
 
     private:
