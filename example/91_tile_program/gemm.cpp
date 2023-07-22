@@ -65,14 +65,15 @@ template <typename ADataType,
           ck::index_t kKPerBlock>
 struct Gemm
 {
-
     __host__ __device__ static constexpr auto MakeALdsBlockDescriptor()
     {
         using namespace ck;
 #if 0
         constexpr auto a_lds_block_desc =
             make_naive_tensor_descriptor_packed(make_tuple(kMPerBlock, kKPerBlock), Number<32>{});
-#else
+
+        return a_lds_block_desc;
+#elif 1
         constexpr auto a_lds_block_desc_0 = make_naive_tensor_descriptor(
             make_tuple(Number<kKPerBlock / 8>{}, Number<kMPerBlock>{}, Number<8>{}),
             make_tuple(Number<(kMPerBlock + 1) * 8>{}, Number<8>{}, Number<1>{}),
@@ -85,18 +86,42 @@ struct Gemm
                        make_merge_transform(make_tuple(kKPerBlock / 8, 8))),
             make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}));
-#endif
 
         return a_lds_block_desc;
+#elif 1
+        constexpr auto a_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
+            make_tuple(kMPerBlock / 2, 2, kKPerBlock), Number<32>{});
+
+        constexpr auto a_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
+            a_lds_block_desc_d1_d2_d3,
+            make_tuple(make_xor_transform(make_tuple(kMPerBlock / 2, kKPerBlock),
+                                          8), // right shift 8 or kKperBlock - 8 ?
+                       make_pass_through_transform(2)),
+            make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
+            make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
+
+        constexpr auto a_lds_block_desc_m_k = transform_tensor_descriptor(
+            a_lds_block_desc_d4_d5_d6,
+            make_tuple(make_merge_transform(make_tuple(kMPerBlock / 2, 2)),
+                       make_pass_through_transform(kKPerBlock)),
+            make_tuple(Sequence<0, 1>{}, Sequence<2>{}),
+            make_tuple(Sequence<0>{}, Sequence<1>{}));
+
+        return a_lds_block_desc_m_k;
+#endif
     }
 
     __host__ __device__ static constexpr auto MakeBLdsBlockDescriptor()
     {
         using namespace ck;
 #if 0
+        // 2D layout [N, K]
         constexpr auto b_lds_block_desc =
             make_naive_tensor_descriptor_packed(make_tuple(kNPerBlock, kKPerBlock), Number<32>{});
-#else
+
+        return b_lds_block_desc;
+#elif 1
+        // [K0, M, K1] layout with padding
         constexpr auto b_lds_block_desc_0 = make_naive_tensor_descriptor(
             make_tuple(Number<kKPerBlock / 8>{}, Number<kNPerBlock>{}, Number<8>{}),
             make_tuple(Number<(kNPerBlock + 1) * 8>{}, Number<8>{}, Number<1>{}),
@@ -109,9 +134,30 @@ struct Gemm
                        make_merge_transform(make_tuple(kKPerBlock / 8, 8))),
             make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}));
-#endif
 
         return b_lds_block_desc;
+#elif 1
+        // XOR layout
+        constexpr auto b_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
+            make_tuple(kNPerBlock / 2, 2, kKPerBlock), Number<32>{});
+
+        constexpr auto b_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
+            b_lds_block_desc_d1_d2_d3,
+            make_tuple(make_xor_transform(make_tuple(kNPerBlock / 2, kKPerBlock),
+                                          8), // right shift 8 or kKperBlock - 8 ?
+                       make_pass_through_transform(2)),
+            make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
+            make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
+
+        constexpr auto b_lds_block_desc_n_k = transform_tensor_descriptor(
+            b_lds_block_desc_d4_d5_d6,
+            make_tuple(make_merge_transform(make_tuple(kNPerBlock / 2, 2)),
+                       make_pass_through_transform(kKPerBlock)),
+            make_tuple(Sequence<0, 1>{}, Sequence<2>{}),
+            make_tuple(Sequence<0>{}, Sequence<1>{}));
+
+        return b_lds_block_desc_n_k;
+#endif
     }
 
     //
@@ -172,6 +218,14 @@ struct Gemm
 
         // [allow optimization] allow different LDS layouts
         constexpr auto a_lds_block_desc = MakeALdsBlockDescriptor();
+
+#if 0 && !defined(__HIP_DEVICE_COMPILE__)
+        for(index_t m = 0; m < kMPerBlock; m++)
+            for(index_t k = 0; k < kKPerBlock; k += 8)
+            {
+                printf("%d, %d: %d \n", m, k, a_lds_block_desc.CalculateOffset(make_tuple(m, k)));
+            }
+#endif
 
         auto a_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_a_lds, a_lds_block_desc);
 

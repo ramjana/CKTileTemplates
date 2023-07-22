@@ -105,4 +105,12 @@ __host__ __device__ constexpr auto make_modulo_transform(const Modulus& modulus,
 {
     return Modulo<Modulus, UpLength>{modulus, up_length};
 }
+
+template <typename LowLengths, typename RightShift>
+__host__ __device__ constexpr auto make_xor_transform(const LowLengths& low_lengths,
+                                                      const RightShift& right_shift)
+{
+    return Xor<LowLengths, RightShift>{low_lengths, right_shift};
+}
+
 } // namespace ck

@@ -18,6 +18,7 @@
 #include "ck/utility/ignore.hpp"
 #include "ck/utility/integral_constant.hpp"
 #include "ck/utility/math.hpp"
+#include "ck/utility/math_v2.hpp"
 #include "ck/utility/number.hpp"
 #include "ck/utility/sequence.hpp"
 #include "ck/utility/sequence_helper.hpp"

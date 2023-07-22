@@ -17,6 +17,7 @@ enum struct IndexTransformEnum
     Merge,
     UnMerge,
     Replicate,
+    Xor,
 };
 
 template <index_t NDimLow, index_t NDimUp>
@@ -1148,4 +1149,114 @@ struct Modulo : public BaseTransform<1, 1>
         printf("}");
     }
 };
+
+// 2D XOR
+template <typename LowLengths, typename RightShift>
+struct Xor : public BaseTransform<2, 2>
+{
+    static constexpr auto type_enum = IndexTransformEnum::Xor;
+
+    using LowerIndex = MultiIndex<2>;
+    using UpperIndex = MultiIndex<2>;
+
+    using UpLengths = LowLengths;
+
+    UpLengths up_lengths_;
+    RightShift right_shift_;
+
+    __host__ __device__ constexpr Xor() : up_lengths_{}, right_shift_{} {}
+
+    __host__ __device__ constexpr Xor(const LowLengths& low_lengths, const RightShift& right_shift)
+        : up_lengths_{low_lengths}, right_shift_{right_shift}
+    {
+    }
+
+    __host__ __device__ static constexpr auto GetTypeEnum() { return IndexTransformEnum::Xor; }
+
+    __host__ __device__ constexpr const auto& GetUpperLengths() const { return up_lengths_; }
+
+    template <typename LowIdx, typename UpIdx>
+    __host__ __device__ constexpr void CalculateLowerIndex(LowIdx& idx_low,
+                                                           const UpIdx& idx_up) const
+    {
+        static_assert(LowIdx::Size() == 2 && UpIdx::Size() == 2,
+                      "wrong! inconsistent # of dimension");
+
+        idx_low(Number<0>{}) = idx_up[Number<0>{}];
+
+        const auto idx_low_1_tmp =
+            (idx_up[Number<1>{}] - idx_up[Number<0>{}] * right_shift_) % up_lengths_[Number<1>{}];
+
+        const auto idx_low_1 =
+            (idx_low_1_tmp >= 0) ? idx_low_1_tmp : up_lengths_[Number<1>{}] + idx_low_1_tmp;
+
+        idx_low(Number<1>{}) = idx_low_1;
+    }
+
+    template <typename LowIdxDiff, typename UpIdxDiff, typename LowIdx, typename UpIdx>
+    __host__ __device__ void UpdateLowerIndex(LowIdxDiff& idx_diff_low,
+                                              const UpIdxDiff&,
+                                              LowIdx& idx_low,
+                                              const UpIdx& idx_up) const
+    {
+        static_assert(LowIdxDiff::Size() == 2 && UpIdxDiff::Size() == 2 && LowIdx::Size() == 2 &&
+                          UpIdx::Size() == 2,
+                      "wrong! inconsistent # of dimension");
+
+        const auto idx_low_old = idx_low;
+
+        CalculateLowerIndex(idx_low, idx_up);
+
+        idx_diff_low = idx_low - idx_low_old;
+    }
+
+    __host__ __device__ static constexpr bool IsValidUpperIndexAlwaysMappedToValidLowerIndex()
+    {
+        return true;
+    }
+
+    template <typename UpIdx>
+    __host__ __device__ static constexpr bool
+    IsValidUpperIndexMappedToValidLowerIndex(const UpIdx& /* idx_up */)
+    {
+        return true;
+    }
+
+    __host__ __device__ static constexpr bool IsKnownAtCompileTime()
+    {
+        return is_known_at_compile_time<UpLengths>::value &&
+               is_known_at_compile_time<RightShift>::value;
+    }
+
+    // MUST be static function
+    template <typename LowVectorLengths, typename LowVectorStrides>
+    __host__ __device__ constexpr auto
+    CalculateUpperDimensionSafeVectorLengthStrides(const LowVectorLengths& low_vector_lengths,
+                                                   const LowVectorStrides& low_vector_strides) const
+    {
+        Array<index_t, 2> up_vector_lengths = low_vector_lengths;
+        Array<index_t, 2> up_vector_strides = low_vector_strides;
+
+        if constexpr(is_known_at_compile_time<RightShift>::value)
+        {
+            if(low_vector_lengths[1] != -1)
+            {
+                up_vector_lengths(1) = math::gcd(low_vector_lengths[1], math::abs(right_shift_));
+            }
+        }
+
+        return make_tuple(up_vector_lengths, up_vector_strides);
+    }
+
+    __host__ __device__ void Print() const
+    {
+        printf("{");
+        printf("Xor, ");
+        printf("up_lengths_");
+        print_multi_index(up_lengths_);
+        printf("right_shift_ %d", index_t{right_shift_});
+        printf("}");
+    }
+};
+
 } // namespace ck

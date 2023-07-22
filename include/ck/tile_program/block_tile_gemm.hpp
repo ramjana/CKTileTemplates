@@ -21,6 +21,10 @@ using WarpGemmMfmaF16F16F32M32N32K8 =
     ck::tile_program::warp::WarpGemm<ck::tile_program::warp::WarpGemmAtrributeMfma<
         ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
 
+using WarpGemmMfmaF16F16F32M32N32K16 =
+    ck::tile_program::warp::WarpGemm<ck::tile_program::warp::WarpGemmAtrributeMfma<
+        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K16>>;
+
 using WarpGemmMfmaF16F16F32M16N16K16 =
     ck::tile_program::warp::WarpGemm<ck::tile_program::warp::WarpGemmAtrributeMfma<
         ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>;
@@ -52,7 +56,7 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
     constexpr index_t KIterPerWarp = 2;
 
     using WG = WarpGemmMfmaF16F16F32M16N16K16;
-#elif 1
+#elif 0
     // 128x256x32   32x32x8
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
@@ -62,6 +66,16 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
     constexpr index_t KIterPerWarp = 4;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
+#elif 1
+    // 128x256x32   32x32x16
+    constexpr index_t MWarp = 2;
+    constexpr index_t NWarp = 2;
+
+    constexpr index_t MIterPerWarp = 2;
+    constexpr index_t NIterPerWarp = 4;
+    constexpr index_t KIterPerWarp = 2;
+
+    using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 1
     // 128x256x32   16x16x16
     constexpr index_t MWarp = 2;
