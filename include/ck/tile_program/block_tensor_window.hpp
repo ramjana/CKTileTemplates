@@ -25,7 +25,9 @@ struct BlockTensorWindow
     static constexpr index_t NDimWindowAdaptorTop = WindowAdaptor::GetNumOfTopDimension();
     static constexpr index_t NDimBottomTensor     = BottomTensorDesc::GetNumOfDimension();
 
-    STATIC_ASSERT(NDimBottomTensor == WindowAdaptor::GetNumOfBottomDimension(),
+    static_assert(WindowAdaptor::IsStatic(), "wrong!");
+
+    static_assert(NDimBottomTensor == WindowAdaptor::GetNumOfBottomDimension(),
                   "wrong! inconsistent # of diemsnions");
 
     using AdaptorTopIndex   = Array<index_t, NDimWindowAdaptorTop>;
@@ -82,8 +84,7 @@ struct BlockTensorWindow
 
     __host__ __device__ constexpr auto GetWindowLengths() const
     {
-        return WindowAdaptor::GetBottomDimensionLengths();
-        ;
+        return WindowAdaptor{}.GetBottomDimensionLengths();
     }
 
     __host__ __device__ constexpr auto GetBlockTensorDistribution() const

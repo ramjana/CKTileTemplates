@@ -16,7 +16,7 @@ struct TensorView
     using TensorIndex = Array<index_t, TensorDesc::GetNumOfTopDimension()>;
     using TensorCoord = decltype(make_tensor_coordinate(TensorDesc{}, TensorIndex{}));
 
-    __host__ __device__ constexpr TensorView() = delete;
+    __host__ __device__ constexpr TensorView() = default;
 
     __host__ __device__ constexpr TensorView(const BufferView& buffer_view, const TensorDesc& desc)
         : buf_{buffer_view}, desc_{desc}

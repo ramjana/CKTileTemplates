@@ -73,7 +73,7 @@ struct Gemm
             make_naive_tensor_descriptor_packed(make_tuple(kMPerBlock, kKPerBlock), Number<32>{});
 
         return a_lds_block_desc;
-#elif 1
+#elif 0
         constexpr auto a_lds_block_desc_0 = make_naive_tensor_descriptor(
             make_tuple(Number<kKPerBlock / 8>{}, Number<kMPerBlock>{}, Number<8>{}),
             make_tuple(Number<(kMPerBlock + 1) * 8>{}, Number<8>{}, Number<1>{}),
@@ -94,8 +94,7 @@ struct Gemm
 
         constexpr auto a_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
             a_lds_block_desc_d1_d2_d3,
-            make_tuple(make_xor_transform(make_tuple(kMPerBlock / 2, kKPerBlock),
-                                          8), // right shift 8 or kKperBlock - 8 ?
+            make_tuple(make_xor_transform(make_tuple(kMPerBlock / 2, kKPerBlock), 8),
                        make_pass_through_transform(2)),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
@@ -120,7 +119,7 @@ struct Gemm
             make_naive_tensor_descriptor_packed(make_tuple(kNPerBlock, kKPerBlock), Number<32>{});
 
         return b_lds_block_desc;
-#elif 1
+#elif 0
         // [K0, M, K1] layout with padding
         constexpr auto b_lds_block_desc_0 = make_naive_tensor_descriptor(
             make_tuple(Number<kKPerBlock / 8>{}, Number<kNPerBlock>{}, Number<8>{}),
@@ -143,8 +142,7 @@ struct Gemm
 
         constexpr auto b_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
             b_lds_block_desc_d1_d2_d3,
-            make_tuple(make_xor_transform(make_tuple(kNPerBlock / 2, kKPerBlock),
-                                          8), // right shift 8 or kKperBlock - 8 ?
+            make_tuple(make_xor_transform(make_tuple(kNPerBlock / 2, kKPerBlock), 8),
                        make_pass_through_transform(2)),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
@@ -206,40 +204,25 @@ struct Gemm
 
         const auto id_tile = block2tile.CalculateBottomIndex(make_tuple(id_block));
 
-        const auto iM = id_tile.At<0>() * kMPerBlock;
-        const auto iN = id_tile.At<1>() * kNPerBlock;
+        const auto iM = ps.read_first_lane(id_tile.At<0>() * kMPerBlock);
+        const auto iN = ps.read_first_lane(id_tile.At<1>() * kNPerBlock);
 
-        // A/B tile in LDS
-#if 0
-        ADataType* p_a_lds = shared_memmory.get_pointer(0);
-#else
+        // A tile in LDS
         ADataType* p_a_lds = static_cast<ADataType*>(static_cast<void*>(p_shared_char));
-#endif
 
         // [allow optimization] allow different LDS layouts
         constexpr auto a_lds_block_desc = MakeALdsBlockDescriptor();
 
-#if 0 && !defined(__HIP_DEVICE_COMPILE__)
-        for(index_t m = 0; m < kMPerBlock; m++)
-            for(index_t k = 0; k < kKPerBlock; k += 8)
-            {
-                printf("%d, %d: %d \n", m, k, a_lds_block_desc.CalculateOffset(make_tuple(m, k)));
-            }
-#endif
-
         auto a_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_a_lds, a_lds_block_desc);
 
-#if 0
-        BDataType* p_b_lds = shared_memory.get_aligned_pointer(a_lds_byte);
-#else
         constexpr index_t a_lds_block_space_size_aligned =
             math::integer_divide_ceil(sizeof(ADataType) * a_lds_block_desc.GetElementSpaceSize(),
                                       16) *
             16;
 
+        // B tile in LDS
         BDataType* p_b_lds = static_cast<BDataType*>(
             static_cast<void*>(p_shared_char + a_lds_block_space_size_aligned));
-#endif
 
         // [allow optimization] allow different LDS layouts
         constexpr auto b_lds_block_desc = MakeBLdsBlockDescriptor();
@@ -250,7 +233,7 @@ struct Gemm
         // FIXME
         constexpr auto a_copy_dram_window_dstr = make_static_block_tensor_distribution(
             StaticTensorDistributionEncoding<Sequence<1>,
-                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
+                                             Tuple<Sequence<4, 4, 16>, Sequence<4, 8>>,
                                              Tuple<Sequence<1>, Sequence<1, 2>>,
                                              Tuple<Sequence<1>, Sequence<2, 0>>,
                                              Sequence<1, 2>,
@@ -266,7 +249,7 @@ struct Gemm
         // FIXME
         constexpr auto b_copy_dram_window_dstr = make_static_block_tensor_distribution(
             StaticTensorDistributionEncoding<Sequence<1>,
-                                             Tuple<Sequence<4, 4, 16>, Sequence<4, 8>>,
+                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
                                              Tuple<Sequence<1>, Sequence<1, 2>>,
                                              Tuple<Sequence<1>, Sequence<2, 0>>,
                                              Sequence<1, 2>,
@@ -376,7 +359,7 @@ struct Gemm
     }
 };
 
-int main()
+int main(int argc, char* argv[])
 {
     using ADataType = ck::half_t;
     using BDataType = ck::half_t;
@@ -385,6 +368,13 @@ int main()
     ck::index_t M = 3328;
     ck::index_t N = 4096;
     ck::index_t K = 4096;
+
+    if(argc == 4)
+    {
+        M = std::stoi(argv[1]);
+        N = std::stoi(argv[2]);
+        K = std::stoi(argv[3]);
+    }
 
     std::array<ck::index_t, 2> a_lengths{M, K};
     std::array<ck::index_t, 2> a_strides{K, 1};
@@ -414,8 +404,8 @@ int main()
     a_buf.ToDevice(a_host.mData.data());
     b_buf.ToDevice(b_host.mData.data());
 
-    constexpr ck::index_t kGemmMPerBlock = 128;
-    constexpr ck::index_t kGemmNPerBlock = 256;
+    constexpr ck::index_t kGemmMPerBlock = 256;
+    constexpr ck::index_t kGemmNPerBlock = 128;
     constexpr ck::index_t kGemmKPerBlock = 32;
 
     constexpr ck::index_t kBlockSize = 256;
