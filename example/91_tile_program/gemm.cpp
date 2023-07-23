@@ -15,7 +15,7 @@
 #include "ck/tile_program/static_block_distributed_tensor.hpp"
 #include "ck/tile_program/load_block_distributed_tensor.hpp"
 #include "ck/tile_program/store_block_distributed_tensor.hpp"
-#include "ck/tile_program/block_tile_gemm.hpp"
+#include "ck/tile_program/block_gemm_impl_cr_as_bs.hpp"
 #include "ck/tile_program/block_tile_elementwise_op.hpp"
 
 #include "ck/library/utility/check_err.hpp"
@@ -266,7 +266,7 @@ struct Gemm
         auto b_lds_gemm_window = b_copy_lds_window;
 
         // C tile
-        auto acc_block_tile = decltype(block_tile_gemm(a_lds_gemm_window, b_lds_gemm_window)){};
+        auto acc_block_tile = decltype(block_gemm_cr_as_bs(a_lds_gemm_window, b_lds_gemm_window)){};
 
         // prefetch
         // global read 0
@@ -297,7 +297,7 @@ struct Gemm
             ps.block_sync_lds();
 
             // GEMM i
-            block_tile_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+            block_gemm_cr_as_bs(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
 
             ps.block_sync_lds();
 
@@ -324,7 +324,7 @@ struct Gemm
             ps.block_sync_lds();
 
             // GEMM num_loop - 2
-            block_tile_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+            block_gemm_cr_as_bs(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
 
             ps.block_sync_lds();
 
@@ -335,7 +335,7 @@ struct Gemm
             ps.block_sync_lds();
 
             // GEMM num_loop - 1
-            block_tile_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+            block_gemm_cr_as_bs(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
         }
 
         // FIXME

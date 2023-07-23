@@ -35,9 +35,9 @@ using WarpGemmMfmaF16F16F32M16N16K32 =
 #endif
 
 template <typename CBlockTensor, typename ABlockWindowTmp, typename BBlockWindowTmp>
-__device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
-                                const ABlockWindowTmp& a_block_window_tmp,
-                                const BBlockWindowTmp& b_block_window_tmp)
+__device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
+                           const ABlockWindowTmp& a_block_window_tmp,
+                           const BBlockWindowTmp& b_block_window_tmp)
 {
     // FIXME: use heuristic to choose paramters and WarpGEMM
 #if 0
@@ -225,8 +225,8 @@ __device__ void block_tile_gemm(CBlockTensor& c_block_tensor,
 }
 
 template <typename ABlockWindow, typename BBlockWindow>
-__host__ __device__ auto block_tile_gemm(const ABlockWindow& a_block_window,
-                                         const BBlockWindow& b_block_window)
+__host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
+                                    const BBlockWindow& b_block_window)
 {
     // FIXME: use heuristic to choose paramters and WarpGEMM
 #if 0
@@ -302,7 +302,9 @@ __host__ __device__ auto block_tile_gemm(const ABlockWindow& a_block_window,
 
     auto c_block_tensor = make_static_block_distributed_tensor<CDataType>(c_block_dstr);
 
-    block_tile_gemm(c_block_tensor, a_block_window, b_block_window);
+    block_tile_elementwise([](auto& c) { c = 0; }, c_block_tensor);
+
+    block_gemm_cr_as_bs(c_block_tensor, a_block_window, b_block_window);
 
     return c_block_tensor;
 }
@@ -310,7 +312,7 @@ __host__ __device__ auto block_tile_gemm(const ABlockWindow& a_block_window,
 #if 1
 // FIXME: remove: dummy host function for tile programming
 template <typename CBlockTensor, typename ABlockWindowTmp, typename BBlockWindowTmp>
-__host__ void block_tile_gemm(CBlockTensor&, const ABlockWindowTmp&, const BBlockWindowTmp&)
+__host__ void block_gemm_cr_as_bs(CBlockTensor&, const ABlockWindowTmp&, const BBlockWindowTmp&)
 {
 }
 #endif
