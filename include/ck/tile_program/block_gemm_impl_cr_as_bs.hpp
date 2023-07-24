@@ -9,37 +9,22 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tile_program/block_tensor_distribution.hpp"
 #include "ck/tile_program/warp_gemm.hpp"
-#include "ck/tile_program/warp_gemm_attribute_mfma.hpp"
-#include "ck/tile_program/warp_gemm_attribute_mfma_impl.hpp"
 
 namespace ck {
 namespace tile_program {
 namespace block {
 
-#if 1
-using WarpGemmMfmaF16F16F32M32N32K8 =
-    ck::tile_program::warp::WarpGemm<ck::tile_program::warp::WarpGemmAtrributeMfma<
-        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
-
-using WarpGemmMfmaF16F16F32M32N32K16 =
-    ck::tile_program::warp::WarpGemm<ck::tile_program::warp::WarpGemmAtrributeMfma<
-        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K16>>;
-
-using WarpGemmMfmaF16F16F32M16N16K16 =
-    ck::tile_program::warp::WarpGemm<ck::tile_program::warp::WarpGemmAtrributeMfma<
-        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>;
-
-using WarpGemmMfmaF16F16F32M16N16K32 =
-    ck::tile_program::warp::WarpGemm<ck::tile_program::warp::WarpGemmAtrributeMfma<
-        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M16N16K32>>;
-#endif
-
+// A is block window on shared memory
+// B is block window on shared memory
+// C is block distributed tensor
 template <typename CBlockTensor, typename ABlockWindowTmp, typename BBlockWindowTmp>
 __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
-                           const ABlockWindowTmp& a_block_window_tmp,
-                           const BBlockWindowTmp& b_block_window_tmp)
+                                    const ABlockWindowTmp& a_block_window_tmp,
+                                    const BBlockWindowTmp& b_block_window_tmp)
 {
-    // FIXME: use heuristic to choose paramters and WarpGEMM
+    using namespace ck::tile_program::warp;
+
+    // FIXME: use heuristic to choose parameters and WarpGEMM
 #if 0
     // 128x128x32   32x32x8
     constexpr index_t MWarp = 2;
@@ -50,6 +35,26 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t KIterPerWarp = 4;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
+#elif 0
+    // 128x128x32   32x32x16
+    constexpr index_t MWarp = 2;
+    constexpr index_t NWarp = 2;
+
+    constexpr index_t MIterPerWarp = 2;
+    constexpr index_t NIterPerWarp = 2;
+    constexpr index_t KIterPerWarp = 2;
+
+    using WG = WarpGemmMfmaF16F16F32M32N32K16;
+#elif 1
+    // 128x128x32   32x32x16
+    constexpr index_t MWarp = 4;
+    constexpr index_t NWarp = 1;
+
+    constexpr index_t MIterPerWarp = 1;
+    constexpr index_t NIterPerWarp = 4;
+    constexpr index_t KIterPerWarp = 2;
+
+    using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 0
     // 128x128x32   16x16x16
     constexpr index_t MWarp = 2;
@@ -90,7 +95,7 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t KIterPerWarp = 2;
 
     using WG = WarpGemmMfmaF16F16F32M16N16K16;
-#elif 1
+#elif 0
     // 256x128x32   32x32x16
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
@@ -176,6 +181,8 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr auto b_warp_y_lengths = to_sequence(WG::BWarpDstr{}.GetYs2DDescriptor().GetLengths());
     constexpr auto c_warp_y_lengths = to_sequence(WG::CWarpDstr{}.GetYs2DDescriptor().GetLengths());
 
+    constexpr auto c_warp_y_index_zeros = uniform_sequence_gen_t<WG::CWarpDstr::NDimY, 0>{};
+
     // hot loop:
     static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
         static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
@@ -201,15 +208,9 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
                 // read C warp tensor from C block tensor
                 WG::CWarpTensor c_warp_tensor;
 
-                constexpr auto c_warp_y_index_zeros =
-                    uniform_sequence_gen_t<WG::CWarpDstr::NDimY, 0>{};
-
-                c_warp_tensor.SetSlicedThreadData(
-                    c_warp_y_index_zeros,
-                    c_warp_y_lengths,
-                    c_block_tensor.GetSlicedThreadData(
-                        merge_sequences(Sequence<mIter, nIter>{}, c_warp_y_index_zeros),
-                        merge_sequences(Sequence<1, 1>{}, c_warp_y_lengths)));
+                c_warp_tensor.GetThreadBuffer() = c_block_tensor.GetSlicedThreadData(
+                    merge_sequences(Sequence<mIter, nIter>{}, c_warp_y_index_zeros),
+                    merge_sequences(Sequence<1, 1>{}, c_warp_y_lengths));
 
                 // warp GEMM
                 WG{}(c_warp_tensor, a_warp_tensor, b_warp_tensor);
@@ -218,7 +219,7 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
                 c_block_tensor.SetSlicedThreadData(
                     merge_sequences(Sequence<mIter, nIter>{}, c_warp_y_index_zeros),
                     merge_sequences(Sequence<1, 1>{}, c_warp_y_lengths),
-                    c_warp_tensor.GetSlicedThreadData(Sequence<0, 0>{}, c_warp_y_lengths));
+                    c_warp_tensor.GetThreadBuffer());
             });
         });
     });
@@ -226,8 +227,10 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
 
 template <typename ABlockWindow, typename BBlockWindow>
 __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
-                                    const BBlockWindow& b_block_window)
+                                             const BBlockWindow& b_block_window)
 {
+    using namespace ck::tile_program::warp;
+
     // FIXME: use heuristic to choose paramters and WarpGEMM
 #if 0
     // 128x128x32   32x32x8
@@ -238,6 +241,24 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     constexpr index_t NIterPerWarp = 2;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
+#elif 0
+    // 128x128x32   32x32x16
+    constexpr index_t MWarp = 2;
+    constexpr index_t NWarp = 2;
+
+    constexpr index_t MIterPerWarp = 2;
+    constexpr index_t NIterPerWarp = 2;
+
+    using WG = WarpGemmMfmaF16F16F32M32N32K16;
+#elif 1
+    // 128x128x32   32x32x16
+    constexpr index_t MWarp = 4;
+    constexpr index_t NWarp = 1;
+
+    constexpr index_t MIterPerWarp = 1;
+    constexpr index_t NIterPerWarp = 4;
+
+    using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 0
     // 128x128x32   16x16x16
     constexpr index_t MWarp = 2;
@@ -309,13 +330,11 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     return c_block_tensor;
 }
 
-#if 1
 // FIXME: remove: dummy host function for tile programming
 template <typename CBlockTensor, typename ABlockWindowTmp, typename BBlockWindowTmp>
 __host__ void block_gemm_cr_as_bs(CBlockTensor&, const ABlockWindowTmp&, const BBlockWindowTmp&)
 {
 }
-#endif
 
 } // namespace block
 } // namespace tile_program
