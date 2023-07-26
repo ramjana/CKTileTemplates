@@ -27,6 +27,10 @@ struct WarpGemmAtrributeMfma
     using BVecType = typename Impl::BVecType;
     using CVecType = typename Impl::CVecType;
 
+    static constexpr index_t M = Impl::M;
+    static constexpr index_t N = Impl::N;
+    static constexpr index_t K = Impl::K;
+
     using AWarpDstrEncoding = StaticTensorDistributionEncoding<
         Sequence<>,
         Tuple<Sequence<Impl::AMLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
@@ -61,6 +65,60 @@ struct WarpGemmAtrributeMfma
     __device__ CVecType operator()(const AVecType& a_vec, const BVecType& b_vec) const
     {
         return Impl{}(a_vec, b_vec);
+    }
+};
+
+template <typename WarpGemmAttributeMfmaImpl_>
+struct WarpGemmAtrributeMfmaTransposedCDistribution
+{
+    using Impl = remove_cvref_t<WarpGemmAttributeMfmaImpl_>;
+
+    using ADataType = typename Impl::BDataType;
+    using BDataType = typename Impl::ADataType;
+    using CDataType = typename Impl::CDataType;
+
+    using AVecType = typename Impl::BVecType;
+    using BVecType = typename Impl::AVecType;
+    using CVecType = typename Impl::CVecType;
+
+    static constexpr index_t M = Impl::N;
+    static constexpr index_t N = Impl::M;
+    static constexpr index_t K = Impl::K;
+
+    using AWarpDstrEncoding = StaticTensorDistributionEncoding<
+        Sequence<>,
+        Tuple<Sequence<Impl::BNLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
+        Tuple<Sequence<2, 1>>,
+        Tuple<Sequence<0, 0>>,
+        Sequence<2>,
+        Sequence<1>>;
+
+    using BWarpDstrEncoding = StaticTensorDistributionEncoding<
+        Sequence<>,
+        Tuple<Sequence<Impl::AMLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
+        Tuple<Sequence<2, 1>>,
+        Tuple<Sequence<0, 0>>,
+        Sequence<2>,
+        Sequence<1>>;
+
+    using CWarpDstrEncoding = StaticTensorDistributionEncoding<
+        Sequence<>,
+        Tuple<Sequence<Impl::CNLane>, Sequence<Impl::CM0PerLane, Impl::CMLane, Impl::CM1PerLane>>,
+        Tuple<Sequence<2, 1>>,
+        Tuple<Sequence<1, 0>>,
+        Sequence<2, 2>,
+        Sequence<0, 2>>;
+
+    // c_vec += a_vec * b_vec
+    __device__ void operator()(CVecType& c_vec, const AVecType& a_vec, const BVecType& b_vec) const
+    {
+        Impl{}(c_vec, b_vec, a_vec);
+    }
+
+    // c_vec = a_vec * b_vec
+    __device__ CVecType operator()(const AVecType& a_vec, const BVecType& b_vec) const
+    {
+        return Impl{}(b_vec, a_vec);
     }
 };
 

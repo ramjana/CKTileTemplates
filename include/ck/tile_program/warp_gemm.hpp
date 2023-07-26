@@ -14,20 +14,19 @@ namespace tile_program {
 namespace warp {
 
 using WarpGemmMfmaF16F16F32M32N32K8 =
-    ck::tile_program::warp::WarpGemmImpl<ck::tile_program::warp::WarpGemmAtrributeMfma<
-        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
+    WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
 
 using WarpGemmMfmaF16F16F32M32N32K16 =
-    ck::tile_program::warp::WarpGemmImpl<ck::tile_program::warp::WarpGemmAtrributeMfma<
-        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K16>>;
+    WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M32N32K16>>;
+
+using WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution = WarpGemmImpl<
+    WarpGemmAtrributeMfmaTransposedCDistribution<WarpGemmAttributeMfmaImplF16F16F32M32N32K16>>;
 
 using WarpGemmMfmaF16F16F32M16N16K16 =
-    ck::tile_program::warp::WarpGemmImpl<ck::tile_program::warp::WarpGemmAtrributeMfma<
-        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>;
+    WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>;
 
 using WarpGemmMfmaF16F16F32M16N16K32 =
-    ck::tile_program::warp::WarpGemmImpl<ck::tile_program::warp::WarpGemmAtrributeMfma<
-        ck::tile_program::warp::WarpGemmAttributeMfmaImplF16F16F32M16N16K32>>;
+    WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M16N16K32>>;
 
 } // namespace warp
 } // namespace tile_program

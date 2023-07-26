@@ -202,11 +202,15 @@ __host__ __device__ constexpr auto
 
 } // namespace detail
 
-template <typename PsYs2XsAdaptor_, typename Ys2DDescriptor_>
+template <typename PsYs2XsAdaptor_,
+          typename Ys2DDescriptor_,
+          typename StaticTensorDistributionEncoding_>
 struct BlockTensorDistribution
 {
     using PsYs2XsAdaptor = remove_cvref_t<PsYs2XsAdaptor_>;
     using Ys2DDescriptor = remove_cvref_t<Ys2DDescriptor_>;
+
+    using StaticTensorDistributionEncoding = remove_cvref_t<StaticTensorDistributionEncoding_>;
 
     static constexpr index_t NDimX = PsYs2XsAdaptor::GetNumOfBottomDimension();
     static constexpr index_t NDimY = Ys2DDescriptor::GetNumOfTopDimension();
@@ -227,6 +231,11 @@ struct BlockTensorDistribution
     __host__ __device__ constexpr const auto& GetPsYs2XsAdaptor() const { return ps_ys_to_xs_; }
 
     __host__ __device__ constexpr const auto& GetYs2DDescriptor() const { return ys_to_d_; }
+
+    __host__ __device__ static constexpr auto GetStaticTensorDistributionEncoding()
+    {
+        return StaticTensorDistributionEncoding{};
+    }
 
     __host__ __device__ static constexpr bool IsStatic()
     {
@@ -394,7 +403,8 @@ __host__ __device__ constexpr auto make_block_tensor_distribution(StaticTensorDi
         make_tensor_descriptor_from_adaptor(ys_to_d_adaptor, d_length);
 
     return BlockTensorDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
-                                   remove_cvref_t<decltype(ys_to_d_descriptor)>>{
+                                   remove_cvref_t<decltype(ys_to_d_descriptor)>,
+                                   remove_cvref_t<StaticTensorDistributionEncoding_>>{
         ps_ys_to_xs_adaptor, ys_to_d_descriptor};
 }
 
@@ -420,7 +430,8 @@ __host__ __device__ constexpr auto
         make_tensor_descriptor_from_adaptor(ys_to_d_adaptor, Number<d_length>{});
 
     return BlockTensorDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
-                                   remove_cvref_t<decltype(ys_to_d_descriptor)>>{
+                                   remove_cvref_t<decltype(ys_to_d_descriptor)>,
+                                   remove_cvref_t<StaticTensorDistributionEncoding_>>{
         ps_ys_to_xs_adaptor, ys_to_d_descriptor};
 }
 

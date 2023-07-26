@@ -7,7 +7,9 @@
 #include "ck/tensor_description/tensor_descriptor.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
+
 #include "ck/tile_program/block_tensor_distribution.hpp"
+#include "ck/tile_program/block_elementwise.hpp"
 #include "ck/tile_program/warp_gemm.hpp"
 
 namespace ck {
@@ -36,7 +38,7 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
 
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
 #elif 0
-    // 128x128x32   32x32x16
+    // 128x128x32, 32x32x16, 2x2 warps
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
@@ -46,7 +48,7 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 1
-    // 128x128x32   32x32x16
+    // 128x128x32, 32x32x16, 4x1 warps,
     constexpr index_t MWarp = 4;
     constexpr index_t NWarp = 1;
 
@@ -55,6 +57,16 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t KIterPerWarp = 2;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
+#elif 0
+    // 128x128x32, 32x32x16-Transposed C Distribution, 4x1 warps,
+    constexpr index_t MWarp = 4;
+    constexpr index_t NWarp = 1;
+
+    constexpr index_t MIterPerWarp = 1;
+    constexpr index_t NIterPerWarp = 4;
+    constexpr index_t KIterPerWarp = 2;
+
+    using WG = WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution;
 #elif 0
     // 128x128x32   16x16x16
     constexpr index_t MWarp = 2;
@@ -151,22 +163,35 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
         Sequence<1, 2>,
         Sequence<0, 0>>{};
 
+    //  WG::AWarpDstrEncoding{}.foo();
+
     constexpr auto a_block_dstr_encode =
         embed_tensor_distribution_encoding(a_block_outer_dstr_encoding, WG::AWarpDstrEncoding{});
+
+    //  a_block_dstr_encode.foo();
+
+    //  WG::BWarpDstrEncoding{}.foo();
 
     constexpr auto b_block_dstr_encode =
         embed_tensor_distribution_encoding(b_block_outer_dstr_encoding, WG::BWarpDstrEncoding{});
 
+    //  b_block_dstr_encode.foo();
+
+    //  WG::CWarpDstrEncoding{}.foo();
+
     constexpr auto c_block_dstr_encode =
         embed_tensor_distribution_encoding(c_block_outer_dstr_encoding, WG::CWarpDstrEncoding{});
 
+    //  c_block_dstr_encode.foo();
+
     constexpr auto a_block_dstr = make_static_block_tensor_distribution(a_block_dstr_encode);
     constexpr auto b_block_dstr = make_static_block_tensor_distribution(b_block_dstr_encode);
-    constexpr auto c_block_dstr = make_static_block_tensor_distribution(c_block_dstr_encode);
 
-    static_assert(is_same_v<remove_cvref_t<decltype(c_block_dstr)>,
-                            remove_cvref_t<decltype(CBlockTensor::GetBlockDistribution())>>,
-                  "wrong!");
+    static_assert(
+        is_same_v<remove_cvref_t<decltype(c_block_dstr_encode)>,
+                  remove_cvref_t<decltype(
+                      CBlockTensor::GetBlockDistribution().GetStaticTensorDistributionEncoding())>>,
+        "wrong!");
 
     // construct A/B-block-window from A/B-block-distribution
     auto a_block_window = make_block_window(a_block_window_tmp.GetBottomTensorView(),
@@ -251,7 +276,7 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 1
-    // 128x128x32   32x32x16
+    // 128x128x32, 32x32x16, 4x1 warps,
     constexpr index_t MWarp = 4;
     constexpr index_t NWarp = 1;
 
@@ -259,6 +284,15 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     constexpr index_t NIterPerWarp = 4;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
+#elif 0
+    // 128x128x32, 32x32x16-Transposed C Distribution, 4x1 warps,
+    constexpr index_t MWarp = 4;
+    constexpr index_t NWarp = 1;
+
+    constexpr index_t MIterPerWarp = 1;
+    constexpr index_t NIterPerWarp = 4;
+
+    using WG = WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution;
 #elif 0
     // 128x128x32   16x16x16
     constexpr index_t MWarp = 2;
@@ -295,7 +329,7 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     constexpr index_t NIterPerWarp = 8;
 
     using WG = WarpGemmMfmaF16F16F32M16N16K16;
-#elif 1
+#elif 0
     // 256x128x32   32x32x16
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
@@ -323,7 +357,7 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
 
     auto c_block_tensor = make_static_block_distributed_tensor<CDataType>(c_block_dstr);
 
-    block_tile_elementwise([](auto& c) { c = 0; }, c_block_tensor);
+    block_elementwise_inout([](auto& c) { c = 0; }, c_block_tensor);
 
     block_gemm_cr_as_bs(c_block_tensor, a_block_window, b_block_window);
 

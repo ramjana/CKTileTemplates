@@ -16,7 +16,7 @@
 #include "ck/tile_program/load_block_distributed_tensor.hpp"
 #include "ck/tile_program/store_block_distributed_tensor.hpp"
 #include "ck/tile_program/block_gemm_impl_cr_as_bs.hpp"
-#include "ck/tile_program/block_tile_elementwise_op.hpp"
+#include "ck/tile_program/block_elementwise.hpp"
 
 #include "ck/library/utility/check_err.hpp"
 #include "ck/library/utility/device_memory.hpp"
@@ -278,7 +278,7 @@ struct Gemm
         move_block_window(b_copy_dram_window, {0, kKPerBlock});
 
         // Initialize C
-        block_tile_elementwise([](auto& acc) { acc = 0; }, acc_block_tile);
+        block_elementwise_inout([](auto& acc) { acc = 0; }, acc_block_tile);
 
         // LDS write 0
         store_block_tile(a_copy_lds_window, a_block_tile);
@@ -338,20 +338,16 @@ struct Gemm
             block_gemm_cr_as_bs(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
         }
 
-        // FIXME
-        constexpr auto c_block_distr = acc_block_tile.GetBlockDistribution();
-
-        auto c_block_tile = make_static_block_distributed_tensor<CDataType>(c_block_distr);
-
         // type convert
-        block_tile_elementwise(
-            [](auto& c, const auto& acc) { c = ck::type_convert<CDataType>(acc); },
-            c_block_tile,
-            acc_block_tile);
+        auto c_block_tile = block_elementwise_in(
+            [](const auto& acc) { return type_convert<CDataType>(acc); }, acc_block_tile);
 
         // store C
         auto c_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<32>{}, Number<1>{});
+
+        // FIXME
+        constexpr auto c_block_distr = c_block_tile.GetBlockDistribution();
 
         auto c_dram_window = make_block_window(c_dram_grid, {iM, iN}, c_block_distr);
 
