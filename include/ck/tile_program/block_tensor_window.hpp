@@ -214,6 +214,8 @@ template <typename BlockTensorWindow_>
 __device__ void move_block_window(BlockTensorWindow_& window,
                                   const MultiIndex<BlockTensorWindow_::GetNumOfDimension()>& step)
 {
+    window.block_window_origin_ += step;
+
     window.MoveBottomTensorThreadCoordinate(step);
 }
 

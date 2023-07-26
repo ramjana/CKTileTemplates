@@ -47,7 +47,7 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t KIterPerWarp = 2;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
-#elif 1
+#elif 0
     // 128x128x32, 32x32x16, 4x1 warps,
     constexpr index_t MWarp = 4;
     constexpr index_t NWarp = 1;
@@ -57,7 +57,7 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t KIterPerWarp = 2;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
-#elif 0
+#elif 1
     // 128x128x32, 32x32x16-Transposed C Distribution, 4x1 warps,
     constexpr index_t MWarp = 4;
     constexpr index_t NWarp = 1;
@@ -275,7 +275,7 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     constexpr index_t NIterPerWarp = 2;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
-#elif 1
+#elif 0
     // 128x128x32, 32x32x16, 4x1 warps,
     constexpr index_t MWarp = 4;
     constexpr index_t NWarp = 1;
@@ -284,7 +284,7 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     constexpr index_t NIterPerWarp = 4;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
-#elif 0
+#elif 1
     // 128x128x32, 32x32x16-Transposed C Distribution, 4x1 warps,
     constexpr index_t MWarp = 4;
     constexpr index_t NWarp = 1;
