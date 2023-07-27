@@ -214,17 +214,21 @@ make_tile_window(const TensorView_& tensor_view,
 }
 
 // FIXME: dummy host function for tile program
-template <typename TileWindowWithStaticDistribution_>
-__host__ void
-move_tile_window(TileWindowWithStaticDistribution_&,
-                 const MultiIndex<TileWindowWithStaticDistribution_::GetNumOfDimension()>&)
+template <typename TensorView_, typename WindowLengths_, typename StaticTileDistribution_>
+__host__ void move_tile_window(
+    TileWindowWithStaticDistribution<TensorView_, WindowLengths_, StaticTileDistribution_>&,
+    const MultiIndex<
+        TileWindowWithStaticDistribution<TensorView_, WindowLengths_, StaticTileDistribution_>::
+            GetNumOfDimension()>&)
 {
 }
 
-template <typename TileWindowWithStaticDistribution_>
-__device__ void
-move_tile_window(TileWindowWithStaticDistribution_& window,
-                 const MultiIndex<TileWindowWithStaticDistribution_::GetNumOfDimension()>& step)
+template <typename TensorView_, typename WindowLengths_, typename StaticTileDistribution_>
+__device__ void move_tile_window(
+    TileWindowWithStaticDistribution<TensorView_, WindowLengths_, StaticTileDistribution_>& window,
+    const MultiIndex<
+        TileWindowWithStaticDistribution<TensorView_, WindowLengths_, StaticTileDistribution_>::
+            GetNumOfDimension()>& step)
 {
     window.window_origin_ += step;
 

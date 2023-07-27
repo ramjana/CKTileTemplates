@@ -9,3 +9,4 @@
 
 #include "ck/tile_program/tile_distribution.hpp"
 #include "ck/tile_program/tile_window_impl_static_distribution.hpp"
+#include "ck/tile_program/tile_window_impl_static_lengths.hpp"

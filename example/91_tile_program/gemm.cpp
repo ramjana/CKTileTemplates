@@ -275,47 +275,45 @@ struct Gemm
         auto b_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_b_lds, b_lds_block_desc);
 
         // A DRAM tile window
-        constexpr auto a_copy_dram_window_dstr = MakeADramTileDistribution();
-
         auto a_copy_dram_window =
             make_tile_window(a_dram_grid,
                              make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}),
                              {iM, 0},
-                             a_copy_dram_window_dstr);
+                             MakeADramTileDistribution());
 
-        // FIXME: implemente "no-distribution window" and remove this
-        constexpr auto a_copy_lds_window_dstr = a_copy_dram_window_dstr;
-
-        // FIXME: implemente "no-distribution window" and remove this
+#if 1
         auto a_copy_lds_window =
             make_tile_window(a_lds_block,
                              make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}),
                              {0, 0},
-                             a_copy_lds_window_dstr);
+                             a_copy_dram_window.GetTileDistribution());
+#else
+        auto a_copy_lds_window = make_tile_window(
+            a_lds_block, make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}), {0, 0});
+#endif
 
         // B DRAM tile window
-        constexpr auto b_copy_dram_window_dstr = MakeBDramTileDistribution();
         auto b_copy_dram_window =
             make_tile_window(b_dram_grid,
                              make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}),
                              {iN, 0},
-                             b_copy_dram_window_dstr);
+                             MakeBDramTileDistribution());
 
-        // FIXME: implemente "no-distribution window" and remove this
-        constexpr auto b_copy_lds_window_dstr = b_copy_dram_window_dstr;
-
-        // FIXME: implemente "no-distribution window" and remove this
         auto b_copy_lds_window =
             make_tile_window(b_lds_block,
                              make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}),
                              {0, 0},
-                             b_copy_lds_window_dstr);
+                             b_copy_dram_window.GetTileDistribution());
 
-        // FIXME: implemente "no-distribution window" and remove this
-        auto a_lds_gemm_window = a_copy_lds_window;
-        auto b_lds_gemm_window = b_copy_lds_window;
+        // A tile for block GEMM
+        auto a_lds_gemm_window = make_tile_window(
+            a_lds_block, make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}), {0, 0});
 
-        // C tile
+        // A tile for block GEMM
+        auto b_lds_gemm_window = make_tile_window(
+            b_lds_block, make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}), {0, 0});
+
+        // Acc tile
         auto acc_block_tile = decltype(block_gemm_cr_as_bs(a_lds_gemm_window, b_lds_gemm_window)){};
 
         // prefetch
@@ -396,14 +394,11 @@ struct Gemm
         auto c_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<32>{}, Number<1>{});
 
-        // FIXME: implemente "no-distribution window" and remove this
-        constexpr auto c_block_distr = c_block_tile.GetTileDistribution();
-
         auto c_dram_window =
             make_tile_window(c_dram_grid,
                              make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}),
                              {iM, iN},
-                             c_block_distr);
+                             c_block_tile.GetTileDistribution());
 
         store_tile(c_dram_window, c_block_tile);
     }
