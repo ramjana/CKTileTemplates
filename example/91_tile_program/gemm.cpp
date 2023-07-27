@@ -27,6 +27,7 @@
 #include "gemm_impl_naive_pipeline.hpp"
 #include "gemm_impl_better_pipeline.hpp"
 #include "gemm_impl_lds_allocator.hpp"
+#include "gemm_impl_dram_to_lds_loader.hpp"
 
 template <typename ADataType, typename BDataType, typename CDataType, typename AccDataType>
 void reference_gemm(const Tensor<ADataType>& a_m_k,
@@ -108,7 +109,7 @@ int main(int argc, char* argv[])
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-#if 0
+#if 1
     using LdsAllocator = LdsAllocator2d<ADataType,
                                         BDataType,
                                         CDataType,
@@ -135,6 +136,17 @@ int main(int argc, char* argv[])
 #endif
 
 #if 1
+    using Dram2LdsLoader = BetterDram2LdsLoader<ADataType,
+                                                BDataType,
+                                                CDataType,
+                                                kBlockSize,
+                                                kGemmMPerBlock,
+                                                kGemmNPerBlock,
+                                                kGemmKPerBlock>;
+#else
+#endif
+
+#if 1
     const auto gemm_kernel = GemmNaivePipeline<ADataType,
                                                BDataType,
                                                CDataType,
@@ -148,7 +160,8 @@ int main(int argc, char* argv[])
                                                kGemmMPerBlock,
                                                kGemmNPerBlock,
                                                kGemmKPerBlock,
-                                               LdsAllocator>{};
+                                               LdsAllocator,
+                                               Dram2LdsLoader>{};
 #else
     const auto gemm_kernel = GemmBetterPipeline<ADataType,
                                                 BDataType,

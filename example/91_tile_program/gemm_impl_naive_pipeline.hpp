@@ -12,49 +12,10 @@ template <typename ADataType,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,
           ck::index_t kKPerBlock,
-          typename LdsAllocator>
+          typename LdsAllocator,
+          typename Dram2LdsLoader>
 struct GemmNaivePipeline
 {
-    __host__ __device__ static constexpr auto MakeADramTileDistribution()
-    {
-        using namespace ck;
-        using namespace ck::tile_program;
-
-        constexpr index_t kK1 = 16 / sizeof(ADataType);
-        constexpr index_t kK0 = kKPerBlock / kK1;
-        constexpr index_t kM2 = get_warp_size() / kK0;
-        constexpr index_t kM1 = kBlockSize / get_warp_size();
-        constexpr index_t kM0 = kMPerBlock / (kM2 * kM1);
-
-        return make_static_tile_distribution(
-            StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<kM0, kM1, kM2>, Sequence<kK0, kK1>>,
-                                           Tuple<Sequence<1>, Sequence<1, 2>>,
-                                           Tuple<Sequence<1>, Sequence<2, 0>>,
-                                           Sequence<1, 2>,
-                                           Sequence<0, 1>>{});
-    }
-
-    __host__ __device__ static constexpr auto MakeBDramTileDistribution()
-    {
-        using namespace ck;
-        using namespace ck::tile_program;
-
-        constexpr index_t kK1 = 16 / sizeof(BDataType);
-        constexpr index_t kK0 = kKPerBlock / kK1;
-        constexpr index_t kN2 = get_warp_size() / kK0;
-        constexpr index_t kN1 = kBlockSize / get_warp_size();
-        constexpr index_t kN0 = kNPerBlock / (kN2 * kN1);
-
-        return make_static_tile_distribution(
-            StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<kN0, kN1, kN2>, Sequence<kK0, kK1>>,
-                                           Tuple<Sequence<1>, Sequence<1, 2>>,
-                                           Tuple<Sequence<1>, Sequence<2, 0>>,
-                                           Sequence<1, 2>,
-                                           Sequence<0, 1>>{});
-    }
-
     __host__ __device__ static constexpr ck::index_t GetStaticLdsSize()
     {
         return ck::math::integer_divide_ceil(
@@ -132,7 +93,7 @@ struct GemmNaivePipeline
             make_tile_window(a_dram_grid,
                              make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}),
                              {iM, 0},
-                             MakeADramTileDistribution());
+                             Dram2LdsLoader::MakeADramTileDistribution());
 
         auto a_copy_lds_window =
             make_tile_window(a_lds_block,
@@ -145,7 +106,7 @@ struct GemmNaivePipeline
             make_tile_window(b_dram_grid,
                              make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}),
                              {iN, 0},
-                             MakeBDramTileDistribution());
+                             Dram2LdsLoader::MakeBDramTileDistribution());
 
         auto b_copy_lds_window =
             make_tile_window(b_lds_block,
@@ -164,32 +125,21 @@ struct GemmNaivePipeline
         // Acc tile
         auto acc_block_tile = decltype(block_gemm_cr_as_bs(a_lds_gemm_window, b_lds_gemm_window)){};
 
-        // prefetch
-        // global read 0
-        auto a_block_tile = load_tile(a_copy_dram_window);
-        auto b_block_tile = load_tile(b_copy_dram_window);
-
-        // move to 1
-        move_tile_window(a_copy_dram_window, {0, kKPerBlock});
-        move_tile_window(b_copy_dram_window, {0, kKPerBlock});
-
         // Initialize C
         tile_elementwise_inout([](auto& acc) { acc = 0; }, acc_block_tile);
-
-        // LDS write 0
-        store_tile(a_copy_lds_window, a_block_tile);
-        // global read 1
-        a_block_tile = load_tile(a_copy_dram_window);
-
-        // LDS write 0
-        store_tile(b_copy_lds_window, b_block_tile);
-        // global read 1
-        b_block_tile = load_tile(b_copy_dram_window);
 
         index_t iK = 0;
 
         do
         {
+            // global read i
+            const auto a_block_tile = load_tile(a_copy_dram_window);
+            const auto b_block_tile = load_tile(b_copy_dram_window);
+
+            // LDS write i
+            store_tile(a_copy_lds_window, a_block_tile);
+            store_tile(b_copy_lds_window, b_block_tile);
+
             ps.block_sync_lds();
 
             // GEMM i
@@ -197,42 +147,13 @@ struct GemmNaivePipeline
 
             ps.block_sync_lds();
 
-            // move to i + 2
+            // move to i + 1
             move_tile_window(a_copy_dram_window, {0, kKPerBlock});
             move_tile_window(b_copy_dram_window, {0, kKPerBlock});
 
-            // LDS write i + 1
-            store_tile(a_copy_lds_window, a_block_tile);
-            // global read i + 2
-            a_block_tile = load_tile(a_copy_dram_window);
-
-            // LDS write i + 1
-            store_tile(b_copy_lds_window, b_block_tile);
-            // global read i + 2
-            b_block_tile = load_tile(b_copy_dram_window);
-
             iK += kKPerBlock;
 
-        } while(iK < K - 2 * kKPerBlock);
-
-        // tail
-        {
-            ps.block_sync_lds();
-
-            // GEMM num_loop - 2
-            block_gemm_cr_as_bs(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
-
-            ps.block_sync_lds();
-
-            // LDS write num_loop - 1
-            store_tile(a_copy_lds_window, a_block_tile);
-            store_tile(b_copy_lds_window, b_block_tile);
-
-            ps.block_sync_lds();
-
-            // GEMM num_loop - 1
-            block_gemm_cr_as_bs(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
-        }
+        } while(iK < K);
 
         // type convert
         auto c_block_tile = tile_elementwise_in(
