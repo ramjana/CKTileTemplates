@@ -136,14 +136,21 @@ int main(int argc, char* argv[])
 #endif
 
 #if 1
-    using Dram2LdsLoader = BetterDram2LdsLoader<ADataType,
+    using Dram2LdsLoader = NaiveDram2LdsLoader<ADataType,
+                                               BDataType,
+                                               CDataType,
+                                               kBlockSize,
+                                               kGemmMPerBlock,
+                                               kGemmNPerBlock,
+                                               kGemmKPerBlock>;
+#else
+    using Dram2LdsLoader   = BetterDram2LdsLoader<ADataType,
                                                 BDataType,
                                                 CDataType,
                                                 kBlockSize,
                                                 kGemmMPerBlock,
                                                 kGemmNPerBlock,
                                                 kGemmKPerBlock>;
-#else
 #endif
 
 #if 1
@@ -176,7 +183,8 @@ int main(int argc, char* argv[])
                                                 kGemmMPerBlock,
                                                 kGemmNPerBlock,
                                                 kGemmKPerBlock,
-                                                LdsAllocator>{};
+                                                LdsAllocator,
+                                                Dram2LdsLoader>{};
 #endif
 
     float ave_time = launch(ProgramServer{},
