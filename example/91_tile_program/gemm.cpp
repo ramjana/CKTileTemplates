@@ -233,7 +233,7 @@ struct Gemm
         // FIXME: move into a fnunction
         constexpr auto a_copy_dram_window_dstr = make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
+                                           Tuple<Sequence<4, 4, 16>, Sequence<4, 8>>,
                                            Tuple<Sequence<1>, Sequence<1, 2>>,
                                            Tuple<Sequence<1>, Sequence<2, 0>>,
                                            Sequence<1, 2>,
@@ -406,7 +406,7 @@ int main(int argc, char* argv[])
     a_buf.ToDevice(a_host.mData.data());
     b_buf.ToDevice(b_host.mData.data());
 
-    constexpr ck::index_t kGemmMPerBlock = 128;
+    constexpr ck::index_t kGemmMPerBlock = 256;
     constexpr ck::index_t kGemmNPerBlock = 128;
     constexpr ck::index_t kGemmKPerBlock = 32;
 
