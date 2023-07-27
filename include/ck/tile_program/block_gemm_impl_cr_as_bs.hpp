@@ -194,13 +194,13 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
         "wrong!");
 
     // construct A/B-block-window from A/B-block-distribution
-    auto a_block_window = make_block_window(a_block_window_tmp.GetBottomTensorView(),
-                                            a_block_window_tmp.GetBlockWindowOrigin(),
-                                            a_block_dstr);
+    auto a_block_window = make_tile_window(a_block_window_tmp.GetBottomTensorView(),
+                                           a_block_window_tmp.GetWindowOrigin(),
+                                           a_block_dstr);
 
-    auto b_block_window = make_block_window(b_block_window_tmp.GetBottomTensorView(),
-                                            b_block_window_tmp.GetBlockWindowOrigin(),
-                                            b_block_dstr);
+    auto b_block_window = make_tile_window(b_block_window_tmp.GetBottomTensorView(),
+                                           b_block_window_tmp.GetWindowOrigin(),
+                                           b_block_dstr);
 
     constexpr auto a_warp_y_lengths = to_sequence(WG::AWarpDstr{}.GetYs2DDescriptor().GetLengths());
     constexpr auto b_warp_y_lengths = to_sequence(WG::BWarpDstr{}.GetYs2DDescriptor().GetLengths());
@@ -214,21 +214,19 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
             // read A warp tensor from A block window
             WG::AWarpTensor a_warp_tensor;
 
-            a_warp_tensor.GetThreadBuffer() =
-                detail::load_sliced_thread_data_from_block_tensor_window(
-                    a_block_window,
-                    MultiIndex<2 + WG::AWarpDstr::NDimY>{mIter, kIter, 0},
-                    merge_sequences(Sequence<1, 1>{}, a_warp_y_lengths));
+            a_warp_tensor.GetThreadBuffer() = detail::load_sliced_thread_data_from_tile_window(
+                a_block_window,
+                MultiIndex<2 + WG::AWarpDstr::NDimY>{mIter, kIter, 0},
+                merge_sequences(Sequence<1, 1>{}, a_warp_y_lengths));
 
             static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
                 // read B warp tensor from B Block window
                 WG::BWarpTensor b_warp_tensor;
 
-                b_warp_tensor.GetThreadBuffer() =
-                    detail::load_sliced_thread_data_from_block_tensor_window(
-                        b_block_window,
-                        MultiIndex<2 + WG::BWarpDstr::NDimY>{nIter, kIter, 0},
-                        merge_sequences(Sequence<1, 1>{}, b_warp_y_lengths));
+                b_warp_tensor.GetThreadBuffer() = detail::load_sliced_thread_data_from_tile_window(
+                    b_block_window,
+                    MultiIndex<2 + WG::BWarpDstr::NDimY>{nIter, kIter, 0},
+                    merge_sequences(Sequence<1, 1>{}, b_warp_y_lengths));
 
                 // read C warp tensor from C block tensor
                 WG::CWarpTensor c_warp_tensor;

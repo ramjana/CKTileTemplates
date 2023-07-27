@@ -11,10 +11,10 @@
 #include "tile_program.hpp"
 #include "ck/tile_program/meta_data_buffer.hpp"
 #include "ck/tile_program/tile_distribution.hpp"
-#include "ck/tile_program/block_tensor_window.hpp"
+#include "ck/tile_program/tile_window.hpp"
 #include "ck/tile_program/static_distributed_tensor.hpp"
-#include "ck/tile_program/load_block_distributed_tensor.hpp"
-#include "ck/tile_program/store_block_distributed_tensor.hpp"
+#include "ck/tile_program/load_tile.hpp"
+#include "ck/tile_program/store_tile.hpp"
 #include "ck/tile_program/block_gemm_impl_cr_as_bs.hpp"
 #include "ck/tile_program/block_elementwise.hpp"
 
@@ -240,13 +240,13 @@ struct Gemm
                                            Sequence<0, 1>>{});
 
         // FIXME: move into a fnunction
-        auto a_copy_dram_window = make_block_window(a_dram_grid, {iM, 0}, a_copy_dram_window_dstr);
+        auto a_copy_dram_window = make_tile_window(a_dram_grid, {iM, 0}, a_copy_dram_window_dstr);
 
         // FIXME: implemente "no-distribution window" and remove this
         constexpr auto a_copy_lds_window_dstr = a_copy_dram_window_dstr;
 
         // FIXME: implemente "no-distribution window" and remove this
-        auto a_copy_lds_window = make_block_window(a_lds_block, {0, 0}, a_copy_lds_window_dstr);
+        auto a_copy_lds_window = make_tile_window(a_lds_block, {0, 0}, a_copy_lds_window_dstr);
 
         // B copy
         // FIXME: move into a fnunction and provide optimization policy
@@ -259,13 +259,13 @@ struct Gemm
                                            Sequence<0, 1>>{});
 
         // FIXME: move into a fnunction
-        auto b_copy_dram_window = make_block_window(b_dram_grid, {iN, 0}, b_copy_dram_window_dstr);
+        auto b_copy_dram_window = make_tile_window(b_dram_grid, {iN, 0}, b_copy_dram_window_dstr);
 
         // FIXME: implemente "no-distribution window" and remove this
         constexpr auto b_copy_lds_window_dstr = b_copy_dram_window_dstr;
 
         // FIXME: implemente "no-distribution window" and remove this
-        auto b_copy_lds_window = make_block_window(b_lds_block, {0, 0}, b_copy_lds_window_dstr);
+        auto b_copy_lds_window = make_tile_window(b_lds_block, {0, 0}, b_copy_lds_window_dstr);
 
         // FIXME: implemente "no-distribution window" and remove this
         auto a_lds_gemm_window = a_copy_lds_window;
@@ -276,25 +276,25 @@ struct Gemm
 
         // prefetch
         // global read 0
-        auto a_block_tile = load_block_tile(a_copy_dram_window);
-        auto b_block_tile = load_block_tile(b_copy_dram_window);
+        auto a_block_tile = load_tile(a_copy_dram_window);
+        auto b_block_tile = load_tile(b_copy_dram_window);
 
         // move to 1
-        move_block_window(a_copy_dram_window, {0, kKPerBlock});
-        move_block_window(b_copy_dram_window, {0, kKPerBlock});
+        move_tile_window(a_copy_dram_window, {0, kKPerBlock});
+        move_tile_window(b_copy_dram_window, {0, kKPerBlock});
 
         // Initialize C
         block_elementwise_inout([](auto& acc) { acc = 0; }, acc_block_tile);
 
         // LDS write 0
-        store_block_tile(a_copy_lds_window, a_block_tile);
+        store_tile(a_copy_lds_window, a_block_tile);
         // global read 1
-        a_block_tile = load_block_tile(a_copy_dram_window);
+        a_block_tile = load_tile(a_copy_dram_window);
 
         // LDS write 0
-        store_block_tile(b_copy_lds_window, b_block_tile);
+        store_tile(b_copy_lds_window, b_block_tile);
         // global read 1
-        b_block_tile = load_block_tile(b_copy_dram_window);
+        b_block_tile = load_tile(b_copy_dram_window);
 
         index_t iK = 0;
 
@@ -308,18 +308,18 @@ struct Gemm
             ps.block_sync_lds();
 
             // move to i + 2
-            move_block_window(a_copy_dram_window, {0, kKPerBlock});
-            move_block_window(b_copy_dram_window, {0, kKPerBlock});
+            move_tile_window(a_copy_dram_window, {0, kKPerBlock});
+            move_tile_window(b_copy_dram_window, {0, kKPerBlock});
 
             // LDS write i + 1
-            store_block_tile(a_copy_lds_window, a_block_tile);
+            store_tile(a_copy_lds_window, a_block_tile);
             // global read i + 2
-            a_block_tile = load_block_tile(a_copy_dram_window);
+            a_block_tile = load_tile(a_copy_dram_window);
 
             // LDS write i + 1
-            store_block_tile(b_copy_lds_window, b_block_tile);
+            store_tile(b_copy_lds_window, b_block_tile);
             // global read i + 2
-            b_block_tile = load_block_tile(b_copy_dram_window);
+            b_block_tile = load_tile(b_copy_dram_window);
 
             iK += kKPerBlock;
 
@@ -335,8 +335,8 @@ struct Gemm
             ps.block_sync_lds();
 
             // LDS write num_loop - 1
-            store_block_tile(a_copy_lds_window, a_block_tile);
-            store_block_tile(b_copy_lds_window, b_block_tile);
+            store_tile(a_copy_lds_window, a_block_tile);
+            store_tile(b_copy_lds_window, b_block_tile);
 
             ps.block_sync_lds();
 
@@ -355,9 +355,9 @@ struct Gemm
         // FIXME: implemente "no-distribution window" and remove this
         constexpr auto c_block_distr = c_block_tile.GetTileDistribution();
 
-        auto c_dram_window = make_block_window(c_dram_grid, {iM, iN}, c_block_distr);
+        auto c_dram_window = make_tile_window(c_dram_grid, {iM, iN}, c_block_distr);
 
-        store_block_tile(c_dram_window, c_block_tile);
+        store_tile(c_dram_window, c_block_tile);
     }
 };
 

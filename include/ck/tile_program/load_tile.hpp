@@ -10,6 +10,7 @@
 #include "ck/tensor_description/tensor_space_filling_curve.hpp"
 
 #include "ck/tile_program/tile_distribution.hpp"
+#include "ck/tile_program/tile_window.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -17,7 +18,7 @@ namespace tile_program {
 // detail used by tile-programming APIs(), not supposed to be used directly
 namespace detail {
 
-// "Y dimension": Y dimensions inside BlockTensorWindow
+// "Y dimension": Y dimensions inside TileWindowWithStaticDistribution
 // input:
 //   y_slice_origin: starting slice origin of Y dimension
 //   y_slice_lengths: slice lengths of Y dimensionr
@@ -25,29 +26,29 @@ namespace detail {
 //   A StaticBuffer holding slice of thread data, and data layout is hardcoded to be in the order of
 //   [Y0, Y1, Y2, ...]
 template <typename BottomTensorView_,
-          typename BlockTensorDistribution_,
+          typename TileDistribution_,
           typename YIndex,
           index_t... YSliceLengths>
-__device__ auto load_sliced_thread_data_from_block_tensor_window(
-    BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& block_tensor_window,
+__device__ auto load_sliced_thread_data_from_tile_window(
+    TileWindowWithStaticDistribution<BottomTensorView_, TileDistribution_>& tile_window,
     const YIndex& ys_slice_origin,
     Sequence<YSliceLengths...>)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;
-    using BlockTensorDstr  = remove_cvref_t<BlockTensorDistribution_>;
-    using BlockWindow      = BlockTensorWindow<BottomTensorView, BlockTensorDstr>;
+    using TileDstr         = remove_cvref_t<TileDistribution_>;
+    using TileWindow       = TileWindowWithStaticDistribution<BottomTensorView, TileDstr>;
 
-    constexpr auto block_dstr = BlockTensorDstr{};
+    constexpr auto tile_dstr = TileDstr{};
 
-    constexpr index_t NDimP = BlockTensorDstr::GetNumOfDimensionP();
-    constexpr index_t NDimY = BlockTensorDstr::GetNumOfDimensionY();
+    constexpr index_t NDimP = TileDstr::GetNumOfDimensionP();
+    constexpr index_t NDimY = TileDstr::GetNumOfDimensionY();
 
     static_assert(NDimY == YIndex::Size() && NDimY == sizeof...(YSliceLengths),
                   "wrong! inconsistent # of dimension");
 
-    static_assert(BlockWindow::HasStaticBlockTensorDistribution(),
-                  "wrong! assume static block distribution");
+    static_assert(TileWindow::HasStaticTileDistribution(),
+                  "wrong! assume static tile distribution");
 
     constexpr auto y_slice_lengths = Sequence<YSliceLengths...>{};
 
@@ -58,7 +59,7 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
 
     constexpr auto tmp = [&y_slice_lengths]() {
         const auto [ys_vector_lengths, ys_vector_strides] =
-            BlockWindow::GetWindowAdaptorYsSafeVectorLengthStrides();
+            TileWindow::GetWindowAdaptorYsSafeVectorLengthStrides();
 
         index_t VectorDimY      = 0;
         index_t ScalarPerVector = 1;
@@ -99,21 +100,21 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
     // move to slice origin
     const auto ps_ys_slice_origin = container_concat(Array<index_t, NDimP>{0}, ys_slice_origin);
 
-    block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(ps_ys_slice_origin);
+    tile_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(ps_ys_slice_origin);
 
     // loop over thread tensor space [y0, y1, ...]
     static_for<0, num_access, 1>{}([&](auto iAccess) {
         // read from bottom tensor
         const vector_t vec_value =
-            block_tensor_window.GetBottomTensorView().template GetVectorizedElements<vector_t>(
-                block_tensor_window.GetBottomTensorThreadCoordinate());
+            tile_window.GetBottomTensorView().template GetVectorizedElements<vector_t>(
+                tile_window.GetBottomTensorThreadCoordinate());
 
         const vector_type_t vec{vec_value};
 
         // data index [y0, y1, ...]
         constexpr auto idx_ys_start = SFC_Ys::GetIndex(iAccess);
 
-        // write into block distributed tensor
+        // write into distributed tensor
         static_for<0, ScalarPerVector, 1>{}([&](auto j) {
             constexpr auto idx_ys = generate_array(
                 [&](auto jj) {
@@ -121,7 +122,7 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
                 },
                 Number<NDimY>{});
 
-            constexpr index_t d = block_dstr.GetYs2DDescriptor().CalculateOffset(idx_ys);
+            constexpr index_t d = tile_dstr.GetYs2DDescriptor().CalculateOffset(idx_ys);
 
             thread_buf.template At<d>() = vec.template AsType<DataType>()[j];
         });
@@ -133,7 +134,7 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
 
             constexpr auto idx_diff_ps_ys = container_concat(Array<index_t, NDimP>{0}, idx_diff_ys);
 
-            block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_ps_ys);
+            tile_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_ps_ys);
         }
     });
 
@@ -143,12 +144,12 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
 
         constexpr auto idx_diff_ps_ys = container_concat(Array<index_t, NDimP>{0}, idx_diff_ys);
 
-        block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_ps_ys);
+        tile_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_ps_ys);
     }
 
     // move back to origin
-    block_tensor_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(
-        MultiIndex<NDimP + NDimY>{0} - ps_ys_slice_origin);
+    tile_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(MultiIndex<NDimP + NDimY>{0} -
+                                                                 ps_ys_slice_origin);
 
     return thread_buf;
 }
@@ -156,44 +157,41 @@ __device__ auto load_sliced_thread_data_from_block_tensor_window(
 } // namespace detail
 
 // FIXME: host dummy function for tile program
-template <typename BottomTensorView_, typename BlockTensorDistribution_>
-__host__ auto load_block_tile(
-    const BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& block_tensor_window)
+template <typename BottomTensorView_, typename TileDistribution_>
+__host__ auto
+load_tile(const TileWindowWithStaticDistribution<BottomTensorView_, TileDistribution_>& tile_window)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;
-    using BlockTensorDstr  = remove_cvref_t<BlockTensorDistribution_>;
-    using BlockWindow      = BlockTensorWindow<BottomTensorView, BlockTensorDstr>;
+    using TileDstr         = remove_cvref_t<TileDistribution_>;
+    using TileWindow       = TileWindowWithStaticDistribution<BottomTensorView, TileDstr>;
 
-    static_assert(BlockWindow::HasStaticBlockTensorDistribution(), "wrong!");
+    static_assert(TileWindow::HasStaticTileDistribution(), "wrong!");
 
-    return make_static_distributed_tensor<DataType>(
-        block_tensor_window.GetBlockTensorDistribution());
+    return make_static_distributed_tensor<DataType>(tile_window.GetTileDistribution());
 }
 
-template <typename BottomTensorView_, typename BlockTensorDistribution_>
+template <typename BottomTensorView_, typename TileDistribution_>
 __device__ auto
-load_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& block_tensor_window)
+load_tile(TileWindowWithStaticDistribution<BottomTensorView_, TileDistribution_>& tile_window)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;
-    using BlockTensorDstr  = remove_cvref_t<BlockTensorDistribution_>;
-    using BlockWindow      = BlockTensorWindow<BottomTensorView, BlockTensorDstr>;
+    using TileDstr         = remove_cvref_t<TileDistribution_>;
+    using TileWindow       = TileWindowWithStaticDistribution<BottomTensorView, TileDstr>;
 
-    static_assert(BlockWindow::HasStaticBlockTensorDistribution(), "wrong!");
+    static_assert(TileWindow::HasStaticTileDistribution(), "wrong!");
 
-    constexpr auto block_dstr = BlockTensorDstr{};
+    constexpr auto tile_dstr = TileDstr{};
 
-    constexpr index_t NDimY = block_dstr.GetYs2DDescriptor().GetNumOfDimension();
+    constexpr index_t NDimY = tile_dstr.GetYs2DDescriptor().GetNumOfDimension();
 
-    auto block_dstr_tensor = make_static_distributed_tensor<DataType>(block_dstr);
+    auto dstr_tensor = make_static_distributed_tensor<DataType>(tile_dstr);
 
-    block_dstr_tensor.GetThreadBuffer() = detail::load_sliced_thread_data_from_block_tensor_window(
-        block_tensor_window,
-        MultiIndex<NDimY>{0},
-        to_sequence(block_dstr.GetYs2DDescriptor().GetLengths()));
+    dstr_tensor.GetThreadBuffer() = detail::load_sliced_thread_data_from_tile_window(
+        tile_window, MultiIndex<NDimY>{0}, to_sequence(tile_dstr.GetYs2DDescriptor().GetLengths()));
 
-    return block_dstr_tensor;
+    return dstr_tensor;
 }
 
 } // namespace tile_program
