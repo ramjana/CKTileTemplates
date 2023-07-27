@@ -32,29 +32,17 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 2;
-    constexpr index_t NIterPerWarp = 2;
-    constexpr index_t KIterPerWarp = 4;
-
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
 #elif 0
     // 128x128x32, 32x32x16, 2x2 warps
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 2;
-    constexpr index_t NIterPerWarp = 2;
-    constexpr index_t KIterPerWarp = 2;
-
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 0
     // 128x128x32, 32x32x16, 4x1 warps,
     constexpr index_t MWarp = 4;
     constexpr index_t NWarp = 1;
-
-    constexpr index_t MIterPerWarp = 1;
-    constexpr index_t NIterPerWarp = 4;
-    constexpr index_t KIterPerWarp = 2;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 0
@@ -72,19 +60,11 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 4;
-    constexpr index_t NIterPerWarp = 4;
-    constexpr index_t KIterPerWarp = 2;
-
     using WG = WarpGemmMfmaF16F16F32M16N16K16;
 #elif 0
     // 128x256x32   32x32x8
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
-
-    constexpr index_t MIterPerWarp = 2;
-    constexpr index_t NIterPerWarp = 4;
-    constexpr index_t KIterPerWarp = 4;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
 #elif 0
@@ -92,19 +72,11 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 2;
-    constexpr index_t NIterPerWarp = 4;
-    constexpr index_t KIterPerWarp = 2;
-
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 0
     // 128x256x32   16x16x16
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
-
-    constexpr index_t MIterPerWarp = 4;
-    constexpr index_t NIterPerWarp = 8;
-    constexpr index_t KIterPerWarp = 2;
 
     using WG = WarpGemmMfmaF16F16F32M16N16K16;
 #elif 1
@@ -112,17 +84,9 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 4;
-    constexpr index_t NIterPerWarp = 2;
-    constexpr index_t KIterPerWarp = 2;
-
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #endif
 
-    // FIXME A/BlockWindow lengths need to be static;
-    // static_assert
-
-#if 0 // debug
     constexpr index_t MPerBlock = ABlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
     constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
     constexpr index_t KPerBlock = ABlockWindowTmp{}.GetWindowLengths()[Number<1>{}];
@@ -130,14 +94,6 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     constexpr index_t MIterPerWarp = MPerBlock / (MWarp * WG::M);
     constexpr index_t NIterPerWarp = NPerBlock / (NWarp * WG::N);
     constexpr index_t KIterPerWarp = KPerBlock / WG::K;
-
-    static_assert(MPerBlock == 128, "wrong!");
-    static_assert(NPerBlock == 256, "wrong!");
-    static_assert(KPerBlock ==  32, "wrong!");
-    static_assert(WG::M == 16, "wrong!");
-    static_assert(WG::N == 16, "wrong!");
-    static_assert(WG::K == 16, "wrong!");
-#endif
 
     constexpr auto a_block_outer_dstr_encoding =
         StaticTileDistributionEncoding<Sequence<NWarp>,
@@ -163,26 +119,14 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
         Sequence<1, 2>,
         Sequence<0, 0>>{};
 
-    //  WG::AWarpDstrEncoding{}.foo();
-
     constexpr auto a_block_dstr_encode =
         embed_tile_distribution_encoding(a_block_outer_dstr_encoding, WG::AWarpDstrEncoding{});
-
-    //  a_block_dstr_encode.foo();
-
-    //  WG::BWarpDstrEncoding{}.foo();
 
     constexpr auto b_block_dstr_encode =
         embed_tile_distribution_encoding(b_block_outer_dstr_encoding, WG::BWarpDstrEncoding{});
 
-    //  b_block_dstr_encode.foo();
-
-    //  WG::CWarpDstrEncoding{}.foo();
-
     constexpr auto c_block_dstr_encode =
         embed_tile_distribution_encoding(c_block_outer_dstr_encoding, WG::CWarpDstrEncoding{});
-
-    //  c_block_dstr_encode.foo();
 
     constexpr auto a_block_dstr = make_static_tile_distribution(a_block_dstr_encode);
     constexpr auto b_block_dstr = make_static_tile_distribution(b_block_dstr_encode);
@@ -195,10 +139,12 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
 
     // construct A/B-block-window from A/B-block-distribution
     auto a_block_window = make_tile_window(a_block_window_tmp.GetBottomTensorView(),
+                                           a_block_window_tmp.GetWindowLengths(),
                                            a_block_window_tmp.GetWindowOrigin(),
                                            a_block_dstr);
 
     auto b_block_window = make_tile_window(b_block_window_tmp.GetBottomTensorView(),
+                                           b_block_window_tmp.GetWindowLengths(),
                                            b_block_window_tmp.GetWindowOrigin(),
                                            b_block_dstr);
 
@@ -260,35 +206,22 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 2;
-    constexpr index_t NIterPerWarp = 2;
-
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
 #elif 0
     // 128x128x32   32x32x16
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 2;
-    constexpr index_t NIterPerWarp = 2;
-
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 0
     // 128x128x32, 32x32x16, 4x1 warps,
     constexpr index_t MWarp = 4;
     constexpr index_t NWarp = 1;
-
-    constexpr index_t MIterPerWarp = 1;
-    constexpr index_t NIterPerWarp = 4;
-
-    using WG = WarpGemmMfmaF16F16F32M32N32K16;
+    using WG                = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 0
     // 128x128x32, 32x32x16-Transposed C Distribution, 4x1 warps,
     constexpr index_t MWarp = 4;
     constexpr index_t NWarp = 1;
-
-    constexpr index_t MIterPerWarp = 1;
-    constexpr index_t NIterPerWarp = 4;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution;
 #elif 0
@@ -296,17 +229,11 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 4;
-    constexpr index_t NIterPerWarp = 4;
-
     using WG = WarpGemmMfmaF16F16F32M16N16K16;
 #elif 0
     // 128x256x32   32x32x8
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
-
-    constexpr index_t MIterPerWarp = 2;
-    constexpr index_t NIterPerWarp = 4;
 
     using WG = WarpGemmMfmaF16F16F32M32N32K8;
 #elif 0
@@ -314,17 +241,11 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 2;
-    constexpr index_t NIterPerWarp = 4;
-
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #elif 0
     // 128x256x32   16x16x16
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
-
-    constexpr index_t MIterPerWarp = 4;
-    constexpr index_t NIterPerWarp = 8;
 
     using WG = WarpGemmMfmaF16F16F32M16N16K16;
 #elif 1
@@ -332,11 +253,14 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     constexpr index_t MWarp = 2;
     constexpr index_t NWarp = 2;
 
-    constexpr index_t MIterPerWarp = 4;
-    constexpr index_t NIterPerWarp = 2;
-
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #endif
+
+    constexpr index_t MPerBlock = ABlockWindow{}.GetWindowLengths()[Number<0>{}];
+    constexpr index_t NPerBlock = BBlockWindow{}.GetWindowLengths()[Number<0>{}];
+
+    constexpr index_t MIterPerWarp = MPerBlock / (MWarp * WG::M);
+    constexpr index_t NIterPerWarp = NPerBlock / (NWarp * WG::N);
 
     constexpr auto c_block_outer_dstr_encoding = StaticTileDistributionEncoding<
         Sequence<>,

@@ -60,6 +60,7 @@ template <typename ADataType,
           typename AElementWiseOperation,
           typename BElementWiseOperation,
           typename CElementWiseOperation,
+          ck::index_t kBlockSize,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,
           ck::index_t kKPerBlock>
@@ -90,11 +91,13 @@ struct Gemm
         return a_lds_block_desc;
 #elif 1
         constexpr auto a_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
-            make_tuple(kMPerBlock / 2, 2, kKPerBlock), Number<32>{});
+            make_tuple(kMPerBlock / 2, 2, kKPerBlock), Number<kKPerBlock>{});
+
+        constexpr index_t kK1 = 16 / sizeof(ADataType);
 
         constexpr auto a_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
             a_lds_block_desc_d1_d2_d3,
-            make_tuple(make_xor_transform(make_tuple(kMPerBlock / 2, kKPerBlock), 8),
+            make_tuple(make_xor_transform(make_tuple(kMPerBlock / 2, kKPerBlock), kK1),
                        make_pass_through_transform(2)),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
@@ -138,11 +141,13 @@ struct Gemm
 #elif 1
         // XOR layout
         constexpr auto b_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
-            make_tuple(kNPerBlock / 2, 2, kKPerBlock), Number<32>{});
+            make_tuple(kNPerBlock / 2, 2, kKPerBlock), Number<kKPerBlock>{});
+
+        constexpr index_t kK1 = 16 / sizeof(BDataType);
 
         constexpr auto b_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
             b_lds_block_desc_d1_d2_d3,
-            make_tuple(make_xor_transform(make_tuple(kNPerBlock / 2, kKPerBlock), 8),
+            make_tuple(make_xor_transform(make_tuple(kNPerBlock / 2, kKPerBlock), kK1),
                        make_pass_through_transform(2)),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
@@ -156,6 +161,46 @@ struct Gemm
 
         return b_lds_block_desc_n_k;
 #endif
+    }
+
+    __host__ __device__ static constexpr auto MakeADramTileDistribution()
+    {
+        using namespace ck;
+        using namespace ck::tile_program;
+
+        constexpr index_t kK1 = 16 / sizeof(ADataType);
+        constexpr index_t kK0 = kKPerBlock / kK1;
+        constexpr index_t kM2 = get_warp_size() / kK0;
+        constexpr index_t kM1 = kBlockSize / get_warp_size();
+        constexpr index_t kM0 = kMPerBlock / (kM2 * kM1);
+
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<kM0, kM1, kM2>, Sequence<kK0, kK1>>,
+                                           Tuple<Sequence<1>, Sequence<1, 2>>,
+                                           Tuple<Sequence<1>, Sequence<2, 0>>,
+                                           Sequence<1, 2>,
+                                           Sequence<0, 1>>{});
+    }
+
+    __host__ __device__ static constexpr auto MakeBDramTileDistribution()
+    {
+        using namespace ck;
+        using namespace ck::tile_program;
+
+        constexpr index_t kK1 = 16 / sizeof(BDataType);
+        constexpr index_t kK0 = kKPerBlock / kK1;
+        constexpr index_t kN2 = get_warp_size() / kK0;
+        constexpr index_t kN1 = kBlockSize / get_warp_size();
+        constexpr index_t kN0 = kNPerBlock / (kN2 * kN1);
+
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<kN0, kN1, kN2>, Sequence<kK0, kK1>>,
+                                           Tuple<Sequence<1>, Sequence<1, 2>>,
+                                           Tuple<Sequence<1>, Sequence<2, 0>>,
+                                           Sequence<1, 2>,
+                                           Sequence<0, 1>>{});
     }
 
     //
@@ -229,43 +274,42 @@ struct Gemm
 
         auto b_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_b_lds, b_lds_block_desc);
 
-        // A copy
-        // FIXME: move into a fnunction
-        constexpr auto a_copy_dram_window_dstr = make_static_tile_distribution(
-            StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<4, 4, 16>, Sequence<4, 8>>,
-                                           Tuple<Sequence<1>, Sequence<1, 2>>,
-                                           Tuple<Sequence<1>, Sequence<2, 0>>,
-                                           Sequence<1, 2>,
-                                           Sequence<0, 1>>{});
+        // A DRAM tile window
+        constexpr auto a_copy_dram_window_dstr = MakeADramTileDistribution();
 
-        // FIXME: move into a fnunction
-        auto a_copy_dram_window = make_tile_window(a_dram_grid, {iM, 0}, a_copy_dram_window_dstr);
+        auto a_copy_dram_window =
+            make_tile_window(a_dram_grid,
+                             make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}),
+                             {iM, 0},
+                             a_copy_dram_window_dstr);
 
         // FIXME: implemente "no-distribution window" and remove this
         constexpr auto a_copy_lds_window_dstr = a_copy_dram_window_dstr;
 
         // FIXME: implemente "no-distribution window" and remove this
-        auto a_copy_lds_window = make_tile_window(a_lds_block, {0, 0}, a_copy_lds_window_dstr);
+        auto a_copy_lds_window =
+            make_tile_window(a_lds_block,
+                             make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}),
+                             {0, 0},
+                             a_copy_lds_window_dstr);
 
-        // B copy
-        // FIXME: move into a fnunction and provide optimization policy
-        constexpr auto b_copy_dram_window_dstr = make_static_tile_distribution(
-            StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
-                                           Tuple<Sequence<1>, Sequence<1, 2>>,
-                                           Tuple<Sequence<1>, Sequence<2, 0>>,
-                                           Sequence<1, 2>,
-                                           Sequence<0, 1>>{});
-
-        // FIXME: move into a fnunction
-        auto b_copy_dram_window = make_tile_window(b_dram_grid, {iN, 0}, b_copy_dram_window_dstr);
+        // B DRAM tile window
+        constexpr auto b_copy_dram_window_dstr = MakeBDramTileDistribution();
+        auto b_copy_dram_window =
+            make_tile_window(b_dram_grid,
+                             make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}),
+                             {iN, 0},
+                             b_copy_dram_window_dstr);
 
         // FIXME: implemente "no-distribution window" and remove this
         constexpr auto b_copy_lds_window_dstr = b_copy_dram_window_dstr;
 
         // FIXME: implemente "no-distribution window" and remove this
-        auto b_copy_lds_window = make_tile_window(b_lds_block, {0, 0}, b_copy_lds_window_dstr);
+        auto b_copy_lds_window =
+            make_tile_window(b_lds_block,
+                             make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}),
+                             {0, 0},
+                             b_copy_lds_window_dstr);
 
         // FIXME: implemente "no-distribution window" and remove this
         auto a_lds_gemm_window = a_copy_lds_window;
@@ -355,7 +399,11 @@ struct Gemm
         // FIXME: implemente "no-distribution window" and remove this
         constexpr auto c_block_distr = c_block_tile.GetTileDistribution();
 
-        auto c_dram_window = make_tile_window(c_dram_grid, {iM, iN}, c_block_distr);
+        auto c_dram_window =
+            make_tile_window(c_dram_grid,
+                             make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}),
+                             {iM, iN},
+                             c_block_distr);
 
         store_tile(c_dram_window, c_block_tile);
     }
@@ -425,6 +473,7 @@ int main(int argc, char* argv[])
                                  ck::tensor_operation::element_wise::PassThrough,
                                  ck::tensor_operation::element_wise::PassThrough,
                                  ck::tensor_operation::element_wise::PassThrough,
+                                 kBlockSize,
                                  kGemmMPerBlock,
                                  kGemmNPerBlock,
                                  kGemmKPerBlock>{},

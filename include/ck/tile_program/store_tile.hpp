@@ -14,21 +14,30 @@ namespace ck {
 namespace tile_program {
 
 // FIXME: host dummy function for tile program
-template <typename BottomTensorView_, typename TileDistribution_, typename DataType_>
-__host__ void store_tile(TileWindowWithStaticDistribution<BottomTensorView_, TileDistribution_>&,
-                         const StaticDistributedTensor<DataType_, TileDistribution_>&)
+template <typename BottomTensorView_,
+          typename WindowLengths_,
+          typename TileDistribution_,
+          typename DataType_>
+__host__ void
+store_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&,
+           const StaticDistributedTensor<DataType_, TileDistribution_>&)
 {
 }
 
-template <typename BottomTensorView_, typename TileDistribution_, typename DataType_>
+template <typename BottomTensorView_,
+          typename WindowLengths_,
+          typename TileDistribution_,
+          typename DataType_>
 __device__ void
-store_tile(TileWindowWithStaticDistribution<BottomTensorView_, TileDistribution_>& tile_window,
+store_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&
+               tile_window,
            const StaticDistributedTensor<DataType_, TileDistribution_>& dstr_tensor)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;
+    using WindowLengths    = remove_cvref_t<WindowLengths_>;
     using TileDstr         = remove_cvref_t<TileDistribution_>;
-    using TileWindow       = TileWindowWithStaticDistribution<BottomTensorView, TileDstr>;
+    using TileWindow = TileWindowWithStaticDistribution<BottomTensorView, WindowLengths, TileDstr>;
 
     static_assert(is_same_v<remove_cvref_t<DataType_>, DataType>, "wrong!");
     static_assert(TileWindow::HasStaticTileDistribution(), "wrong!");

@@ -26,18 +26,21 @@ namespace detail {
 //   A StaticBuffer holding slice of thread data, and data layout is hardcoded to be in the order of
 //   [Y0, Y1, Y2, ...]
 template <typename BottomTensorView_,
+          typename WindowLengths_,
           typename TileDistribution_,
           typename YIndex,
           index_t... YSliceLengths>
 __device__ auto load_sliced_thread_data_from_tile_window(
-    TileWindowWithStaticDistribution<BottomTensorView_, TileDistribution_>& tile_window,
+    TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&
+        tile_window,
     const YIndex& ys_slice_origin,
     Sequence<YSliceLengths...>)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;
+    using WindowLengths    = remove_cvref_t<WindowLengths_>;
     using TileDstr         = remove_cvref_t<TileDistribution_>;
-    using TileWindow       = TileWindowWithStaticDistribution<BottomTensorView, TileDstr>;
+    using TileWindow = TileWindowWithStaticDistribution<BottomTensorView, WindowLengths, TileDstr>;
 
     constexpr auto tile_dstr = TileDstr{};
 
@@ -157,29 +160,37 @@ __device__ auto load_sliced_thread_data_from_tile_window(
 } // namespace detail
 
 // FIXME: host dummy function for tile program
-template <typename BottomTensorView_, typename TileDistribution_>
-__host__ auto
-load_tile(const TileWindowWithStaticDistribution<BottomTensorView_, TileDistribution_>& tile_window)
+template <typename BottomTensorView_, typename WindowLengths_, typename TileDistribution_>
+__host__ auto load_tile(
+    const TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&
+        tile_window)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;
+    using WindowLengths    = remove_cvref_t<WindowLengths_>;
     using TileDstr         = remove_cvref_t<TileDistribution_>;
-    using TileWindow       = TileWindowWithStaticDistribution<BottomTensorView, TileDstr>;
+    using TileWindow = TileWindowWithStaticDistribution<BottomTensorView, WindowLengths, TileDstr>;
 
+    static_assert(is_known_at_compile_time<WindowLengths>::value,
+                  "wrong! lengths should be static");
     static_assert(TileWindow::HasStaticTileDistribution(), "wrong!");
 
     return make_static_distributed_tensor<DataType>(tile_window.GetTileDistribution());
 }
 
-template <typename BottomTensorView_, typename TileDistribution_>
+template <typename BottomTensorView_, typename WindowLengths_, typename TileDistribution_>
 __device__ auto
-load_tile(TileWindowWithStaticDistribution<BottomTensorView_, TileDistribution_>& tile_window)
+load_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&
+              tile_window)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;
+    using WindowLengths    = remove_cvref_t<WindowLengths_>;
     using TileDstr         = remove_cvref_t<TileDistribution_>;
-    using TileWindow       = TileWindowWithStaticDistribution<BottomTensorView, TileDstr>;
+    using TileWindow = TileWindowWithStaticDistribution<BottomTensorView, WindowLengths, TileDstr>;
 
+    static_assert(is_known_at_compile_time<WindowLengths>::value,
+                  "wrong! lengths should be static");
     static_assert(TileWindow::HasStaticTileDistribution(), "wrong!");
 
     constexpr auto tile_dstr = TileDstr{};
