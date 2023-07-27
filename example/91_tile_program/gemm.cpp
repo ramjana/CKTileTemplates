@@ -16,7 +16,7 @@
 #include "ck/tile_program/load_tile.hpp"
 #include "ck/tile_program/store_tile.hpp"
 #include "ck/tile_program/block_gemm_impl_cr_as_bs.hpp"
-#include "ck/tile_program/block_elementwise.hpp"
+#include "ck/tile_program/tile_elementwise.hpp"
 
 #include "ck/library/utility/check_err.hpp"
 #include "ck/library/utility/device_memory.hpp"
@@ -284,7 +284,7 @@ struct Gemm
         move_tile_window(b_copy_dram_window, {0, kKPerBlock});
 
         // Initialize C
-        block_elementwise_inout([](auto& acc) { acc = 0; }, acc_block_tile);
+        tile_elementwise_inout([](auto& acc) { acc = 0; }, acc_block_tile);
 
         // LDS write 0
         store_tile(a_copy_lds_window, a_block_tile);
@@ -345,7 +345,7 @@ struct Gemm
         }
 
         // type convert
-        auto c_block_tile = block_elementwise_in(
+        auto c_block_tile = tile_elementwise_in(
             [](const auto& acc) { return type_convert<CDataType>(acc); }, acc_block_tile);
 
         // store C

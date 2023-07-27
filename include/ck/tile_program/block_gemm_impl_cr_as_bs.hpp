@@ -9,7 +9,7 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
 #include "ck/tile_program/tile_distribution.hpp"
-#include "ck/tile_program/block_elementwise.hpp"
+#include "ck/tile_program/tile_elementwise.hpp"
 #include "ck/tile_program/warp_gemm.hpp"
 
 namespace ck {
@@ -355,7 +355,7 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
 
     auto c_block_tensor = make_static_distributed_tensor<CDataType>(c_block_dstr);
 
-    block_elementwise_inout([](auto& c) { c = 0; }, c_block_tensor);
+    tile_elementwise_inout([](auto& c) { c = 0; }, c_block_tensor);
 
     block_gemm_cr_as_bs(c_block_tensor, a_block_window, b_block_window);
 
