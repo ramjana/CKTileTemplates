@@ -6,7 +6,7 @@
 #include "ck/utility/common_header.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tensor_description/tensor_adaptor_coordinate.hpp"
-#include "ck/tile_program/block_tensor_distribution.hpp"
+#include "ck/tile_program/tile_distribution.hpp"
 
 namespace ck {
 namespace tile_program {

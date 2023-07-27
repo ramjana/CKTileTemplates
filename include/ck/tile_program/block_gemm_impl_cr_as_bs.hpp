@@ -8,7 +8,7 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
-#include "ck/tile_program/block_tensor_distribution.hpp"
+#include "ck/tile_program/tile_distribution.hpp"
 #include "ck/tile_program/block_elementwise.hpp"
 #include "ck/tile_program/warp_gemm.hpp"
 
@@ -139,23 +139,23 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     static_assert(WG::K == 16, "wrong!");
 #endif
 
-    constexpr auto a_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
-        Sequence<NWarp>,
-        Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<KIterPerWarp>>,
-        Tuple<Sequence<1, 0>>,
-        Tuple<Sequence<1, 0>>,
-        Sequence<1, 2>,
-        Sequence<0, 0>>{};
+    constexpr auto a_block_outer_dstr_encoding =
+        StaticTileDistributionEncoding<Sequence<NWarp>,
+                                       Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<KIterPerWarp>>,
+                                       Tuple<Sequence<1, 0>>,
+                                       Tuple<Sequence<1, 0>>,
+                                       Sequence<1, 2>,
+                                       Sequence<0, 0>>{};
 
-    constexpr auto b_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
-        Sequence<MWarp>,
-        Tuple<Sequence<NIterPerWarp, NWarp>, Sequence<KIterPerWarp>>,
-        Tuple<Sequence<0, 1>>,
-        Tuple<Sequence<0, 1>>,
-        Sequence<1, 2>,
-        Sequence<0, 0>>{};
+    constexpr auto b_block_outer_dstr_encoding =
+        StaticTileDistributionEncoding<Sequence<MWarp>,
+                                       Tuple<Sequence<NIterPerWarp, NWarp>, Sequence<KIterPerWarp>>,
+                                       Tuple<Sequence<0, 1>>,
+                                       Tuple<Sequence<0, 1>>,
+                                       Sequence<1, 2>,
+                                       Sequence<0, 0>>{};
 
-    constexpr auto c_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
+    constexpr auto c_block_outer_dstr_encoding = StaticTileDistributionEncoding<
         Sequence<>,
         Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<NIterPerWarp, NWarp>>,
         Tuple<Sequence<1, 2>>,
@@ -166,31 +166,31 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     //  WG::AWarpDstrEncoding{}.foo();
 
     constexpr auto a_block_dstr_encode =
-        embed_tensor_distribution_encoding(a_block_outer_dstr_encoding, WG::AWarpDstrEncoding{});
+        embed_tile_distribution_encoding(a_block_outer_dstr_encoding, WG::AWarpDstrEncoding{});
 
     //  a_block_dstr_encode.foo();
 
     //  WG::BWarpDstrEncoding{}.foo();
 
     constexpr auto b_block_dstr_encode =
-        embed_tensor_distribution_encoding(b_block_outer_dstr_encoding, WG::BWarpDstrEncoding{});
+        embed_tile_distribution_encoding(b_block_outer_dstr_encoding, WG::BWarpDstrEncoding{});
 
     //  b_block_dstr_encode.foo();
 
     //  WG::CWarpDstrEncoding{}.foo();
 
     constexpr auto c_block_dstr_encode =
-        embed_tensor_distribution_encoding(c_block_outer_dstr_encoding, WG::CWarpDstrEncoding{});
+        embed_tile_distribution_encoding(c_block_outer_dstr_encoding, WG::CWarpDstrEncoding{});
 
     //  c_block_dstr_encode.foo();
 
-    constexpr auto a_block_dstr = make_static_block_tensor_distribution(a_block_dstr_encode);
-    constexpr auto b_block_dstr = make_static_block_tensor_distribution(b_block_dstr_encode);
+    constexpr auto a_block_dstr = make_static_tile_distribution(a_block_dstr_encode);
+    constexpr auto b_block_dstr = make_static_tile_distribution(b_block_dstr_encode);
 
     static_assert(
         is_same_v<remove_cvref_t<decltype(c_block_dstr_encode)>,
                   remove_cvref_t<decltype(
-                      CBlockTensor::GetBlockDistribution().GetStaticTensorDistributionEncoding())>>,
+                      CBlockTensor::GetBlockDistribution().GetStaticTileDistributionEncoding())>>,
         "wrong!");
 
     // construct A/B-block-window from A/B-block-distribution
@@ -340,7 +340,7 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
     using WG = WarpGemmMfmaF16F16F32M32N32K16;
 #endif
 
-    constexpr auto c_block_outer_dstr_encoding = StaticTensorDistributionEncoding<
+    constexpr auto c_block_outer_dstr_encoding = StaticTileDistributionEncoding<
         Sequence<>,
         Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<NIterPerWarp, NWarp>>,
         Tuple<Sequence<1, 2>>,
@@ -349,9 +349,9 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
         Sequence<0, 0>>{};
 
     constexpr auto c_block_dstr_encode =
-        embed_tensor_distribution_encoding(c_block_outer_dstr_encoding, WG::CWarpDstrEncoding{});
+        embed_tile_distribution_encoding(c_block_outer_dstr_encoding, WG::CWarpDstrEncoding{});
 
-    constexpr auto c_block_dstr = make_static_block_tensor_distribution(c_block_dstr_encode);
+    constexpr auto c_block_dstr = make_static_tile_distribution(c_block_dstr_encode);
 
     using CDataType = typename WG::CDataType;
 

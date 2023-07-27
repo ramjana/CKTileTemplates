@@ -7,7 +7,7 @@
 #include "ck/tensor_description/tensor_descriptor.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
-#include "ck/tile_program/block_tensor_distribution.hpp"
+#include "ck/tile_program/tile_distribution.hpp"
 
 namespace ck {
 namespace tile_program {

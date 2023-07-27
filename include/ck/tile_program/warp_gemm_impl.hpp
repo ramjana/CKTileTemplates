@@ -7,7 +7,7 @@
 #include "ck/tensor_description/tensor_descriptor.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
-#include "ck/tile_program/block_tensor_distribution.hpp"
+#include "ck/tile_program/tile_distribution.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -30,14 +30,11 @@ struct WarpGemmImpl
     using BWarpDstrEncoding = typename WarpGemmAttribute::BWarpDstrEncoding;
     using CWarpDstrEncoding = typename WarpGemmAttribute::CWarpDstrEncoding;
 
-    using AWarpDstr =
-        remove_cvref_t<decltype(make_static_block_tensor_distribution(AWarpDstrEncoding{}))>;
+    using AWarpDstr = remove_cvref_t<decltype(make_static_tile_distribution(AWarpDstrEncoding{}))>;
 
-    using BWarpDstr =
-        remove_cvref_t<decltype(make_static_block_tensor_distribution(BWarpDstrEncoding{}))>;
+    using BWarpDstr = remove_cvref_t<decltype(make_static_tile_distribution(BWarpDstrEncoding{}))>;
 
-    using CWarpDstr =
-        remove_cvref_t<decltype(make_static_block_tensor_distribution(CWarpDstrEncoding{}))>;
+    using CWarpDstr = remove_cvref_t<decltype(make_static_tile_distribution(CWarpDstrEncoding{}))>;
 
     using AWarpTensor = StaticBlockDistributedTensor<ADataType, AWarpDstr>;
     using BWarpTensor = StaticBlockDistributedTensor<BDataType, BWarpDstr>;

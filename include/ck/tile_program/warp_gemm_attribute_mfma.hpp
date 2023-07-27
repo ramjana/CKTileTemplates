@@ -7,7 +7,7 @@
 #include "ck/tensor_description/tensor_descriptor.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
-#include "ck/tile_program/block_tensor_distribution.hpp"
+#include "ck/tile_program/tile_distribution.hpp"
 #include "ck/tile_program/warp_gemm_attribute_mfma_impl.hpp"
 
 namespace ck {
@@ -31,7 +31,7 @@ struct WarpGemmAtrributeMfma
     static constexpr index_t N = Impl::N;
     static constexpr index_t K = Impl::K;
 
-    using AWarpDstrEncoding = StaticTensorDistributionEncoding<
+    using AWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
         Tuple<Sequence<Impl::AMLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
         Tuple<Sequence<2, 1>>,
@@ -39,7 +39,7 @@ struct WarpGemmAtrributeMfma
         Sequence<2>,
         Sequence<1>>;
 
-    using BWarpDstrEncoding = StaticTensorDistributionEncoding<
+    using BWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
         Tuple<Sequence<Impl::BNLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
         Tuple<Sequence<2, 1>>,
@@ -47,7 +47,7 @@ struct WarpGemmAtrributeMfma
         Sequence<2>,
         Sequence<1>>;
 
-    using CWarpDstrEncoding = StaticTensorDistributionEncoding<
+    using CWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
         Tuple<Sequence<Impl::CM0PerLane, Impl::CMLane, Impl::CM1PerLane>, Sequence<Impl::CNLane>>,
         Tuple<Sequence<1, 2>>,
@@ -85,7 +85,7 @@ struct WarpGemmAtrributeMfmaTransposedCDistribution
     static constexpr index_t N = Impl::M;
     static constexpr index_t K = Impl::K;
 
-    using AWarpDstrEncoding = StaticTensorDistributionEncoding<
+    using AWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
         Tuple<Sequence<Impl::BNLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
         Tuple<Sequence<2, 1>>,
@@ -93,7 +93,7 @@ struct WarpGemmAtrributeMfmaTransposedCDistribution
         Sequence<2>,
         Sequence<1>>;
 
-    using BWarpDstrEncoding = StaticTensorDistributionEncoding<
+    using BWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
         Tuple<Sequence<Impl::AMLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
         Tuple<Sequence<2, 1>>,
@@ -101,7 +101,7 @@ struct WarpGemmAtrributeMfmaTransposedCDistribution
         Sequence<2>,
         Sequence<1>>;
 
-    using CWarpDstrEncoding = StaticTensorDistributionEncoding<
+    using CWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
         Tuple<Sequence<Impl::CNLane>, Sequence<Impl::CM0PerLane, Impl::CMLane, Impl::CM1PerLane>>,
         Tuple<Sequence<2, 1>>,

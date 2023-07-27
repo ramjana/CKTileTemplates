@@ -10,7 +10,7 @@
 
 #include "tile_program.hpp"
 #include "ck/tile_program/meta_data_buffer.hpp"
-#include "ck/tile_program/block_tensor_distribution.hpp"
+#include "ck/tile_program/tile_distribution.hpp"
 #include "ck/tile_program/block_tensor_window.hpp"
 #include "ck/tile_program/static_block_distributed_tensor.hpp"
 #include "ck/tile_program/load_block_distributed_tensor.hpp"
@@ -230,38 +230,44 @@ struct Gemm
         auto b_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_b_lds, b_lds_block_desc);
 
         // A copy
-        // FIXME
-        constexpr auto a_copy_dram_window_dstr = make_static_block_tensor_distribution(
-            StaticTensorDistributionEncoding<Sequence<1>,
-                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
-                                             Tuple<Sequence<1>, Sequence<1, 2>>,
-                                             Tuple<Sequence<1>, Sequence<2, 0>>,
-                                             Sequence<1, 2>,
-                                             Sequence<0, 1>>{});
+        // FIXME: move into a fnunction
+        constexpr auto a_copy_dram_window_dstr = make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
+                                           Tuple<Sequence<1>, Sequence<1, 2>>,
+                                           Tuple<Sequence<1>, Sequence<2, 0>>,
+                                           Sequence<1, 2>,
+                                           Sequence<0, 1>>{});
 
-        constexpr auto a_copy_lds_window_dstr = a_copy_dram_window_dstr;
-
+        // FIXME: move into a fnunction
         auto a_copy_dram_window = make_block_window(a_dram_grid, {iM, 0}, a_copy_dram_window_dstr);
 
+        // FIXME: implemente "no-distribution window" and remove this
+        constexpr auto a_copy_lds_window_dstr = a_copy_dram_window_dstr;
+
+        // FIXME: implemente "no-distribution window" and remove this
         auto a_copy_lds_window = make_block_window(a_lds_block, {0, 0}, a_copy_lds_window_dstr);
 
         // B copy
-        // FIXME
-        constexpr auto b_copy_dram_window_dstr = make_static_block_tensor_distribution(
-            StaticTensorDistributionEncoding<Sequence<1>,
-                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
-                                             Tuple<Sequence<1>, Sequence<1, 2>>,
-                                             Tuple<Sequence<1>, Sequence<2, 0>>,
-                                             Sequence<1, 2>,
-                                             Sequence<0, 1>>{});
+        // FIXME: move into a fnunction and provide optimization policy
+        constexpr auto b_copy_dram_window_dstr = make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
+                                           Tuple<Sequence<1>, Sequence<1, 2>>,
+                                           Tuple<Sequence<1>, Sequence<2, 0>>,
+                                           Sequence<1, 2>,
+                                           Sequence<0, 1>>{});
 
-        constexpr auto b_copy_lds_window_dstr = b_copy_dram_window_dstr;
-
+        // FIXME: move into a fnunction
         auto b_copy_dram_window = make_block_window(b_dram_grid, {iN, 0}, b_copy_dram_window_dstr);
 
+        // FIXME: implemente "no-distribution window" and remove this
+        constexpr auto b_copy_lds_window_dstr = b_copy_dram_window_dstr;
+
+        // FIXME: implemente "no-distribution window" and remove this
         auto b_copy_lds_window = make_block_window(b_lds_block, {0, 0}, b_copy_lds_window_dstr);
 
-        // FIXME
+        // FIXME: implemente "no-distribution window" and remove this
         auto a_lds_gemm_window = a_copy_lds_window;
         auto b_lds_gemm_window = b_copy_lds_window;
 
@@ -346,7 +352,7 @@ struct Gemm
         auto c_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<32>{}, Number<1>{});
 
-        // FIXME
+        // FIXME: implemente "no-distribution window" and remove this
         constexpr auto c_block_distr = c_block_tile.GetBlockDistribution();
 
         auto c_dram_window = make_block_window(c_dram_grid, {iM, iN}, c_block_distr);

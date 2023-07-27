@@ -419,10 +419,5 @@ int main(int argc, char* argv[])
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
 
-#if 0
-    LogRangeAsType<float>(std::cout << "ref: ", c1_host_ref.mData, ", ") << std::endl;
-    LogRangeAsType<float>(std::cout << "dev: ", c1_host_dev.mData, ", ") << std::endl;
-#endif
-
     return ck::utils::check_err(c1_host_dev, c1_host_ref);
 }

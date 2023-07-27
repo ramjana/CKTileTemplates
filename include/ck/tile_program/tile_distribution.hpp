@@ -26,17 +26,17 @@ __host__ __device__ constexpr auto make_sequential_index(index_t ibegin, index_t
     return arr;
 }
 
-// this returns a constexpr encoding of BlockTensorDistribution
-template <typename StaticTensorDistributionEncoding_>
+// this returns a constexpr encoding of TileDistribution
+template <typename StaticTileDistributionEncoding_>
 __host__ __device__ constexpr auto
-    make_adaptor_encoding_for_tensor_distribution(StaticTensorDistributionEncoding_)
+    make_adaptor_encoding_for_tile_distribution(StaticTileDistributionEncoding_)
 {
-    using RsLengths    = typename StaticTensorDistributionEncoding_::RsLengths;
-    using HsLengthss   = typename StaticTensorDistributionEncoding_::HsLengthss;
-    using Ps2RHssMajor = typename StaticTensorDistributionEncoding_::Ps2RHssMajor;
-    using Ps2RHssMinor = typename StaticTensorDistributionEncoding_::Ps2RHssMinor;
-    using Ys2RHsMajor  = typename StaticTensorDistributionEncoding_::Ys2RHsMajor;
-    using Ys2RHsMinor  = typename StaticTensorDistributionEncoding_::Ys2RHsMinor;
+    using RsLengths    = typename StaticTileDistributionEncoding_::RsLengths;
+    using HsLengthss   = typename StaticTileDistributionEncoding_::HsLengthss;
+    using Ps2RHssMajor = typename StaticTileDistributionEncoding_::Ps2RHssMajor;
+    using Ps2RHssMinor = typename StaticTileDistributionEncoding_::Ps2RHssMinor;
+    using Ys2RHsMajor  = typename StaticTileDistributionEncoding_::Ys2RHsMajor;
+    using Ys2RHsMinor  = typename StaticTileDistributionEncoding_::Ys2RHsMinor;
 
     constexpr index_t kMaxNumTransforms = 20;
     constexpr index_t kMaxMetaDataSize  = 128;
@@ -204,13 +204,13 @@ __host__ __device__ constexpr auto
 
 template <typename PsYs2XsAdaptor_,
           typename Ys2DDescriptor_,
-          typename StaticTensorDistributionEncoding_>
-struct BlockTensorDistribution
+          typename StaticTileDistributionEncoding_>
+struct TileDistribution
 {
     using PsYs2XsAdaptor = remove_cvref_t<PsYs2XsAdaptor_>;
     using Ys2DDescriptor = remove_cvref_t<Ys2DDescriptor_>;
 
-    using StaticTensorDistributionEncoding = remove_cvref_t<StaticTensorDistributionEncoding_>;
+    using StaticTileDistributionEncoding = remove_cvref_t<StaticTileDistributionEncoding_>;
 
     static constexpr index_t NDimX = PsYs2XsAdaptor::GetNumOfBottomDimension();
     static constexpr index_t NDimY = Ys2DDescriptor::GetNumOfTopDimension();
@@ -232,9 +232,9 @@ struct BlockTensorDistribution
 
     __host__ __device__ constexpr const auto& GetYs2DDescriptor() const { return ys_to_d_; }
 
-    __host__ __device__ static constexpr auto GetStaticTensorDistributionEncoding()
+    __host__ __device__ static constexpr auto GetStaticTileDistributionEncoding()
     {
-        return StaticTensorDistributionEncoding{};
+        return StaticTileDistributionEncoding{};
     }
 
     __host__ __device__ static constexpr bool IsStatic()
@@ -245,7 +245,7 @@ struct BlockTensorDistribution
     __host__ __device__ void Print() const
     {
         printf("{");
-        printf("BlockTensorDistribution, ");
+        printf("TileDistribution, ");
         ps_ys_to_xs_.Print();
         ys_to_d_.Print();
         printf("}");
@@ -259,7 +259,7 @@ template <typename RsLengths_,    // Sequence<...>
           typename Ys2RHsMajor_,  // Sequence<...>
           typename Ys2RHsMinor_   // Sequence<...>
           >
-struct StaticTensorDistributionEncoding
+struct StaticTileDistributionEncoding
 {
     using RsLengths    = remove_cvref_t<RsLengths_>;
     using HsLengthss   = remove_cvref_t<HsLengthss_>;
@@ -277,7 +277,7 @@ struct StaticTensorDistributionEncoding
 };
 
 template <typename OuterDstr, typename InnerDstr>
-__host__ __device__ constexpr auto embed_tensor_distribution_encoding(OuterDstr, InnerDstr)
+__host__ __device__ constexpr auto embed_tile_distribution_encoding(OuterDstr, InnerDstr)
 {
     static_assert(OuterDstr::NDimX == InnerDstr::NDimX, "wrong!");
 
@@ -374,20 +374,20 @@ __host__ __device__ constexpr auto embed_tensor_distribution_encoding(OuterDstr,
     constexpr auto ys_2_rhs_minor =
         merge_sequences(typename OuterDstr::Ys2RHsMinor{}, updated_inner_ys_2_rhs_minor);
 
-    return StaticTensorDistributionEncoding<RsLengths,
-                                            remove_cvref_t<decltype(hs_lengthss)>,
-                                            remove_cvref_t<decltype(ps_2_rhss_major)>,
-                                            remove_cvref_t<decltype(ps_2_rhss_minor)>,
-                                            remove_cvref_t<decltype(ys_2_rhs_major)>,
-                                            remove_cvref_t<decltype(ys_2_rhs_minor)>>{};
+    return StaticTileDistributionEncoding<RsLengths,
+                                          remove_cvref_t<decltype(hs_lengthss)>,
+                                          remove_cvref_t<decltype(ps_2_rhss_major)>,
+                                          remove_cvref_t<decltype(ps_2_rhss_minor)>,
+                                          remove_cvref_t<decltype(ys_2_rhs_major)>,
+                                          remove_cvref_t<decltype(ys_2_rhs_minor)>>{};
 }
 
-// this returns a constexpr BlockTensorDistribution
-template <typename StaticTensorDistributionEncoding_>
-__host__ __device__ constexpr auto make_block_tensor_distribution(StaticTensorDistributionEncoding_)
+// this returns a constexpr TileDistribution
+template <typename StaticTileDistributionEncoding_>
+__host__ __device__ constexpr auto make_tile_distribution(StaticTileDistributionEncoding_)
 {
     constexpr auto encode =
-        detail::make_adaptor_encoding_for_tensor_distribution(StaticTensorDistributionEncoding_{});
+        detail::make_adaptor_encoding_for_tile_distribution(StaticTileDistributionEncoding_{});
 
     constexpr auto encoded_ps_ys_to_xs_adaptor = encode.template At<0>();
     constexpr auto encoded_ys_to_d_adaptor     = encode.template At<1>();
@@ -402,19 +402,18 @@ __host__ __device__ constexpr auto make_block_tensor_distribution(StaticTensorDi
     constexpr auto ys_to_d_descriptor =
         make_tensor_descriptor_from_adaptor(ys_to_d_adaptor, d_length);
 
-    return BlockTensorDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
-                                   remove_cvref_t<decltype(ys_to_d_descriptor)>,
-                                   remove_cvref_t<StaticTensorDistributionEncoding_>>{
-        ps_ys_to_xs_adaptor, ys_to_d_descriptor};
+    return TileDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
+                            remove_cvref_t<decltype(ys_to_d_descriptor)>,
+                            remove_cvref_t<StaticTileDistributionEncoding_>>{ps_ys_to_xs_adaptor,
+                                                                             ys_to_d_descriptor};
 }
 
-// this returns a static BlockTensorDistribution
-template <typename StaticTensorDistributionEncoding_>
-__host__ __device__ constexpr auto
-    make_static_block_tensor_distribution(StaticTensorDistributionEncoding_)
+// this returns a static TileDistribution
+template <typename StaticTileDistributionEncoding_>
+__host__ __device__ constexpr auto make_static_tile_distribution(StaticTileDistributionEncoding_)
 {
     constexpr auto encode =
-        detail::make_adaptor_encoding_for_tensor_distribution(StaticTensorDistributionEncoding_{});
+        detail::make_adaptor_encoding_for_tile_distribution(StaticTileDistributionEncoding_{});
 
     constexpr auto encoded_ps_ys_to_xs_adaptor = encode.template At<0>();
     constexpr auto encoded_ys_to_d_adaptor     = encode.template At<1>();
@@ -429,10 +428,10 @@ __host__ __device__ constexpr auto
     constexpr auto ys_to_d_descriptor =
         make_tensor_descriptor_from_adaptor(ys_to_d_adaptor, Number<d_length>{});
 
-    return BlockTensorDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
-                                   remove_cvref_t<decltype(ys_to_d_descriptor)>,
-                                   remove_cvref_t<StaticTensorDistributionEncoding_>>{
-        ps_ys_to_xs_adaptor, ys_to_d_descriptor};
+    return TileDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
+                            remove_cvref_t<decltype(ys_to_d_descriptor)>,
+                            remove_cvref_t<StaticTileDistributionEncoding_>>{ps_ys_to_xs_adaptor,
+                                                                             ys_to_d_descriptor};
 }
 
 } // namespace tile_program
