@@ -12,23 +12,22 @@
 namespace ck {
 namespace tile_program {
 
-template <typename DataType_, typename StaticBlockDistribution_>
-struct StaticBlockDistributedTensor
+template <typename DataType_, typename StaticTileDistribution_>
+struct StaticDistributedTensor
 {
-    using DataType                = remove_cvref_t<DataType_>;
-    using StaticBlockDistribution = remove_cvref_t<StaticBlockDistribution_>;
+    using DataType               = remove_cvref_t<DataType_>;
+    using StaticTileDistribution = remove_cvref_t<StaticTileDistribution_>;
 
-    static_assert(StaticBlockDistribution::IsStatic(),
-                  "wrong! StaticBlockDistribution should be known at compile tile");
+    static_assert(StaticTileDistribution::IsStatic(),
+                  "wrong! StaticTileDistribution should be known at compile tile");
 
-    using ThreadTensorDesc =
-        remove_cvref_t<decltype(StaticBlockDistribution{}.GetYs2DDescriptor())>;
+    using ThreadTensorDesc = remove_cvref_t<decltype(StaticTileDistribution{}.GetYs2DDescriptor())>;
 
     static constexpr index_t kThreadElementSpaceSize = ThreadTensorDesc{}.GetElementSpaceSize();
 
-    __host__ __device__ static constexpr auto GetBlockDistribution()
+    __host__ __device__ static constexpr auto GetTileDistribution()
     {
-        return StaticBlockDistribution{};
+        return StaticTileDistribution{};
     }
 
     __host__ __device__ void Initialize(const DataType& x) { thread_buf_.Initialize(x); }
@@ -46,8 +45,8 @@ struct StaticBlockDistributedTensor
     __host__ __device__ auto GetSlicedThreadData(Sequence<YSliceOrigins...>,
                                                  Sequence<YSliceLengths...>) const
     {
-        static_assert(sizeof...(YSliceOrigins) == StaticBlockDistribution::NDimY &&
-                          sizeof...(YSliceLengths) == StaticBlockDistribution::NDimY,
+        static_assert(sizeof...(YSliceOrigins) == StaticTileDistribution::NDimY &&
+                          sizeof...(YSliceLengths) == StaticTileDistribution::NDimY,
                       "wrong!");
 
         constexpr auto sliced_thread_tensor_desc =
@@ -75,8 +74,8 @@ struct StaticBlockDistributedTensor
         Sequence<YSliceLengths...>,
         const StaticBuffer<AddressSpaceEnum::Vgpr, DataType, NSlicedData, true>& sliced_thread_data)
     {
-        static_assert(sizeof...(YSliceOrigins) == StaticBlockDistribution::NDimY &&
-                          sizeof...(YSliceLengths) == StaticBlockDistribution::NDimY,
+        static_assert(sizeof...(YSliceOrigins) == StaticTileDistribution::NDimY &&
+                          sizeof...(YSliceLengths) == StaticTileDistribution::NDimY,
                       "wrong!");
 
         constexpr auto sliced_thread_tensor_desc =
@@ -94,12 +93,11 @@ struct StaticBlockDistributedTensor
     StaticBuffer<AddressSpaceEnum::Vgpr, DataType, kThreadElementSpaceSize, true> thread_buf_;
 };
 
-template <typename DataType, typename StaticBlockDistribution>
-__host__ __device__ constexpr auto
-make_static_block_distributed_tensor(const StaticBlockDistribution&)
+template <typename DataType, typename StaticTileDistribution>
+__host__ __device__ constexpr auto make_static_distributed_tensor(const StaticTileDistribution&)
 {
-    return StaticBlockDistributedTensor<remove_cvref_t<DataType>,
-                                        remove_cvref_t<StaticBlockDistribution>>{};
+    return StaticDistributedTensor<remove_cvref_t<DataType>,
+                                   remove_cvref_t<StaticTileDistribution>>{};
 }
 
 } // namespace tile_program

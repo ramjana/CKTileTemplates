@@ -36,12 +36,12 @@ __host__ __device__ auto block_elementwise_in(const InElementOp& in_element_op,
 
     // TODO: make sure all tensors have same lengths and distribution
     // static_assert(xxx);
-    constexpr auto in_block_distr = type_pack_element<0, InBlockTensors...>::GetBlockDistribution();
+    constexpr auto in_block_distr = type_pack_element<0, InBlockTensors...>::GetTileDistribution();
 
     constexpr index_t thread_buffer_size =
         type_pack_element<0, InBlockTensors...>::GetThreadBufferSize();
 
-    auto out_block_tensor = make_static_block_distributed_tensor<OutDataType>(in_block_distr);
+    auto out_block_tensor = make_static_distributed_tensor<OutDataType>(in_block_distr);
 
     static_for<0, thread_buffer_size, 1>{}([&](auto i) {
         out_block_tensor.GetThreadBuffer()(i) =

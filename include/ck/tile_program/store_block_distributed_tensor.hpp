@@ -15,16 +15,15 @@ namespace tile_program {
 
 // FIXME: host dummy function for tile program
 template <typename BottomTensorView_, typename BlockTensorDistribution_, typename DataType_>
-__host__ void
-store_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>&,
-                 const StaticBlockDistributedTensor<DataType_, BlockTensorDistribution_>&)
+__host__ void store_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>&,
+                               const StaticDistributedTensor<DataType_, BlockTensorDistribution_>&)
 {
 }
 
 template <typename BottomTensorView_, typename BlockTensorDistribution_, typename DataType_>
 __device__ void store_block_tile(
     BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& block_tensor_window,
-    const StaticBlockDistributedTensor<DataType_, BlockTensorDistribution_>& block_dstr_tensor)
+    const StaticDistributedTensor<DataType_, BlockTensorDistribution_>& block_dstr_tensor)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;

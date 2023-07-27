@@ -12,7 +12,7 @@
 #include "ck/tile_program/meta_data_buffer.hpp"
 #include "ck/tile_program/tile_distribution.hpp"
 #include "ck/tile_program/block_tensor_window.hpp"
-#include "ck/tile_program/static_block_distributed_tensor.hpp"
+#include "ck/tile_program/static_distributed_tensor.hpp"
 #include "ck/tile_program/load_block_distributed_tensor.hpp"
 #include "ck/tile_program/store_block_distributed_tensor.hpp"
 #include "ck/tile_program/block_gemm_impl_cr_as_bs.hpp"
@@ -353,7 +353,7 @@ struct Gemm
             p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<32>{}, Number<1>{});
 
         // FIXME: implemente "no-distribution window" and remove this
-        constexpr auto c_block_distr = c_block_tile.GetBlockDistribution();
+        constexpr auto c_block_distr = c_block_tile.GetTileDistribution();
 
         auto c_dram_window = make_block_window(c_dram_grid, {iM, iN}, c_block_distr);
 

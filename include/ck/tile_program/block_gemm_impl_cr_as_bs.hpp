@@ -190,7 +190,7 @@ __device__ void block_gemm_cr_as_bs(CBlockTensor& c_block_tensor,
     static_assert(
         is_same_v<remove_cvref_t<decltype(c_block_dstr_encode)>,
                   remove_cvref_t<decltype(
-                      CBlockTensor::GetBlockDistribution().GetStaticTileDistributionEncoding())>>,
+                      CBlockTensor::GetTileDistribution().GetStaticTileDistributionEncoding())>>,
         "wrong!");
 
     // construct A/B-block-window from A/B-block-distribution
@@ -355,7 +355,7 @@ __host__ __device__ auto block_gemm_cr_as_bs(const ABlockWindow& a_block_window,
 
     using CDataType = typename WG::CDataType;
 
-    auto c_block_tensor = make_static_block_distributed_tensor<CDataType>(c_block_dstr);
+    auto c_block_tensor = make_static_distributed_tensor<CDataType>(c_block_dstr);
 
     block_elementwise_inout([](auto& c) { c = 0; }, c_block_tensor);
 

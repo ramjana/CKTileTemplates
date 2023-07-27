@@ -31,14 +31,12 @@ struct WarpGemmImpl
     using CWarpDstrEncoding = typename WarpGemmAttribute::CWarpDstrEncoding;
 
     using AWarpDstr = remove_cvref_t<decltype(make_static_tile_distribution(AWarpDstrEncoding{}))>;
-
     using BWarpDstr = remove_cvref_t<decltype(make_static_tile_distribution(BWarpDstrEncoding{}))>;
-
     using CWarpDstr = remove_cvref_t<decltype(make_static_tile_distribution(CWarpDstrEncoding{}))>;
 
-    using AWarpTensor = StaticBlockDistributedTensor<ADataType, AWarpDstr>;
-    using BWarpTensor = StaticBlockDistributedTensor<BDataType, BWarpDstr>;
-    using CWarpTensor = StaticBlockDistributedTensor<CDataType, CWarpDstr>;
+    using AWarpTensor = StaticDistributedTensor<ADataType, AWarpDstr>;
+    using BWarpTensor = StaticDistributedTensor<BDataType, BWarpDstr>;
+    using CWarpTensor = StaticDistributedTensor<CDataType, CWarpDstr>;
 
     __device__ void operator()(CWarpTensor& c, const AWarpTensor& a, const BWarpTensor& b) const
     {

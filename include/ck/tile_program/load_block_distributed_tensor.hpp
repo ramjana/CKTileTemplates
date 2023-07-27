@@ -8,6 +8,7 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tensor_description/tensor_space_filling_curve.hpp"
+
 #include "ck/tile_program/tile_distribution.hpp"
 
 namespace ck {
@@ -166,7 +167,7 @@ __host__ auto load_block_tile(
 
     static_assert(BlockWindow::HasStaticBlockTensorDistribution(), "wrong!");
 
-    return make_static_block_distributed_tensor<DataType>(
+    return make_static_distributed_tensor<DataType>(
         block_tensor_window.GetBlockTensorDistribution());
 }
 
@@ -185,7 +186,7 @@ load_block_tile(BlockTensorWindow<BottomTensorView_, BlockTensorDistribution_>& 
 
     constexpr index_t NDimY = block_dstr.GetYs2DDescriptor().GetNumOfDimension();
 
-    auto block_dstr_tensor = make_static_block_distributed_tensor<DataType>(block_dstr);
+    auto block_dstr_tensor = make_static_distributed_tensor<DataType>(block_dstr);
 
     block_dstr_tensor.GetThreadBuffer() = detail::load_sliced_thread_data_from_block_tensor_window(
         block_tensor_window,
