@@ -16,8 +16,15 @@ namespace ck {
 // X contains multiple T
 // FIXME: InvalidElementUseNumericalZeroValue and invalid_element_value_ should be a property of
 //        transforms of TensorView/Tensor
-template <typename T, typename BufferSizeType, bool InvalidElementUseNumericalZeroValue>
-struct BufferView<AddressSpaceEnum::Global, T, BufferSizeType, InvalidElementUseNumericalZeroValue>
+template <typename T,
+          typename BufferSizeType,
+          bool InvalidElementUseNumericalZeroValue,
+          AmdBufferCoherenceEnum Coherence>
+struct BufferView<AddressSpaceEnum::Global,
+                  T,
+                  BufferSizeType,
+                  InvalidElementUseNumericalZeroValue,
+                  Coherence>
 {
     using type = T;
 
@@ -81,13 +88,16 @@ struct BufferView<AddressSpaceEnum::Global, T, BufferSizeType, InvalidElementUse
 
             if constexpr(InvalidElementUseNumericalZeroValue)
             {
-                return amd_buffer_load_invalid_element_return_zero<remove_cvref_t<T>, t_per_x>(
+                return amd_buffer_load_invalid_element_return_zero<remove_cvref_t<T>,
+                                                                   t_per_x,
+                                                                   Coherence>(
                     p_data_, i, is_valid_element, buffer_size_);
             }
             else
             {
                 return amd_buffer_load_invalid_element_return_customized_value<remove_cvref_t<T>,
-                                                                               t_per_x>(
+                                                                               t_per_x,
+                                                                               Coherence>(
                     p_data_, i, is_valid_element, buffer_size_, invalid_element_value_);
             }
         }
@@ -174,7 +184,7 @@ struct BufferView<AddressSpaceEnum::Global, T, BufferSizeType, InvalidElementUse
         {
             constexpr index_t t_per_x = scalar_per_x_vector / scalar_per_t_vector;
 
-            amd_buffer_store<remove_cvref_t<T>, t_per_x>(
+            amd_buffer_store<remove_cvref_t<T>, t_per_x, Coherence>(
                 x, p_data_, i, is_valid_element, buffer_size_);
         }
         else
@@ -229,7 +239,7 @@ struct BufferView<AddressSpaceEnum::Global, T, BufferSizeType, InvalidElementUse
         {
             constexpr index_t t_per_x = scalar_per_x_vector / scalar_per_t_vector;
 
-            amd_buffer_atomic_add<remove_cvref_t<T>, t_per_x>(
+            amd_buffer_atomic_add<remove_cvref_t<T>, t_per_x, Coherence>(
                 x, p_data_, i, is_valid_element, buffer_size_);
         }
         else

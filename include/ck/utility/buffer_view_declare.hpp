@@ -17,10 +17,13 @@ namespace ck {
 // X contains multiple T
 // FIXME: InvalidElementUseNumericalZeroValue and invalid_element_value_ should be a property of
 //        transforms of TensorView/Tensor
+// FIXME: AmdBufferCoherenceEnum is only meaningful for buffer addressing. Need to split BufferView
+// definition for different memory address space (Global/GenericLds/Vgpr)
 template <AddressSpaceEnum BufferAddressSpace,
           typename T,
           typename BufferSizeType,
-          bool InvalidElementUseNumericalZeroValue>
+          bool InvalidElementUseNumericalZeroValue,
+          AmdBufferCoherenceEnum Coherence = AmdBufferCoherenceEnum::DefaultCoherence>
 struct BufferView;
 
 } // namespace ck

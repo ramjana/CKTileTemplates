@@ -87,8 +87,7 @@ template <AddressSpaceEnum BufferAddressSpace = AddressSpaceEnum::Generic,
 __host__ __device__ constexpr auto make_tensor_view(DataType* p,
                                                     const TensorDescriptor<Ts...>& desc)
 {
-    auto buffer_view =
-        make_buffer_view<BufferAddressSpace, DataType>(p, desc.GetElementSpaceSize());
+    auto buffer_view = make_buffer_view<BufferAddressSpace>(p, desc.GetElementSpaceSize());
 
     return TensorView<decltype(buffer_view), decltype(desc)>{buffer_view, desc};
 }

@@ -12,14 +12,18 @@
 
 namespace ck {
 
-template <AddressSpaceEnum BufferAddressSpace, typename T, typename BufferSizeType>
+template <AddressSpaceEnum BufferAddressSpace,
+          AmdBufferCoherenceEnum Coherence = AmdBufferCoherenceEnum::DefaultCoherence,
+          typename T,
+          typename BufferSizeType>
 __host__ __device__ constexpr auto make_buffer_view(T* p, BufferSizeType buffer_size)
 {
-    return BufferView<BufferAddressSpace, T, BufferSizeType, true>{p, buffer_size};
+    return BufferView<BufferAddressSpace, T, BufferSizeType, true, Coherence>{p, buffer_size};
 }
 
 template <
     AddressSpaceEnum BufferAddressSpace,
+    AmdBufferCoherenceEnum Coherence = AmdBufferCoherenceEnum::DefaultCoherence,
     typename T,
     typename BufferSizeType,
     typename X,
@@ -27,7 +31,7 @@ template <
 __host__ __device__ constexpr auto
 make_buffer_view(T* p, BufferSizeType buffer_size, X invalid_element_value)
 {
-    return BufferView<BufferAddressSpace, T, BufferSizeType, false>{
+    return BufferView<BufferAddressSpace, T, BufferSizeType, false, Coherence>{
         p, buffer_size, invalid_element_value};
 }
 

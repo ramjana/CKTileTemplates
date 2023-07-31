@@ -29,15 +29,6 @@ struct StaticBuffer : public StaticallyIndexedArray<remove_cvref_t<S_>, N>
         return x;
     }
 
-#if 0
-    __host__ __device__ constexpr StaticBuffer& operator=(const T& y)
-    {
-        StaticBuffer& x = *this;
-        static_for<0, base::Size(), 1>{}([&](auto i) { x(i) = y; });
-        return x;
-    }
-#endif
-
     __host__ __device__ static constexpr AddressSpaceEnum GetAddressSpace() { return AddressSpace; }
 
     __host__ __device__ static constexpr index_t Size() { return N; }
@@ -105,6 +96,16 @@ struct StaticBuffer : public StaticallyIndexedArray<remove_cvref_t<S_>, N>
     __host__ __device__ void Initialize(const S& x)
     {
         static_for<0, N, 1>{}([&](auto i) { operator()(i) = S{x}; });
+    }
+
+    // FIXME: deprecated
+    __host__ __device__ void Clear() { Initialize(0); }
+
+    // FIXME: deprecated
+    __host__ __device__ constexpr StaticBuffer& operator=(const S& v)
+    {
+        Initialize(v);
+        return *this;
     }
 };
 

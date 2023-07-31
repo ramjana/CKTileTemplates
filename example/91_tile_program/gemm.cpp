@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-#if 1
+#if 0
     using LdsAllocator = LdsAllocator2d<ADataType,
                                         BDataType,
                                         CDataType,
@@ -135,7 +135,7 @@ int main(int argc, char* argv[])
                                          kGemmKPerBlock>;
 #endif
 
-#if 1
+#if 0
     using Dram2LdsLoader = NaiveDram2LdsLoader<ADataType,
                                                BDataType,
                                                CDataType,
@@ -153,7 +153,7 @@ int main(int argc, char* argv[])
                                                 kGemmKPerBlock>;
 #endif
 
-#if 1
+#if 0
     const auto gemm_kernel = GemmNaivePipeline<ADataType,
                                                BDataType,
                                                CDataType,

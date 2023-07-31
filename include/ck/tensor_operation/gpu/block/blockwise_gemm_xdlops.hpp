@@ -710,7 +710,7 @@ struct BlockwiseGemmXdlops_v2
 
         const auto xdlops_a_idx = xdlops_gemm.CalculateAThreadOriginDataIndex();
 
-        return make_tuple(0, waveId_m, xdlops_a_idx[I1], KPack * xdlops_a_idx[I0]);
+        return make_multi_index(0, waveId_m, xdlops_a_idx[I1], KPack * xdlops_a_idx[I0]);
     }
 
     __device__ static auto CalculateBThreadOriginDataIndex()
@@ -721,7 +721,7 @@ struct BlockwiseGemmXdlops_v2
 
         const auto xdlops_b_idx = xdlops_gemm.CalculateBThreadOriginDataIndex();
 
-        return make_tuple(0, waveId_n, xdlops_b_idx[I1], KPack * xdlops_b_idx[I0]);
+        return make_multi_index(0, waveId_n, xdlops_b_idx[I1], KPack * xdlops_b_idx[I0]);
     }
 
     template <index_t m0, index_t n0, index_t xdlops_i, index_t blk_i>
@@ -768,10 +768,10 @@ struct BlockwiseGemmXdlops_v2
             m0, n0, waveId_m, waveId_n, blk_idx[I0], blk_idx[I1], blk_idx[I2], blk_idx[I3]);
     }
 
-    using Tuple4 = decltype(CalculateAThreadOriginDataIndex());
+    using Array4 = decltype(CalculateAThreadOriginDataIndex());
 
-    __host__ __device__ BlockwiseGemmXdlops_v2(Tuple4 a_origin = CalculateAThreadOriginDataIndex(),
-                                               Tuple4 b_origin = CalculateBThreadOriginDataIndex())
+    __host__ __device__ BlockwiseGemmXdlops_v2(Array4 a_origin = CalculateAThreadOriginDataIndex(),
+                                               Array4 b_origin = CalculateBThreadOriginDataIndex())
         : a_thread_copy_(a_origin), b_thread_copy_(b_origin)
     {
         static_assert(AMmaTileDesc::IsKnownAtCompileTime() && BMmaTileDesc::IsKnownAtCompileTime(),

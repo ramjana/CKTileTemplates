@@ -13,20 +13,29 @@ namespace ck {
 template <AddressSpaceEnum BufferAddressSpace,
           typename T,
           typename ElementSpaceSize,
-          bool InvalidElementUseNumericalZeroValue>
-using DynamicBuffer =
-    BufferView<BufferAddressSpace, T, ElementSpaceSize, InvalidElementUseNumericalZeroValue>;
+          bool InvalidElementUseNumericalZeroValue,
+          AmdBufferCoherenceEnum Coherence = AmdBufferCoherenceEnum::DefaultCoherence>
+using DynamicBuffer = BufferView<BufferAddressSpace,
+                                 T,
+                                 ElementSpaceSize,
+                                 InvalidElementUseNumericalZeroValue,
+                                 Coherence>;
 
 // FIXME: deprecate make_dynamic_buffer, use make_buffer_view instead
-template <AddressSpaceEnum BufferAddressSpace, typename T, typename ElementSpaceSize>
+template <AddressSpaceEnum BufferAddressSpace,
+          AmdBufferCoherenceEnum Coherence = AmdBufferCoherenceEnum::DefaultCoherence,
+          typename T,
+          typename ElementSpaceSize>
 __host__ __device__ constexpr auto make_dynamic_buffer(T* p, ElementSpaceSize element_space_size)
 {
-    return make_buffer_view<BufferAddressSpace, T, ElementSpaceSize>(p, element_space_size);
+    return make_buffer_view<BufferAddressSpace, Coherence, T, ElementSpaceSize>(p,
+                                                                                element_space_size);
 }
 
 // FIXME: deprecate make_dynamic_buffer, use make_buffer_view instead
 template <
     AddressSpaceEnum BufferAddressSpace,
+    AmdBufferCoherenceEnum Coherence = AmdBufferCoherenceEnum::DefaultCoherence,
     typename T,
     typename ElementSpaceSize,
     typename X,
@@ -34,7 +43,7 @@ template <
 __host__ __device__ constexpr auto
 make_dynamic_buffer(T* p, ElementSpaceSize element_space_size, X invalid_element_value)
 {
-    return make_buffer_view<BufferAddressSpace, T, ElementSpaceSize>(
+    return make_buffer_view<BufferAddressSpace, Coherence, T, ElementSpaceSize>(
         p, element_space_size, invalid_element_value);
 }
 

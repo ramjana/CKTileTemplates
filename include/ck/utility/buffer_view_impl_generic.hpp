@@ -17,7 +17,11 @@ namespace ck {
 // FIXME: InvalidElementUseNumericalZeroValue and invalid_element_value_ should be a property of
 //        transforms of TensorView/Tensor
 template <typename T, typename BufferSizeType, bool InvalidElementUseNumericalZeroValue>
-struct BufferView<AddressSpaceEnum::Generic, T, BufferSizeType, InvalidElementUseNumericalZeroValue>
+struct BufferView<AddressSpaceEnum::Generic,
+                  T,
+                  BufferSizeType,
+                  InvalidElementUseNumericalZeroValue,
+                  AmdBufferCoherenceEnum::DefaultCoherence>
 {
     using type = T;
 
