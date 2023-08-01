@@ -1,6 +1,7 @@
 // C = A * B
 template <typename ADataType,
           typename BDataType,
+          typename AccDataType,
           typename CDataType,
           typename ALayout,
           typename BLayout,
@@ -118,12 +119,15 @@ struct GemmBetterPipeline
         auto a_lds_gemm_window = make_tile_window(
             a_lds_block, make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}), {0, 0});
 
-        // A tile for block GEMM
+        // B tile for block GEMM
         auto b_lds_gemm_window = make_tile_window(
             b_lds_block, make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}), {0, 0});
 
+        // Block GEMM
+        constexpr auto block_gemm = BlockGemmV1<ADataType, BDataType, AccDataType, kBlockSize>{};
+
         // Acc tile
-        auto acc_block_tile = decltype(block_gemm_cr_as_bs(a_lds_gemm_window, b_lds_gemm_window)){};
+        auto acc_block_tile = decltype(block_gemm(a_lds_gemm_window, b_lds_gemm_window)){};
 
         // prefetch
         // global read 0
@@ -154,7 +158,7 @@ struct GemmBetterPipeline
             ps.block_sync_lds();
 
             // GEMM i
-            block_gemm_cr_as_bs(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+            block_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
 
             ps.block_sync_lds();
 
@@ -181,7 +185,7 @@ struct GemmBetterPipeline
             ps.block_sync_lds();
 
             // GEMM num_loop - 2
-            block_gemm_cr_as_bs(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+            block_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
 
             ps.block_sync_lds();
 
@@ -192,7 +196,7 @@ struct GemmBetterPipeline
             ps.block_sync_lds();
 
             // GEMM num_loop - 1
-            block_gemm_cr_as_bs(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
+            block_gemm(acc_block_tile, a_lds_gemm_window, b_lds_gemm_window);
         }
 
         // type convert

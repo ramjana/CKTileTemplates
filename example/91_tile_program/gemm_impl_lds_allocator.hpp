@@ -1,7 +1,6 @@
 // 2D layout [N, K]
 template <typename ADataType,
           typename BDataType,
-          typename CDataType,
           ck::index_t kBlockSize,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,
@@ -32,7 +31,6 @@ struct LdsAllocator2d
 // [K0, M, K1] layout with padding
 template <typename ADataType,
           typename BDataType,
-          typename CDataType,
           ck::index_t kBlockSize,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,
@@ -83,7 +81,6 @@ struct LdsAllocator3dPad
 // Xor layout
 template <typename ADataType,
           typename BDataType,
-          typename CDataType,
           ck::index_t kBlockSize,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,

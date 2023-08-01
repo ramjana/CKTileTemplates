@@ -1,6 +1,5 @@
 template <typename ADataType,
           typename BDataType,
-          typename CDataType,
           ck::index_t kBlockSize,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,
@@ -38,7 +37,6 @@ struct NaiveDram2LdsLoader
 
 template <typename ADataType,
           typename BDataType,
-          typename CDataType,
           ck::index_t kBlockSize,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,

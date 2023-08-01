@@ -19,19 +19,19 @@ struct WarpGemmAttributeMfmaImplF16F16F32M32N32K8
     using BVecType = typename vector_type<half_t, 4>::type;
     using CVecType = typename vector_type<float, 16>::type;
 
-    static constexpr index_t M = 32;
-    static constexpr index_t N = 32;
-    static constexpr index_t K = 8;
+    static constexpr index_t kM = 32;
+    static constexpr index_t kN = 32;
+    static constexpr index_t kK = 8;
 
-    static constexpr index_t AMLane     = 32;
-    static constexpr index_t BNLane     = 32;
-    static constexpr index_t ABKLane    = 2;
-    static constexpr index_t ABKPerLane = 4;
+    static constexpr index_t kAMLane     = 32;
+    static constexpr index_t kBNLane     = 32;
+    static constexpr index_t kABKLane    = 2;
+    static constexpr index_t kABKPerLane = 4;
 
-    static constexpr index_t CMLane     = 2;
-    static constexpr index_t CNLane     = 32;
-    static constexpr index_t CM0PerLane = 4;
-    static constexpr index_t CM1PerLane = 4;
+    static constexpr index_t kCMLane     = 2;
+    static constexpr index_t kCNLane     = 32;
+    static constexpr index_t kCM0PerLane = 4;
+    static constexpr index_t kCM1PerLane = 4;
 
     // c_vec += a_vec * b_vec
     __device__ void operator()(CVecType& c_vec, const AVecType& a_vec, const BVecType& b_vec) const
@@ -57,19 +57,19 @@ struct WarpGemmAttributeMfmaImplF16F16F32M32N32K16
     using BVecType = typename vector_type<half_t, 8>::type;
     using CVecType = typename vector_type<float, 16>::type;
 
-    static constexpr index_t M = 32;
-    static constexpr index_t N = 32;
-    static constexpr index_t K = 16;
+    static constexpr index_t kM = 32;
+    static constexpr index_t kN = 32;
+    static constexpr index_t kK = 16;
 
-    static constexpr index_t AMLane     = 32;
-    static constexpr index_t BNLane     = 32;
-    static constexpr index_t ABKLane    = 2;
-    static constexpr index_t ABKPerLane = 8;
+    static constexpr index_t kAMLane     = 32;
+    static constexpr index_t kBNLane     = 32;
+    static constexpr index_t kABKLane    = 2;
+    static constexpr index_t kABKPerLane = 8;
 
-    static constexpr index_t CMLane     = 2;
-    static constexpr index_t CNLane     = 32;
-    static constexpr index_t CM0PerLane = 4;
-    static constexpr index_t CM1PerLane = 4;
+    static constexpr index_t kCMLane     = 2;
+    static constexpr index_t kCNLane     = 32;
+    static constexpr index_t kCM0PerLane = 4;
+    static constexpr index_t kCM1PerLane = 4;
 
     // c_vec += a_vec * b_vec
     __device__ void operator()(CVecType& c_vec, const AVecType& a_vec, const BVecType& b_vec) const
@@ -132,19 +132,19 @@ struct WarpGemmAttributeMfmaImplF16F16F32M16N16K16
     using BVecType = typename vector_type<half_t, 4>::type;
     using CVecType = typename vector_type<float, 4>::type;
 
-    static constexpr index_t M = 16;
-    static constexpr index_t N = 16;
-    static constexpr index_t K = 16;
+    static constexpr index_t kM = 16;
+    static constexpr index_t kN = 16;
+    static constexpr index_t kK = 16;
 
-    static constexpr index_t AMLane     = 16;
-    static constexpr index_t BNLane     = 16;
-    static constexpr index_t ABKLane    = 4;
-    static constexpr index_t ABKPerLane = 4;
+    static constexpr index_t kAMLane     = 16;
+    static constexpr index_t kBNLane     = 16;
+    static constexpr index_t kABKLane    = 4;
+    static constexpr index_t kABKPerLane = 4;
 
-    static constexpr index_t CMLane     = 4;
-    static constexpr index_t CNLane     = 16;
-    static constexpr index_t CM0PerLane = 1;
-    static constexpr index_t CM1PerLane = 4;
+    static constexpr index_t kCMLane     = 4;
+    static constexpr index_t kCNLane     = 16;
+    static constexpr index_t kCM0PerLane = 1;
+    static constexpr index_t kCM1PerLane = 4;
 
     // c_vec += a_vec * b_vec
     __device__ void operator()(CVecType& c_vec, const AVecType& a_vec, const BVecType& b_vec) const
@@ -170,19 +170,19 @@ struct WarpGemmAttributeMfmaImplF16F16F32M16N16K32
     using BVecType = typename vector_type<half_t, 8>::type;
     using CVecType = typename vector_type<float, 4>::type;
 
-    static constexpr index_t M = 16;
-    static constexpr index_t N = 16;
-    static constexpr index_t K = 32;
+    static constexpr index_t kM = 16;
+    static constexpr index_t kN = 16;
+    static constexpr index_t kK = 32;
 
-    static constexpr index_t AMLane     = 16;
-    static constexpr index_t BNLane     = 16;
-    static constexpr index_t ABKLane    = 4;
-    static constexpr index_t ABKPerLane = 8;
+    static constexpr index_t kAMLane     = 16;
+    static constexpr index_t kBNLane     = 16;
+    static constexpr index_t kABKLane    = 4;
+    static constexpr index_t kABKPerLane = 8;
 
-    static constexpr index_t CMLane     = 4;
-    static constexpr index_t CNLane     = 16;
-    static constexpr index_t CM0PerLane = 1;
-    static constexpr index_t CM1PerLane = 4;
+    static constexpr index_t kCMLane     = 4;
+    static constexpr index_t kCNLane     = 16;
+    static constexpr index_t kCM0PerLane = 1;
+    static constexpr index_t kCM1PerLane = 4;
 
     // c_vec += a_vec * b_vec
     __device__ void operator()(CVecType& c_vec, const AVecType& a_vec, const BVecType& b_vec) const

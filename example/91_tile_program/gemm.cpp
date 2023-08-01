@@ -57,9 +57,10 @@ void reference_gemm(const Tensor<ADataType>& a_m_k,
 
 int main(int argc, char* argv[])
 {
-    using ADataType = ck::half_t;
-    using BDataType = ck::half_t;
-    using CDataType = ck::half_t;
+    using ADataType   = ck::half_t;
+    using BDataType   = ck::half_t;
+    using AccDataType = float;
+    using CDataType   = ck::half_t;
 
     ck::index_t M = 3328;
     ck::index_t N = 4096;
@@ -112,7 +113,6 @@ int main(int argc, char* argv[])
 #if 0
     using LdsAllocator = LdsAllocator2d<ADataType,
                                         BDataType,
-                                        CDataType,
                                         kBlockSize,
                                         kGemmMPerBlock,
                                         kGemmNPerBlock,
@@ -120,7 +120,6 @@ int main(int argc, char* argv[])
 #elif 0
     using LdsAllocator     = LdsAllocator3dPad<ADataType,
                                            BDataType,
-                                           CDataType,
                                            kBlockSize,
                                            kGemmMPerBlock,
                                            kGemmNPerBlock,
@@ -128,7 +127,6 @@ int main(int argc, char* argv[])
 #elif 1
     using LdsAllocator = LdsAllocatorXor<ADataType,
                                          BDataType,
-                                         CDataType,
                                          kBlockSize,
                                          kGemmMPerBlock,
                                          kGemmNPerBlock,
@@ -138,7 +136,6 @@ int main(int argc, char* argv[])
 #if 0
     using Dram2LdsLoader = NaiveDram2LdsLoader<ADataType,
                                                BDataType,
-                                               CDataType,
                                                kBlockSize,
                                                kGemmMPerBlock,
                                                kGemmNPerBlock,
@@ -146,7 +143,6 @@ int main(int argc, char* argv[])
 #else
     using Dram2LdsLoader   = BetterDram2LdsLoader<ADataType,
                                                 BDataType,
-                                                CDataType,
                                                 kBlockSize,
                                                 kGemmMPerBlock,
                                                 kGemmNPerBlock,
@@ -156,6 +152,7 @@ int main(int argc, char* argv[])
 #if 0
     const auto gemm_kernel = GemmNaivePipeline<ADataType,
                                                BDataType,
+                                                AccDataType,
                                                CDataType,
                                                ck::tensor_layout::gemm::RowMajor,
                                                ck::tensor_layout::gemm::ColumnMajor,
@@ -172,6 +169,7 @@ int main(int argc, char* argv[])
 #else
     const auto gemm_kernel = GemmBetterPipeline<ADataType,
                                                 BDataType,
+                                                AccDataType,
                                                 CDataType,
                                                 ck::tensor_layout::gemm::RowMajor,
                                                 ck::tensor_layout::gemm::ColumnMajor,

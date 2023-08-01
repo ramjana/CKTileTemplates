@@ -207,6 +207,11 @@
 
 namespace ck {
 
+enum struct ArchEnum
+{
+    Gfx90a,
+};
+
 enum struct InMemoryDataOperationEnum
 {
     Set,

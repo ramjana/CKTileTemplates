@@ -19,9 +19,9 @@ struct WarpGemmImpl
 {
     using WarpGemmAttribute = remove_cvref_t<WarpGemmAttribute_>;
 
-    static constexpr index_t M = WarpGemmAttribute::Impl::M;
-    static constexpr index_t N = WarpGemmAttribute::Impl::N;
-    static constexpr index_t K = WarpGemmAttribute::Impl::K;
+    static constexpr index_t kM = WarpGemmAttribute::Impl::kM;
+    static constexpr index_t kN = WarpGemmAttribute::Impl::kN;
+    static constexpr index_t kK = WarpGemmAttribute::Impl::kK;
 
     using ADataType = typename WarpGemmAttribute::ADataType;
     using BDataType = typename WarpGemmAttribute::BDataType;

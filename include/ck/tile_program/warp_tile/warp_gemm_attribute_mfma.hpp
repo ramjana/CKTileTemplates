@@ -28,13 +28,13 @@ struct WarpGemmAtrributeMfma
     using BVecType = typename Impl::BVecType;
     using CVecType = typename Impl::CVecType;
 
-    static constexpr index_t M = Impl::M;
-    static constexpr index_t N = Impl::N;
-    static constexpr index_t K = Impl::K;
+    static constexpr index_t kM = Impl::kM;
+    static constexpr index_t kN = Impl::kN;
+    static constexpr index_t kK = Impl::kK;
 
     using AWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
-        Tuple<Sequence<Impl::AMLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
+        Tuple<Sequence<Impl::kAMLane>, Sequence<Impl::kABKLane, Impl::kABKPerLane>>,
         Tuple<Sequence<2, 1>>,
         Tuple<Sequence<0, 0>>,
         Sequence<2>,
@@ -42,7 +42,7 @@ struct WarpGemmAtrributeMfma
 
     using BWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
-        Tuple<Sequence<Impl::BNLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
+        Tuple<Sequence<Impl::kBNLane>, Sequence<Impl::kABKLane, Impl::kABKPerLane>>,
         Tuple<Sequence<2, 1>>,
         Tuple<Sequence<0, 0>>,
         Sequence<2>,
@@ -50,7 +50,8 @@ struct WarpGemmAtrributeMfma
 
     using CWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
-        Tuple<Sequence<Impl::CM0PerLane, Impl::CMLane, Impl::CM1PerLane>, Sequence<Impl::CNLane>>,
+        Tuple<Sequence<Impl::kCM0PerLane, Impl::kCMLane, Impl::kCM1PerLane>,
+              Sequence<Impl::kCNLane>>,
         Tuple<Sequence<1, 2>>,
         Tuple<Sequence<1, 0>>,
         Sequence<1, 1>,
@@ -82,13 +83,13 @@ struct WarpGemmAtrributeMfmaTransposedCDistribution
     using BVecType = typename Impl::AVecType;
     using CVecType = typename Impl::CVecType;
 
-    static constexpr index_t M = Impl::N;
-    static constexpr index_t N = Impl::M;
-    static constexpr index_t K = Impl::K;
+    static constexpr index_t kM = Impl::kN;
+    static constexpr index_t kN = Impl::kM;
+    static constexpr index_t kK = Impl::kK;
 
     using AWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
-        Tuple<Sequence<Impl::BNLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
+        Tuple<Sequence<Impl::kBNLane>, Sequence<Impl::kABKLane, Impl::kABKPerLane>>,
         Tuple<Sequence<2, 1>>,
         Tuple<Sequence<0, 0>>,
         Sequence<2>,
@@ -96,7 +97,7 @@ struct WarpGemmAtrributeMfmaTransposedCDistribution
 
     using BWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
-        Tuple<Sequence<Impl::AMLane>, Sequence<Impl::ABKLane, Impl::ABKPerLane>>,
+        Tuple<Sequence<Impl::kAMLane>, Sequence<Impl::kABKLane, Impl::kABKPerLane>>,
         Tuple<Sequence<2, 1>>,
         Tuple<Sequence<0, 0>>,
         Sequence<2>,
@@ -104,7 +105,8 @@ struct WarpGemmAtrributeMfmaTransposedCDistribution
 
     using CWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
-        Tuple<Sequence<Impl::CNLane>, Sequence<Impl::CM0PerLane, Impl::CMLane, Impl::CM1PerLane>>,
+        Tuple<Sequence<Impl::kCNLane>,
+              Sequence<Impl::kCM0PerLane, Impl::kCMLane, Impl::kCM1PerLane>>,
         Tuple<Sequence<2, 1>>,
         Tuple<Sequence<1, 0>>,
         Sequence<2, 2>,
