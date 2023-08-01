@@ -9,8 +9,8 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tensor_description/tensor_space_filling_curve.hpp"
 
-#include "ck/tile_program/tile_distribution.hpp"
-#include "ck/tile_program/tile_window.hpp"
+#include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/tile_window.hpp"
 
 namespace ck {
 namespace tile_program {

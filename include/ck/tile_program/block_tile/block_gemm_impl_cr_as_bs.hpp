@@ -8,9 +8,9 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
-#include "ck/tile_program/tile_distribution.hpp"
-#include "ck/tile_program/tile_elementwise.hpp"
-#include "ck/tile_program/warp_gemm.hpp"
+#include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/tile_elementwise.hpp"
+#include "ck/tile_program/warp_tile/warp_gemm.hpp"
 
 namespace ck {
 namespace tile_program {

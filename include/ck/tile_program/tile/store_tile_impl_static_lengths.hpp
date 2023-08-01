@@ -8,7 +8,9 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tensor_description/tensor_space_filling_curve.hpp"
-#include "ck/tile_program/tile_distribution.hpp"
+
+#include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/tile_window.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -18,9 +20,8 @@ template <typename BottomTensorView_,
           typename WindowLengths_,
           typename TileDistribution_,
           typename DataType_>
-__host__ void
-store_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&,
-           const StaticDistributedTensor<DataType_, TileDistribution_>&)
+__host__ void store_tile(TileWindowWithStaticLengths<BottomTensorView_, WindowLengths_>&,
+                         const StaticDistributedTensor<DataType_, TileDistribution_>&)
 {
 }
 
@@ -29,8 +30,7 @@ template <typename BottomTensorView_,
           typename TileDistribution_,
           typename DataType_>
 __device__ void
-store_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&
-               tile_window,
+store_tile(TileWindowWithStaticLengths<BottomTensorView_, WindowLengths_>& tile_window_tmp,
            const StaticDistributedTensor<DataType_, TileDistribution_>& dstr_tensor)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
@@ -40,9 +40,13 @@ store_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, T
     using TileWindow = TileWindowWithStaticDistribution<BottomTensorView, WindowLengths, TileDstr>;
 
     static_assert(is_same_v<remove_cvref_t<DataType_>, DataType>, "wrong!");
-    static_assert(TileWindow::HasStaticTileDistribution(), "wrong!");
 
     constexpr auto tile_dstr = TileDstr{};
+
+    auto tile_window = make_tile_window(tile_window_tmp.GetBottomTensorView(),
+                                        tile_window_tmp.GetWindowLengths(),
+                                        tile_window_tmp.GetWindowOrigin(),
+                                        tile_dstr);
 
     constexpr auto thread_tensor_lengths_ys =
         to_sequence(tile_dstr.GetYs2DDescriptor().GetLengths());

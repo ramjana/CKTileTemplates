@@ -8,7 +8,7 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tensor_description/tensor_space_filling_curve.hpp"
-#include "ck/tile_program/tile_distribution.hpp"
 
-#include "ck/tile_program/store_tile_impl_static_distribution.hpp"
-#include "ck/tile_program/store_tile_impl_static_lengths.hpp"
+#include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/store_tile_impl_static_distribution.hpp"
+#include "ck/tile_program/tile/store_tile_impl_static_lengths.hpp"

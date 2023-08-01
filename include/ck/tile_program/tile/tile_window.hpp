@@ -7,6 +7,6 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 #include "ck/tensor_description/tensor_adaptor_coordinate.hpp"
 
-#include "ck/tile_program/tile_distribution.hpp"
-#include "ck/tile_program/tile_window_impl_static_distribution.hpp"
-#include "ck/tile_program/tile_window_impl_static_lengths.hpp"
+#include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/tile_window_impl_static_distribution.hpp"
+#include "ck/tile_program/tile/tile_window_impl_static_lengths.hpp"

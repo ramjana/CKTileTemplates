@@ -7,8 +7,9 @@
 #include "ck/tensor_description/tensor_descriptor.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
-#include "ck/tile_program/tile_distribution.hpp"
-#include "ck/tile_program/warp_gemm_attribute_mfma_impl.hpp"
+
+#include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/warp_tile/warp_gemm_attribute_mfma_impl.hpp"
 
 namespace ck {
 namespace tile_program {

@@ -5,9 +5,10 @@
 #pragma once
 
 #include "ck/utility/common_header.hpp"
-#include "ck/tile_program/warp_gemm_impl.hpp"
-#include "ck/tile_program/warp_gemm_attribute_mfma.hpp"
-#include "ck/tile_program/warp_gemm_attribute_mfma_impl.hpp"
+
+#include "ck/tile_program/warp_tile/warp_gemm_impl.hpp"
+#include "ck/tile_program/warp_tile/warp_gemm_attribute_mfma.hpp"
+#include "ck/tile_program/warp_tile/warp_gemm_attribute_mfma_impl.hpp"
 
 namespace ck {
 namespace tile_program {
