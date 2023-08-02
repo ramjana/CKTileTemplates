@@ -84,17 +84,17 @@ struct ProgramServer
         return ck::forwarder{}(meta_data_.pull<T>());
     }
 
-    __host__ static ck::index_t get_block_1d_id() { return -1; }
+    __host__ static ck::index_t get_block_id() { return -1; }
 
-    __host__ static ck::index_t get_thread_local_1d_id() { return -1; }
+    __host__ static ck::index_t get_thread_id() { return -1; }
 
     __host__ static ck::index_t get_grid_size() { return -1; }
 
     __host__ static void block_sync_lds() {}
 
-    __device__ static ck::index_t get_block_1d_id() { return ck::get_block_1d_id(); }
+    __device__ static ck::index_t get_block_id() { return ck::get_block_id(); }
 
-    __device__ static ck::index_t get_thread_local_1d_id() { return ck::get_thread_local_1d_id(); }
+    __device__ static ck::index_t get_thread_id() { return ck::get_thread_id(); }
 
     __device__ static ck::index_t get_grid_size() { return ck::get_grid_size(); }
 

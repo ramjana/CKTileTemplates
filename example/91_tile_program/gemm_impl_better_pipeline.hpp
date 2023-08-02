@@ -55,7 +55,7 @@ struct GemmBetterPipeline
             p_b, make_tuple(N, K), make_tuple(Ldb, 1), Number<32>{}, Number<1>{});
 
         // divide problem
-        const auto id_block = ps.get_block_1d_id();
+        const auto id_block = ps.get_block_id();
 
         const auto num_tile_m = M / kMPerBlock;
         const auto num_tile_n = N / kNPerBlock;
@@ -124,7 +124,8 @@ struct GemmBetterPipeline
             b_lds_block, make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}), {0, 0});
 
         // Block GEMM
-        constexpr auto block_gemm = BlockGemmV1<ADataType, BDataType, AccDataType, kBlockSize>{};
+        constexpr auto block_gemm =
+            BlockGemmASmemBSmemCRegV1<ADataType, BDataType, AccDataType, kBlockSize>{};
 
         // Acc tile
         auto acc_block_tile = decltype(block_gemm(a_lds_gemm_window, b_lds_gemm_window)){};

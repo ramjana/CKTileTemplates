@@ -16,7 +16,7 @@
 #include "ck/tile_program/tile/load_tile.hpp"
 #include "ck/tile_program/tile/store_tile.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
-#include "ck/tile_program/block_tile/block_gemm_impl_cr_as_bs.hpp"
+#include "ck/tile_program/block_tile/block_gemm_asmem_bsmem_creg_v1.hpp"
 
 #include "ck/library/utility/check_err.hpp"
 #include "ck/library/utility/device_memory.hpp"
