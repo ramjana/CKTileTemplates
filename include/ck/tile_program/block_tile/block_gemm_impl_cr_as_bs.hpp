@@ -83,7 +83,7 @@ struct BlockGemmV1DefaultPolicy
         constexpr index_t NWarp = 2;
 
         using WG = WarpGemmMfmaF16F16F32M32N32K8;
-#elif 1
+#elif 0
         // 256x128x32   32x32x16
         constexpr index_t MWarp = 2;
         constexpr index_t NWarp = 2;
@@ -103,7 +103,23 @@ struct BlockGemmV1DefaultPolicy
         using WG = WarpGemmMfmaF16F16F32M16N16K32TransposedCDistribution;
 #endif
 
-        return make_tuple(WG{}, MWarp, NWarp);
+        static_assert(kBlockSize % get_warp_size() == 0, "wrong!");
+
+        constexpr index_t NumWarp = kBlockSize / get_warp_size();
+
+        constexpr index_t kMPerBlock = BlockGemmShape::kM;
+        constexpr index_t kNPerBlock = BlockGemmShape::kN;
+        constexpr index_t kKPerBlock = BlockGemmShape::kK;
+
+        if constexpr(NumWarp == 4 && kMPerBlock % 128 == 0 &&
+                     kNPerBlock % 128 == 0 % kKPerBlock % 16 == 0)
+        {
+            return make_tuple(WarpGemmMfmaF16F16F32M32N32K16{}, 2, 2);
+        }
+        else
+        {
+            return make_tuple(WarpGemmMfmaF16F16F32M32N32K16{}, 2, 2);
+        }
     }
 };
 

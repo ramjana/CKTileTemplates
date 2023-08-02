@@ -117,7 +117,7 @@ int main(int argc, char* argv[])
                                         kGemmMPerBlock,
                                         kGemmNPerBlock,
                                         kGemmKPerBlock>;
-#elif 0
+#elif 1
     using LdsAllocator     = LdsAllocator3dPad<ADataType,
                                            BDataType,
                                            kBlockSize,
