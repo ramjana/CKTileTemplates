@@ -14,52 +14,24 @@ namespace ck {
 namespace tile_program {
 namespace warp {
 
-#if 0
-template<typename DataTypes, typename WarpGemmShape>
-struct WarpGemmListByDatatypeAndShape;
-
-template<>
-struct WarpGemmListByDatatypeAndShape<Tuple<half_t, half_t, float>, TileGemmShape<16, 16, 16>>
-{
-    using List = Tuple<
-        WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>,
-        WarpGemmImpl<WarpGemmAtrributeMfmaTransposedCDistribution<WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>
-        >;
-};
-
-template<>
-struct WarpGemmListByDatatypeAndShape<Tuple<half_t, half_t, float>, TileGemmShape<32, 32, 8>>
-{
-    using List = Tuple<
-        WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>,
-        WarpGemmImpl<WarpGemmAtrributeMfmaTransposedCDistribution<WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>
-        >;
-};
-
-template<>
-struct WarpGemmListByDatatypeAndShape<Tuple<half_t, half_t, float>, TileGemmShape<32, 32, 16>>
-{
-    using List = Tuple<
-        WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M32N32K16>>,
-        WarpGemmImpl<WarpGemmAtrributeMfmaTransposedCDistribution<WarpGemmAttributeMfmaImplF16F16F32M32N32K16>>
-        >;
-};
-#endif
-
 using WarpGemmMfmaF16F16F32M32N32K8 =
     WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
-
-using WarpGemmMfmaF16F16F32M32N32K16 =
-    WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M32N32K16>>;
-
-using WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution = WarpGemmImpl<
-    WarpGemmAtrributeMfmaTransposedCDistribution<WarpGemmAttributeMfmaImplF16F16F32M32N32K16>>;
 
 using WarpGemmMfmaF16F16F32M16N16K16 =
     WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>;
 
-using WarpGemmMfmaF16F16F32M16N16K32 =
-    WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M16N16K32>>;
+using WarpGemmMfmaF16F16F32M32N32K16 =
+    WarpGemmImpl<WarpGemmAtrributeMfmaIterateK<WarpGemmAttributeMfmaImplF16F16F32M32N32K8, 2>>;
+
+using WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution =
+    WarpGemmImpl<WarpGemmAtrributeMfmaIterateKAndTransposedCDistribution<
+        WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
+        2>>;
+
+using WarpGemmMfmaF16F16F32M16N16K32TransposedCDistribution =
+    WarpGemmImpl<WarpGemmAtrributeMfmaIterateKAndTransposedCDistribution<
+        WarpGemmAttributeMfmaImplF16F16F32M16N16K16,
+        2>>;
 
 } // namespace warp
 } // namespace tile_program

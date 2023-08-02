@@ -52,10 +52,6 @@ struct BlockGemmV1DefaultPolicy
         constexpr index_t MWarp = 4;
         constexpr index_t NWarp = 1;
 
-        constexpr index_t MIterPerWarp = 1;
-        constexpr index_t NIterPerWarp = 4;
-        constexpr index_t KIterPerWarp = 2;
-
         using WG = WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution;
 #elif 0
         // 128x128x32   16x16x16
@@ -81,12 +77,30 @@ struct BlockGemmV1DefaultPolicy
         constexpr index_t NWarp = 2;
 
         using WG = WarpGemmMfmaF16F16F32M16N16K16;
+#elif 0
+        // 256x128x32   32x32x8
+        constexpr index_t MWarp = 2;
+        constexpr index_t NWarp = 2;
+
+        using WG = WarpGemmMfmaF16F16F32M32N32K8;
 #elif 1
         // 256x128x32   32x32x16
         constexpr index_t MWarp = 2;
         constexpr index_t NWarp = 2;
 
         using WG = WarpGemmMfmaF16F16F32M32N32K16;
+#elif 0
+        // 256x128x32, 32x32x16, transposed C distribution
+        constexpr index_t MWarp = 2;
+        constexpr index_t NWarp = 2;
+
+        using WG = WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution;
+#elif 0
+        // 256x128x32, 16x16x32, transposed C distribution
+        constexpr index_t MWarp = 2;
+        constexpr index_t NWarp = 2;
+
+        using WG = WarpGemmMfmaF16F16F32M16N16K32TransposedCDistribution;
 #endif
 
         return make_tuple(WG{}, MWarp, NWarp);
@@ -128,9 +142,6 @@ struct BlockGemmV1
             template GetConfig<ADataType, BDataType, CDataType, kBlockSize, BlockGemmShape>();
 
         using WG = remove_cvref_t<decltype(config.template At<0>())>;
-
-        static_assert(is_same_v<WG, ck::tile_program::warp::WarpGemmMfmaF16F16F32M32N32K16>,
-                      "wrong!");
 
         constexpr index_t MWarp = config.template At<1>();
         constexpr index_t NWarp = config.template At<2>();
