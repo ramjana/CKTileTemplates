@@ -24,10 +24,7 @@
 #include "ck/library/utility/host_tensor.hpp"
 #include "ck/library/utility/host_tensor_generator.hpp"
 
-#include "gemm_impl_naive_pipeline.hpp"
-#include "gemm_impl_better_pipeline.hpp"
-#include "gemm_impl_lds_allocator.hpp"
-#include "gemm_impl_dram_to_lds_loader.hpp"
+#include "gemm.hpp"
 
 // elementwise lambda
 struct AElementFunction
@@ -138,78 +135,20 @@ int main(int argc, char* argv[])
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-#if 0
-    using LdsAllocator = LdsAllocator2d<ADataType,
-                                        BDataType,
-                                        kBlockSize,
-                                        kGemmMPerBlock,
-                                        kGemmNPerBlock,
-                                        kGemmKPerBlock>;
-#elif 0
-    using LdsAllocator     = LdsAllocator3dPad<ADataType,
-                                           BDataType,
-                                           kBlockSize,
-                                           kGemmMPerBlock,
-                                           kGemmNPerBlock,
-                                           kGemmKPerBlock>;
-#elif 0
-    using LdsAllocator = LdsAllocatorXor<ADataType,
-                                         BDataType,
-                                         kBlockSize,
-                                         kGemmMPerBlock,
-                                         kGemmNPerBlock,
-                                         kGemmKPerBlock>;
-#endif
-
-#if 0
-    using Dram2LdsLoader = NaiveDram2LdsLoader<ADataType,
-                                               BDataType,
-                                               kBlockSize,
-                                               kGemmMPerBlock,
-                                               kGemmNPerBlock,
-                                               kGemmKPerBlock>;
-#elif 0
-    using Dram2LdsLoader   = BetterDram2LdsLoader<ADataType,
-                                                BDataType,
-                                                kBlockSize,
-                                                kGemmMPerBlock,
-                                                kGemmNPerBlock,
-                                                kGemmKPerBlock>;
-#endif
-
-#if 0
-    const auto gemm_kernel = GemmNaivePipeline<ADataType,
-                                               BDataType,
-                                                AccDataType,
-                                               CDataType,
-                                               ck::tensor_layout::gemm::RowMajor,
-                                               ck::tensor_layout::gemm::ColumnMajor,
-                                               ck::tensor_layout::gemm::RowMajor,
-                                               ck::tensor_operation::element_wise::PassThrough,
-                                               ck::tensor_operation::element_wise::PassThrough,
-                                               ck::tensor_operation::element_wise::PassThrough,
-                                               kBlockSize,
-                                               kGemmMPerBlock,
-                                               kGemmNPerBlock,
-                                               kGemmKPerBlock,
-                                               LdsAllocator,
-                                               Dram2LdsLoader>{};
-#else
-    const auto gemm_kernel = GemmBetterPipeline<ADataType,
-                                                BDataType,
-                                                AccDataType,
-                                                CDataType,
-                                                ck::tensor_layout::gemm::RowMajor,
-                                                ck::tensor_layout::gemm::ColumnMajor,
-                                                ck::tensor_layout::gemm::RowMajor,
-                                                AElementFunction,
-                                                BElementFunction,
-                                                CElementFunction,
-                                                kBlockSize,
-                                                kGemmMPerBlock,
-                                                kGemmNPerBlock,
-                                                kGemmKPerBlock>{};
-#endif
+    const auto gemm_kernel = GemmKernel<ADataType,
+                                  BDataType,
+                                  AccDataType,
+                                  CDataType,
+                                  ck::tensor_layout::gemm::RowMajor,
+                                  ck::tensor_layout::gemm::ColumnMajor,
+                                  ck::tensor_layout::gemm::RowMajor,
+                                  AElementFunction,
+                                  BElementFunction,
+                                  CElementFunction,
+                                  kBlockSize,
+                                  kGemmMPerBlock,
+                                  kGemmNPerBlock,
+                                  kGemmKPerBlock>{};
 
     float ave_time = launch(ProgramServer{},
                             gemm_kernel,

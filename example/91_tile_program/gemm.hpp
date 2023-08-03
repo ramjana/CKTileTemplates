@@ -30,7 +30,7 @@ template <typename ADataType,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,
           ck::index_t kKPerBlock>
-struct GemmBetterPipeline
+struct Gemm
 {
 #if 0
     using BlockGemmPipelineProblem =
