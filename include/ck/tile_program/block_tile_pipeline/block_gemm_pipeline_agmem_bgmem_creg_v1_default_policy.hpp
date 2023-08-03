@@ -10,25 +10,25 @@
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
-#include "ck/tile_program/tile/static_tile_gemm_shape.hpp"
+#include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
-#include "ck/tile_program/block_tile/block_gemm_impl_cr_as_bs.hpp"
+#include "ck/tile_program/block_tile/block_gemm_asmem_bsmem_creg_v1.hpp"
 
 namespace ck {
 namespace tile_program {
 namespace block {
 
-// Default policy for BlockGemmPipelineV1
+// Default policy for BlockGemmPipelineAGmemBGmemCRegV1
 // Default policy class should not be templated, put template on member functions instead
-struct BlockGemmPipelineV1DefaultPolicy
+struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
 {
     template <typename ADataType, typename BlockGemmShape>
     __host__ __device__ static constexpr auto MakeALdsBlockDescriptor()
     {
         using namespace ck;
 
-        static constexpr index_t kMPerBlock = BlockGemmShape::kM;
-        static constexpr index_t kKPerBlock = BlockGemmShape::kK;
+        constexpr index_t kMPerBlock = BlockGemmShape::kM;
+        constexpr index_t kKPerBlock = BlockGemmShape::kK;
 
         constexpr auto a_lds_block_desc_0 = make_naive_tensor_descriptor(
             make_tuple(Number<kKPerBlock / 8>{}, Number<kMPerBlock>{}, Number<8>{}),
@@ -51,8 +51,8 @@ struct BlockGemmPipelineV1DefaultPolicy
     {
         using namespace ck;
 
-        static constexpr index_t kNPerBlock = BlockGemmShape::kN;
-        static constexpr index_t kKPerBlock = BlockGemmShape::kK;
+        constexpr index_t kNPerBlock = BlockGemmShape::kN;
+        constexpr index_t kKPerBlock = BlockGemmShape::kK;
 
         constexpr auto b_lds_block_desc_0 = make_naive_tensor_descriptor(
             make_tuple(Number<kKPerBlock / 8>{}, Number<kNPerBlock>{}, Number<8>{}),
@@ -70,13 +70,13 @@ struct BlockGemmPipelineV1DefaultPolicy
         return b_lds_block_desc;
     }
 
-    template <typename ADataType, typename BlockGemmShape>
+    template <typename ADataType, index_t kBlockSize, typename BlockGemmShape>
     __host__ __device__ static constexpr auto MakeADramTileDistribution()
     {
         using namespace ck::tile_program;
 
-        static constexpr index_t kMPerBlock = BlockGemmShape::kM;
-        static constexpr index_t kKPerBlock = BlockGemmShape::kK;
+        constexpr index_t kMPerBlock = BlockGemmShape::kM;
+        constexpr index_t kKPerBlock = BlockGemmShape::kK;
 
         constexpr index_t K1 = 16 / sizeof(ADataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -93,13 +93,13 @@ struct BlockGemmPipelineV1DefaultPolicy
                                            Sequence<0, 1>>{});
     }
 
-    template <typename BDataType, typename BlockGemmShape>
+    template <typename BDataType, index_t kBlockSize, typename BlockGemmShape>
     __host__ __device__ static constexpr auto MakeBDramTileDistribution()
     {
         using namespace ck::tile_program;
 
-        static constexpr index_t kNPerBlock = BlockGemmShape::kN;
-        static constexpr index_t kKPerBlock = BlockGemmShape::kK;
+        constexpr index_t kNPerBlock = BlockGemmShape::kN;
+        constexpr index_t kKPerBlock = BlockGemmShape::kK;
 
         constexpr index_t K1 = 16 / sizeof(BDataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -116,13 +116,16 @@ struct BlockGemmPipelineV1DefaultPolicy
                                            Sequence<0, 1>>{});
     }
 
-    template <typename ADataType_, typename BDataType_, typename CDataType_, index_t kBlockSize>
+    template <typename ADataType, typename BDataType, typename CDataType, index_t kBlockSize>
     __host__ __device__ static constexpr auto GetBlockGemm()
     {
-        return BlockGemmV1<ADataType, BDataType, CDataType, kBlockSize, BlockGemmV1DefaultPolicy>{};
+        return BlockGemmASmemBSmemCRegV1<remove_cvref_t<ADataType>,
+                                         remove_cvref_t<BDataType>,
+                                         remove_cvref_t<CDataType>,
+                                         kBlockSize,
+                                         BlockGemmASmemBSmemCRegV1DefaultPolicy>{};
     }
-
-}; // struct BlockGemmPipelineV1DefaultPolicy
+};
 
 } // namespace block
 } // namespace tile_program

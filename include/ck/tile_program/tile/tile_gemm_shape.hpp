@@ -9,7 +9,7 @@ namespace ck {
 namespace tile_program {
 
 template <index_t kMPerTile, index_t kNPerTile, index_t kKPerTile>
-struct StaticTileGemmShape
+struct TileGemmShape
 {
     static constexpr index_t kM = kMPerTile;
     static constexpr index_t kN = kNPerTile;

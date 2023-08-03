@@ -117,14 +117,14 @@ int main(int argc, char* argv[])
                                         kGemmMPerBlock,
                                         kGemmNPerBlock,
                                         kGemmKPerBlock>;
-#elif 1
+#elif 0
     using LdsAllocator     = LdsAllocator3dPad<ADataType,
                                            BDataType,
                                            kBlockSize,
                                            kGemmMPerBlock,
                                            kGemmNPerBlock,
                                            kGemmKPerBlock>;
-#elif 1
+#elif 0
     using LdsAllocator = LdsAllocatorXor<ADataType,
                                          BDataType,
                                          kBlockSize,
@@ -140,7 +140,7 @@ int main(int argc, char* argv[])
                                                kGemmMPerBlock,
                                                kGemmNPerBlock,
                                                kGemmKPerBlock>;
-#else
+#elif 0
     using Dram2LdsLoader   = BetterDram2LdsLoader<ADataType,
                                                 BDataType,
                                                 kBlockSize,
@@ -180,9 +180,7 @@ int main(int argc, char* argv[])
                                                 kBlockSize,
                                                 kGemmMPerBlock,
                                                 kGemmNPerBlock,
-                                                kGemmKPerBlock,
-                                                LdsAllocator,
-                                                Dram2LdsLoader>{};
+                                                kGemmKPerBlock>{};
 #endif
 
     float ave_time = launch(ProgramServer{},

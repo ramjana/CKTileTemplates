@@ -10,7 +10,7 @@
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
-#include "ck/tile_program/tile/static_tile_gemm_shape.hpp"
+#include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile/block_gemm_asmem_bsmem_creg_v1_default_policy.hpp"
 
@@ -47,7 +47,7 @@ struct BlockGemmASmemBSmemCRegV1
         constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
         constexpr index_t KPerBlock = ABlockWindowTmp{}.GetWindowLengths()[Number<1>{}];
 
-        using BlockGemmShape = StaticTileGemmShape<MPerBlock, NPerBlock, KPerBlock>;
+        using BlockGemmShape = TileGemmShape<MPerBlock, NPerBlock, KPerBlock>;
 
         constexpr auto config = Policy::
             template GetConfig<ADataType, BDataType, CDataType, kBlockSize, BlockGemmShape>();
@@ -180,7 +180,7 @@ struct BlockGemmASmemBSmemCRegV1
         constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
         constexpr index_t KPerBlock = ABlockWindowTmp{}.GetWindowLengths()[Number<1>{}];
 
-        using BlockGemmShape = StaticTileGemmShape<MPerBlock, NPerBlock, KPerBlock>;
+        using BlockGemmShape = TileGemmShape<MPerBlock, NPerBlock, KPerBlock>;
 
         constexpr auto config = Policy::
             template GetConfig<ADataType, BDataType, CDataType, kBlockSize, BlockGemmShape>();
@@ -330,7 +330,7 @@ struct BlockGemmASmemBSmemCRegV1
         constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
         constexpr index_t KPerBlock = ABlockWindowTmp{}.GetWindowLengths()[Number<1>{}];
 
-        using BlockGemmShape = StaticTileGemmShape<MPerBlock, NPerBlock, KPerBlock>;
+        using BlockGemmShape = TileGemmShape<MPerBlock, NPerBlock, KPerBlock>;
 
         constexpr auto config = Policy::
             template GetConfig<ADataType, BDataType, CDataType, kBlockSize, BlockGemmShape>();

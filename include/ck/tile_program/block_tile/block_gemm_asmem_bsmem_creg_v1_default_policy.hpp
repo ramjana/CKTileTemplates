@@ -10,7 +10,7 @@
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
-#include "ck/tile_program/tile/static_tile_gemm_shape.hpp"
+#include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 
 namespace ck {
