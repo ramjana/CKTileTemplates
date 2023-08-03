@@ -18,21 +18,34 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
-//  A Tile Window: global memory
-//  B Tile Window: global memory
-//  C Distributed tensor: register
+// Problem Description BlockGemmPipelineAGmemBGmemCRegV1
 template <typename ADataType_,
           typename BDataType_,
           typename AccDataType_,
-          index_t kBlockSize,
-          typename BlockGemmShape_,
-          typename Policy = BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy>
-struct BlockGemmPipelineAGmemBGmemCRegV1
+          index_t kBlockSize_,
+          typename BlockGemmShape_>
+struct BlockGemmPipelineAGmemBGmemCRegV1Description
 {
     using ADataType      = remove_cvref_t<ADataType_>;
     using BDataType      = remove_cvref_t<BDataType_>;
     using AccDataType    = remove_cvref_t<AccDataType_>;
     using BlockGemmShape = remove_cvref_t<BlockGemmShape_>;
+
+    static constexpr index_t kBlockSize = kBlockSize_;
+};
+
+//  A Tile Window: global memory
+//  B Tile Window: global memory
+//  C Distributed tensor: register
+template <typename Description, typename Policy = BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy>
+struct BlockGemmPipelineAGmemBGmemCRegV1
+{
+    using ADataType      = remove_cvref_t<typename Description::ADataType>;
+    using BDataType      = remove_cvref_t<typename Description::BDataType>;
+    using AccDataType    = remove_cvref_t<typename Description::AccDataType>;
+    using BlockGemmShape = remove_cvref_t<typename Description::BlockGemmShape>;
+
+    static constexpr index_t kBlockSize = Description::kBlockSize;
 
     static constexpr index_t kMPerBlock = BlockGemmShape::kM;
     static constexpr index_t kNPerBlock = BlockGemmShape::kN;
@@ -75,7 +88,6 @@ struct BlockGemmPipelineAGmemBGmemCRegV1
         // A tile in LDS
         ADataType* p_a_lds = static_cast<ADataType*>(p_smem);
 
-        // [allow optimization] allow different LDS layouts
         constexpr auto a_lds_block_desc =
             Policy::template MakeALdsBlockDescriptor<ADataType, BlockGemmShape>();
 
@@ -90,43 +102,44 @@ struct BlockGemmPipelineAGmemBGmemCRegV1
         BDataType* p_b_lds = static_cast<BDataType*>(
             static_cast<void*>(static_cast<char*>(p_smem) + a_lds_block_space_size_aligned));
 
-        // [allow optimization] allow different LDS layouts
         constexpr auto b_lds_block_desc =
             Policy::template MakeBLdsBlockDescriptor<BDataType, BlockGemmShape>();
 
         auto b_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_b_lds, b_lds_block_desc);
 
-        // A DRAM tile window
+        // A DRAM tile window for load
         auto a_copy_dram_window = make_tile_window(
             a_dram_block_window_tmp.GetBottomTensorView(),
             make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}),
             a_dram_block_window_tmp.GetWindowOrigin(),
             Policy::template MakeADramTileDistribution<ADataType, kBlockSize, BlockGemmShape>());
 
+        // A LDS tile window for store
         auto a_copy_lds_window =
             make_tile_window(a_lds_block,
                              make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}),
                              {0, 0},
                              a_copy_dram_window.GetTileDistribution());
 
-        // B DRAM tile window
+        // B DRAM tile window for load
         auto b_copy_dram_window = make_tile_window(
             b_dram_block_window_tmp.GetBottomTensorView(),
             make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}),
             b_dram_block_window_tmp.GetWindowOrigin(),
             Policy::template MakeBDramTileDistribution<BDataType, kBlockSize, BlockGemmShape>());
 
+        // B LDS tile window for store
         auto b_copy_lds_window =
             make_tile_window(b_lds_block,
                              make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}),
                              {0, 0},
                              b_copy_dram_window.GetTileDistribution());
 
-        // A tile for block GEMM
+        // A LDS tile for block GEMM
         auto a_lds_gemm_window = make_tile_window(
             a_lds_block, make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}), {0, 0});
 
-        // B tile for block GEMM
+        // B LDS tile for block GEMM
         auto b_lds_gemm_window = make_tile_window(
             b_lds_block, make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}), {0, 0});
 
@@ -134,7 +147,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV1
         constexpr auto block_gemm =
             Policy::template GetBlockGemm<ADataType, BDataType, AccDataType, kBlockSize>();
 
-        // Acc tile
+        // Acc register tile
         auto acc_block_tile = decltype(block_gemm(a_lds_gemm_window, b_lds_gemm_window)){};
 
         // prefetch

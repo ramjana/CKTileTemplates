@@ -31,18 +31,25 @@ template <typename ADataType,
           ck::index_t kKPerBlock>
 struct GemmBetterPipeline
 {
+    using PipelineDescription =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1Description<
+            ADataType,
+            BDataType,
+            AccDataType,
+            kBlockSize,
+            ck::tile_program::TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
+
+    using PipelinePolicy = ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy;
+
+    using BlockGemmPipeline =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1<PipelineDescription,
+                                                                   PipelinePolicy>;
+
     __host__ __device__ static constexpr ck::index_t GetStaticLdsSize()
     {
         using namespace ck;
         using namespace ck::tile_program;
         using namespace ck::tile_program::block;
-
-        using BlockGemmPipeline =
-            BlockGemmPipelineAGmemBGmemCRegV1<ADataType,
-                                              BDataType,
-                                              AccDataType,
-                                              kBlockSize,
-                                              TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
 
         return BlockGemmPipeline::GetStaticLdsSize();
     }
@@ -93,12 +100,7 @@ struct GemmBetterPipeline
         auto b_dram_block_window = make_tile_window(
             b_dram_grid, make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}), {iN, 0});
 
-        auto block_gemm_pipeline =
-            BlockGemmPipelineAGmemBGmemCRegV1<ADataType,
-                                              BDataType,
-                                              AccDataType,
-                                              kBlockSize,
-                                              TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>{};
+        auto block_gemm_pipeline = BlockGemmPipeline{};
 
         __shared__ char p_smem_char[block_gemm_pipeline.GetStaticLdsSize()];
 
@@ -109,7 +111,7 @@ struct GemmBetterPipeline
                                                         K / kKPerBlock,
                                                         p_smem_char);
 
-        // cast to CDataType and  and apply CElementOp
+        // cast to CDataType and apply CElementOp
         auto c_block_tile = tile_elementwise_in(
             [&](const auto& acc) { return c_element_func(type_convert<CDataType>(acc)); },
             acc_block_tile);
