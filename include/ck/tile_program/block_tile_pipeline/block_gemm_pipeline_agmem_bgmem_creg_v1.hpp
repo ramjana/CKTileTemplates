@@ -53,12 +53,12 @@ struct BlockGemmPipelineAGmemBGmemCRegV1
 
     template <typename ADramBlockWindowTmp,
               typename BDramBlockWindowTmp,
-              typename AElementOp,
-              typename BElementOp>
+              typename AElementFunction,
+              typename BElementFunction>
     __host__ __device__ auto operator()(const ADramBlockWindowTmp& a_dram_block_window_tmp,
-                                        const AElementOp& a_op,
+                                        const AElementFunction& a_element_func,
                                         const BDramBlockWindowTmp& b_dram_block_window_tmp,
-                                        const BElementOp& b_op,
+                                        const BElementFunction& b_element_func,
                                         index_t num_loop,
                                         void* p_smem) const
     {
@@ -142,24 +142,26 @@ struct BlockGemmPipelineAGmemBGmemCRegV1
         auto a_block_tile = load_tile(a_copy_dram_window);
         auto b_block_tile = load_tile(b_copy_dram_window);
 
-        // move to 1
-        move_tile_window(a_copy_dram_window, {0, kKPerBlock});
-        move_tile_window(b_copy_dram_window, {0, kKPerBlock});
+        {
+            // move to 1
+            move_tile_window(a_copy_dram_window, {0, kKPerBlock});
+            move_tile_window(b_copy_dram_window, {0, kKPerBlock});
 
-        // Initialize C
-        tile_elementwise_inout([](auto& acc) { acc = 0; }, acc_block_tile);
+            // Initialize C
+            tile_elementwise_inout([](auto& acc) { acc = 0; }, acc_block_tile);
 
-        // LDS write 0
-        tile_elementwise_inout([&](auto& a) { a = a_op(a); }, a_block_tile);
-        store_tile(a_copy_lds_window, a_block_tile);
-        // global read 1
-        a_block_tile = load_tile(a_copy_dram_window);
+            // LDS write 0
+            const auto a_block_tile_tmp = tile_elementwise_in(a_element_func, a_block_tile);
+            store_tile(a_copy_lds_window, a_block_tile_tmp);
+            // global read 1
+            a_block_tile = load_tile(a_copy_dram_window);
 
-        // LDS write 0
-        tile_elementwise_inout([&](auto& b) { b = b_op(b); }, b_block_tile);
-        store_tile(b_copy_lds_window, b_block_tile);
-        // global read 1
-        b_block_tile = load_tile(b_copy_dram_window);
+            // LDS write 0
+            const auto b_block_tile_tmp = tile_elementwise_in(b_element_func, b_block_tile);
+            store_tile(b_copy_lds_window, b_block_tile_tmp);
+            // global read 1
+            b_block_tile = load_tile(b_copy_dram_window);
+        }
 
         index_t i_loop = 0;
 
@@ -177,14 +179,14 @@ struct BlockGemmPipelineAGmemBGmemCRegV1
             move_tile_window(b_copy_dram_window, {0, kKPerBlock});
 
             // LDS write i + 1
-            tile_elementwise_inout([&](auto& a) { a = a_op(a); }, a_block_tile);
-            store_tile(a_copy_lds_window, a_block_tile);
+            const auto a_block_tile_tmp = tile_elementwise_in(a_element_func, a_block_tile);
+            store_tile(a_copy_lds_window, a_block_tile_tmp);
             // global read i + 2
             a_block_tile = load_tile(a_copy_dram_window);
 
             // LDS write i + 1
-            tile_elementwise_inout([&](auto& b) { b = b_op(b); }, b_block_tile);
-            store_tile(b_copy_lds_window, b_block_tile);
+            const auto b_block_tile_tmp = tile_elementwise_in(b_element_func, b_block_tile);
+            store_tile(b_copy_lds_window, b_block_tile_tmp);
             // global read i + 2
             b_block_tile = load_tile(b_copy_dram_window);
 
@@ -202,11 +204,11 @@ struct BlockGemmPipelineAGmemBGmemCRegV1
             ProgramServer::block_sync_lds();
 
             // LDS write num_loop - 1
-            tile_elementwise_inout([&](auto& a) { a = a_op(a); }, a_block_tile);
-            store_tile(a_copy_lds_window, a_block_tile);
+            const auto a_block_tile_tmp = tile_elementwise_in(a_element_func, a_block_tile);
+            store_tile(a_copy_lds_window, a_block_tile_tmp);
 
-            tile_elementwise_inout([&](auto& b) { b = b_op(b); }, b_block_tile);
-            store_tile(b_copy_lds_window, b_block_tile);
+            const auto b_block_tile_tmp = tile_elementwise_in(b_element_func, b_block_tile);
+            store_tile(b_copy_lds_window, b_block_tile_tmp);
 
             ProgramServer::block_sync_lds();
 

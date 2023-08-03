@@ -29,6 +29,34 @@
 #include "gemm_impl_lds_allocator.hpp"
 #include "gemm_impl_dram_to_lds_loader.hpp"
 
+// elementwise lambda
+struct AElementFunction
+{
+    template <typename X>
+    __host__ __device__ auto operator()(const X& x) const
+    {
+        return x;
+    }
+};
+
+struct BElementFunction
+{
+    template <typename X>
+    __host__ __device__ auto operator()(const X& x) const
+    {
+        return x;
+    }
+};
+
+struct CElementFunction
+{
+    template <typename X>
+    __host__ __device__ auto operator()(const X& x) const
+    {
+        return x;
+    }
+};
+
 template <typename ADataType, typename BDataType, typename CDataType, typename AccDataType>
 void reference_gemm(const Tensor<ADataType>& a_m_k,
                     const Tensor<BDataType>& b_n_k,
@@ -174,9 +202,9 @@ int main(int argc, char* argv[])
                                                 ck::tensor_layout::gemm::RowMajor,
                                                 ck::tensor_layout::gemm::ColumnMajor,
                                                 ck::tensor_layout::gemm::RowMajor,
-                                                ck::tensor_operation::element_wise::PassThrough,
-                                                ck::tensor_operation::element_wise::PassThrough,
-                                                ck::tensor_operation::element_wise::PassThrough,
+                                                AElementFunction,
+                                                BElementFunction,
+                                                CElementFunction,
                                                 kBlockSize,
                                                 kGemmMPerBlock,
                                                 kGemmNPerBlock,
@@ -196,9 +224,9 @@ int main(int argc, char* argv[])
                             K,
                             K,
                             N,
-                            ck::tensor_operation::element_wise::PassThrough{},
-                            ck::tensor_operation::element_wise::PassThrough{},
-                            ck::tensor_operation::element_wise::PassThrough{});
+                            AElementFunction{},
+                            BElementFunction{},
+                            CElementFunction{});
 
     c_buf.FromDevice(c_host_dev.mData.data());
 

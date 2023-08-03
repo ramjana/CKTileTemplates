@@ -22,9 +22,9 @@ template <typename ADataType,
           typename ALayout,
           typename BLayout,
           typename CLayout,
-          typename AElementWiseOperation,
-          typename BElementWiseOperation,
-          typename CElementWiseOperation,
+          typename AElementFunction,
+          typename BElementFunction,
+          typename CElementFunction,
           ck::index_t kBlockSize,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,
@@ -57,9 +57,9 @@ struct GemmBetterPipeline
                                         ck::index_t Lda,
                                         ck::index_t Ldb,
                                         ck::index_t Ldc,
-                                        AElementWiseOperation /* a_op */,
-                                        BElementWiseOperation /* b_op */,
-                                        CElementWiseOperation /* c_op */)
+                                        const AElementFunction& a_element_func,
+                                        const BElementFunction& b_element_func,
+                                        const CElementFunction& c_element_func)
     {
         using namespace ck;
         using namespace ck::tile_program;
@@ -86,11 +86,11 @@ struct GemmBetterPipeline
         const auto iN = ps.read_first_lane(id_tile.At<1>() * kNPerBlock);
 
         // A DRAM tile window
-        auto a_dram_window = make_tile_window(
+        auto a_dram_block_window = make_tile_window(
             a_dram_grid, make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}), {iM, 0});
 
         // B DRAM tile window
-        auto b_dram_window = make_tile_window(
+        auto b_dram_block_window = make_tile_window(
             b_dram_grid, make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}), {iN, 0});
 
         auto block_gemm_pipeline =
@@ -102,17 +102,17 @@ struct GemmBetterPipeline
 
         __shared__ char p_smem_char[block_gemm_pipeline.GetStaticLdsSize()];
 
-        const auto acc_block_tile = block_gemm_pipeline(
-            a_dram_window,
-            [](auto& a) { return a; },
-            b_dram_window,
-            [](auto& b) { return b; },
-            K / kKPerBlock,
-            p_smem_char);
+        const auto acc_block_tile = block_gemm_pipeline(a_dram_block_window,
+                                                        a_element_func,
+                                                        b_dram_block_window,
+                                                        b_element_func,
+                                                        K / kKPerBlock,
+                                                        p_smem_char);
 
-        // type convert
+        // cast to CDataType and  and apply CElementOp
         auto c_block_tile = tile_elementwise_in(
-            [](const auto& acc) { return type_convert<CDataType>(acc); }, acc_block_tile);
+            [&](const auto& acc) { return c_element_func(type_convert<CDataType>(acc)); },
+            acc_block_tile);
 
         // store C
         auto c_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
