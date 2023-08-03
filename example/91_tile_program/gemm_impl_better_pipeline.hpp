@@ -12,6 +12,7 @@
 #include "ck/tile_program/tile/tile_elementwise.hpp"
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
 
 // C = A * B
@@ -31,6 +32,22 @@ template <typename ADataType,
           ck::index_t kKPerBlock>
 struct GemmBetterPipeline
 {
+#if 0
+    using BlockGemmPipelineProblem =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1Problem<
+            ADataType,
+            BDataType,
+            AccDataType,
+            kBlockSize,
+            ck::tile_program::TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
+
+    using BlockGemmPipelinePolicy =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy;
+
+    using BlockGemmPipeline =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1<BlockGemmPipelineProblem,
+                                                                   BlockGemmPipelinePolicy>;
+#else
     using BlockGemmPipelineProblem =
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2Problem<
             ADataType,
@@ -45,6 +62,7 @@ struct GemmBetterPipeline
     using BlockGemmPipeline =
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<BlockGemmPipelineProblem,
                                                                    BlockGemmPipelinePolicy>;
+#endif
 
     __host__ __device__ static constexpr ck::index_t GetStaticLdsSize()
     {

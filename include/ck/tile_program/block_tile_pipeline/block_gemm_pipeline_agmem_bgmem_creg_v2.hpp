@@ -171,7 +171,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2
             b_block_tile = load_tile(b_copy_dram_window);
         }
 
-        index_t i_loop = 0;
+        index_t iCounter = num_loop - 2;
 
         do
         {
@@ -198,9 +198,9 @@ struct BlockGemmPipelineAGmemBGmemCRegV2
             // global read i + 2
             b_block_tile = load_tile(b_copy_dram_window);
 
-            i_loop++;
+            iCounter--;
 
-        } while(i_loop < num_loop - 2);
+        } while(iCounter > 0);
 
         // tail
         {
