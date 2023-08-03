@@ -21,11 +21,7 @@ namespace block {
 // Default policy class should not be templated, put template on member functions instead
 struct BlockGemmASmemBSmemCRegV1DefaultPolicy
 {
-    template <typename ADataType,
-              typename BDataType,
-              typename CDataType,
-              index_t kBlockSize,
-              typename BlockGemmShape>
+    template <typename Problem>
     __host__ __device__ static constexpr auto GetConfig()
     {
         using namespace ck::tile_program::warp;
@@ -105,13 +101,15 @@ struct BlockGemmASmemBSmemCRegV1DefaultPolicy
         using WG = WarpGemmMfmaF16F16F32M16N16K32TransposedCDistribution;
 #endif
 
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+
+        constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
+        constexpr index_t kNPerBlock = Problem::BlockGemmShape::kN;
+        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
+
         static_assert(kBlockSize % get_warp_size() == 0, "wrong!");
 
         constexpr index_t NumWarp = kBlockSize / get_warp_size();
-
-        constexpr index_t kMPerBlock = BlockGemmShape::kM;
-        constexpr index_t kNPerBlock = BlockGemmShape::kN;
-        constexpr index_t kKPerBlock = BlockGemmShape::kK;
 
         if constexpr(NumWarp == 4 && kMPerBlock % 128 == 0 &&
                      kNPerBlock % 128 == 0 % kKPerBlock % 16 == 0)

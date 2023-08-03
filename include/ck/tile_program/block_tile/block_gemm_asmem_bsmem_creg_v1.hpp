@@ -18,19 +18,34 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
-// A is block window on shared memory
-// B is block window on shared memory
-// C is block distributed tensor
+// Problem Description for BlockGemmASmemBSmemCRegV1
 template <typename ADataType_,
           typename BDataType_,
           typename CDataType_,
-          index_t kBlockSize,
-          typename Policy = BlockGemmASmemBSmemCRegV1DefaultPolicy>
+          index_t kBlockSize_,
+          typename BlockGemmShape_>
+struct BlockGemmASmemBSmemCRegV1Problem
+{
+    using ADataType      = remove_cvref_t<ADataType_>;
+    using BDataType      = remove_cvref_t<BDataType_>;
+    using CDataType      = remove_cvref_t<CDataType_>;
+    using BlockGemmShape = remove_cvref_t<BlockGemmShape_>;
+
+    static constexpr index_t kBlockSize = kBlockSize_;
+};
+
+// A is block window on shared memory
+// B is block window on shared memory
+// C is block distributed tensor
+template <typename Problem, typename Policy = BlockGemmASmemBSmemCRegV1DefaultPolicy>
 struct BlockGemmASmemBSmemCRegV1
 {
-    using ADataType = remove_cvref_t<ADataType_>;
-    using BDataType = remove_cvref_t<BDataType_>;
-    using CDataType = remove_cvref_t<CDataType_>;
+    using ADataType      = remove_cvref_t<typename Problem::ADataType>;
+    using BDataType      = remove_cvref_t<typename Problem::BDataType>;
+    using CDataType      = remove_cvref_t<typename Problem::CDataType>;
+    using BlockGemmShape = remove_cvref_t<typename Problem::BlockGemmShape>;
+
+    static constexpr index_t kBlockSize = Problem::kBlockSize;
 
     // C += A * B
     template <typename CBlockTensor, typename ABlockWindowTmp, typename BBlockWindowTmp>
@@ -47,10 +62,11 @@ struct BlockGemmASmemBSmemCRegV1
         constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
         constexpr index_t KPerBlock = ABlockWindowTmp{}.GetWindowLengths()[Number<1>{}];
 
-        using BlockGemmShape = TileGemmShape<MPerBlock, NPerBlock, KPerBlock>;
+        static_assert(MPerBlock == BlockGemmShape::kM && NPerBlock == BlockGemmShape::kN &&
+                          KPerBlock == BlockGemmShape::kK,
+                      "wrong!");
 
-        constexpr auto config = Policy::
-            template GetConfig<ADataType, BDataType, CDataType, kBlockSize, BlockGemmShape>();
+        constexpr auto config = Policy::template GetConfig<Problem>();
 
         using WG = remove_cvref_t<decltype(config.template At<0>())>;
 
@@ -180,10 +196,11 @@ struct BlockGemmASmemBSmemCRegV1
         constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
         constexpr index_t KPerBlock = ABlockWindowTmp{}.GetWindowLengths()[Number<1>{}];
 
-        using BlockGemmShape = TileGemmShape<MPerBlock, NPerBlock, KPerBlock>;
+        static_assert(MPerBlock == BlockGemmShape::kM && NPerBlock == BlockGemmShape::kN &&
+                          KPerBlock == BlockGemmShape::kK,
+                      "wrong!");
 
-        constexpr auto config = Policy::
-            template GetConfig<ADataType, BDataType, CDataType, kBlockSize, BlockGemmShape>();
+        constexpr auto config = Policy::template GetConfig<Problem>();
 
         using WG = remove_cvref_t<decltype(config.template At<0>())>;
 
@@ -328,12 +345,10 @@ struct BlockGemmASmemBSmemCRegV1
 
         constexpr index_t MPerBlock = ABlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
         constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
-        constexpr index_t KPerBlock = ABlockWindowTmp{}.GetWindowLengths()[Number<1>{}];
 
-        using BlockGemmShape = TileGemmShape<MPerBlock, NPerBlock, KPerBlock>;
+        static_assert(MPerBlock == BlockGemmShape::kM && NPerBlock == BlockGemmShape::kN, "wrong!");
 
-        constexpr auto config = Policy::
-            template GetConfig<ADataType, BDataType, CDataType, kBlockSize, BlockGemmShape>();
+        constexpr auto config = Policy::template GetConfig<Problem>();
 
         using WG = remove_cvref_t<decltype(config.template At<0>())>;
 

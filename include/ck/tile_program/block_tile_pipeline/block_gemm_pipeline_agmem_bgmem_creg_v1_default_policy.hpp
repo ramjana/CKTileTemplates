@@ -22,13 +22,13 @@ namespace block {
 // Default policy class should not be templated, put template on member functions instead
 struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
 {
-    template <typename ADataType, typename BlockGemmShape>
+    template <typename Problem>
     __host__ __device__ static constexpr auto MakeALdsBlockDescriptor()
     {
         using namespace ck;
 
-        constexpr index_t kMPerBlock = BlockGemmShape::kM;
-        constexpr index_t kKPerBlock = BlockGemmShape::kK;
+        constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
+        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
 
         constexpr auto a_lds_block_desc_0 = make_naive_tensor_descriptor(
             make_tuple(Number<kKPerBlock / 8>{}, Number<kMPerBlock>{}, Number<8>{}),
@@ -46,13 +46,13 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
         return a_lds_block_desc;
     }
 
-    template <typename BDataType, typename BlockGemmShape>
+    template <typename Problem>
     __host__ __device__ static constexpr auto MakeBLdsBlockDescriptor()
     {
         using namespace ck;
 
-        constexpr index_t kNPerBlock = BlockGemmShape::kN;
-        constexpr index_t kKPerBlock = BlockGemmShape::kK;
+        constexpr index_t kNPerBlock = Problem::BlockGemmShape::kN;
+        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
 
         constexpr auto b_lds_block_desc_0 = make_naive_tensor_descriptor(
             make_tuple(Number<kKPerBlock / 8>{}, Number<kNPerBlock>{}, Number<8>{}),
@@ -70,13 +70,15 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
         return b_lds_block_desc;
     }
 
-    template <typename ADataType, index_t kBlockSize, typename BlockGemmShape>
+    template <typename Problem>
     __host__ __device__ static constexpr auto MakeADramTileDistribution()
     {
-        using namespace ck::tile_program;
+        using ADataType = remove_cvref_t<typename Problem::ADataType>;
 
-        constexpr index_t kMPerBlock = BlockGemmShape::kM;
-        constexpr index_t kKPerBlock = BlockGemmShape::kK;
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+
+        constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
+        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
 
         constexpr index_t K1 = 16 / sizeof(ADataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -93,13 +95,15 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
                                            Sequence<0, 1>>{});
     }
 
-    template <typename BDataType, index_t kBlockSize, typename BlockGemmShape>
+    template <typename Problem>
     __host__ __device__ static constexpr auto MakeBDramTileDistribution()
     {
-        using namespace ck::tile_program;
+        using BDataType = remove_cvref_t<typename Problem::BDataType>;
 
-        constexpr index_t kNPerBlock = BlockGemmShape::kN;
-        constexpr index_t kKPerBlock = BlockGemmShape::kK;
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+
+        constexpr index_t kNPerBlock = Problem::BlockGemmShape::kN;
+        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
 
         constexpr index_t K1 = 16 / sizeof(BDataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -116,14 +120,12 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
                                            Sequence<0, 1>>{});
     }
 
-    template <typename ADataType, typename BDataType, typename CDataType, index_t kBlockSize>
+    template <typename Problem>
     __host__ __device__ static constexpr auto GetBlockGemm()
     {
-        return BlockGemmASmemBSmemCRegV1<remove_cvref_t<ADataType>,
-                                         remove_cvref_t<BDataType>,
-                                         remove_cvref_t<CDataType>,
-                                         kBlockSize,
-                                         BlockGemmASmemBSmemCRegV1DefaultPolicy>{};
+        using BlockGemmPolicy = BlockGemmASmemBSmemCRegV1DefaultPolicy;
+
+        return BlockGemmASmemBSmemCRegV1<Problem, BlockGemmPolicy>{};
     }
 };
 
