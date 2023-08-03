@@ -12,19 +12,19 @@
 #include "ck/tile_program/tile/tile_elementwise.hpp"
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
-#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v1_default_policy.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2_default_policy.hpp"
 
 namespace ck {
 namespace tile_program {
 namespace block {
 
-// Problem Description for BlockGemmPipelineAGmemBGmemCRegV1
+// Problem Description for BlockGemmPipelineAGmemBGmemCRegV2
 template <typename ADataType_,
           typename BDataType_,
           typename CDataType_,
           index_t kBlockSize_,
           typename BlockGemmShape_>
-struct BlockGemmPipelineAGmemBGmemCRegV1Problem
+struct BlockGemmPipelineAGmemBGmemCRegV2Problem
 {
     using ADataType      = remove_cvref_t<ADataType_>;
     using BDataType      = remove_cvref_t<BDataType_>;
@@ -37,8 +37,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV1Problem
 //  A Tile Window: global memory
 //  B Tile Window: global memory
 //  C Distributed tensor: register
-template <typename Problem, typename Policy = BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy>
-struct BlockGemmPipelineAGmemBGmemCRegV1
+template <typename Problem, typename Policy = BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>
+struct BlockGemmPipelineAGmemBGmemCRegV2
 {
     using ADataType      = remove_cvref_t<typename Problem::ADataType>;
     using BDataType      = remove_cvref_t<typename Problem::BDataType>;

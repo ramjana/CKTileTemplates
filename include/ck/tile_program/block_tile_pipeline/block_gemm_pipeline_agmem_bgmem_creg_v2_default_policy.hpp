@@ -18,9 +18,9 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
-// Default policy for BlockGemmPipelineAGmemBGmemCRegV1
+// Default policy for BlockGemmPipelineAGmemBGmemCRegV2
 // Default policy class should not be templated, put template on member functions instead
-struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
+struct BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy
 {
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeALdsBlockDescriptor()
