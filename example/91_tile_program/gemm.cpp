@@ -135,7 +135,7 @@ int main(int argc, char* argv[])
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-    const auto gemm_kernel = GemmKernel<ADataType,
+    const auto gemm_kernel = Gemm<ADataType,
                                   BDataType,
                                   AccDataType,
                                   CDataType,
