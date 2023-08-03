@@ -66,7 +66,7 @@ struct BlockGemmASmemBSmemCRegV1
                           KPerBlock == BlockGemmShape::kK,
                       "wrong!");
 
-        constexpr auto config = Policy::template GetConfig<Problem>();
+        constexpr auto config = Policy::template GetWarpGemmMWarpNWarp<Problem>();
 
         using WG = remove_cvref_t<decltype(config.template At<0>())>;
 
@@ -200,7 +200,7 @@ struct BlockGemmASmemBSmemCRegV1
                           KPerBlock == BlockGemmShape::kK,
                       "wrong!");
 
-        constexpr auto config = Policy::template GetConfig<Problem>();
+        constexpr auto config = Policy::template GetWarpGemmMWarpNWarp<Problem>();
 
         using WG = remove_cvref_t<decltype(config.template At<0>())>;
 
@@ -348,7 +348,7 @@ struct BlockGemmASmemBSmemCRegV1
 
         static_assert(MPerBlock == BlockGemmShape::kM && NPerBlock == BlockGemmShape::kN, "wrong!");
 
-        constexpr auto config = Policy::template GetConfig<Problem>();
+        constexpr auto config = Policy::template GetWarpGemmMWarpNWarp<Problem>();
 
         using WG = remove_cvref_t<decltype(config.template At<0>())>;
 

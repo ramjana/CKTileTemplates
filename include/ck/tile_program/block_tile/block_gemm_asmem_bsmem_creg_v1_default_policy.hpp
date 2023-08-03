@@ -22,7 +22,7 @@ namespace block {
 struct BlockGemmASmemBSmemCRegV1DefaultPolicy
 {
     template <typename Problem>
-    __host__ __device__ static constexpr auto GetConfig()
+    __host__ __device__ static constexpr auto GetWarpGemmMWarpNWarp()
     {
         using namespace ck::tile_program::warp;
 
