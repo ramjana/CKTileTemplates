@@ -186,6 +186,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
         constexpr index_t M1 = kBlockSize / get_warp_size();
         constexpr index_t M0 = kMPerBlock / (M2 * M1);
 
+#if 1
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
                                            Tuple<Sequence<M0, M1, M2>, Sequence<K0, K1>>,
@@ -193,6 +194,15 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
                                            Tuple<Sequence<1>, Sequence<2, 0>>,
                                            Sequence<1, 2>,
                                            Sequence<0, 1>>{});
+#else // load order: wave#0 -> wave#1 -> wave#2 -> wave#3
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<M1, M0, M2>, Sequence<K0, K1>>,
+                                           Tuple<Sequence<1>, Sequence<1, 2>>,
+                                           Tuple<Sequence<0>, Sequence<2, 0>>,
+                                           Sequence<1, 2>,
+                                           Sequence<1, 1>>{});
+#endif
     }
 
     template <typename Problem>
@@ -211,6 +221,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
         constexpr index_t N1 = kBlockSize / get_warp_size();
         constexpr index_t N0 = kNPerBlock / (N2 * N1);
 
+#if 1
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
                                            Tuple<Sequence<N0, N1, N2>, Sequence<K0, K1>>,
@@ -218,6 +229,15 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
                                            Tuple<Sequence<1>, Sequence<2, 0>>,
                                            Sequence<1, 2>,
                                            Sequence<0, 1>>{});
+#else // load order: wave#0 -> wave#1 -> wave#2 -> wave#3
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<N1, N0, N2>, Sequence<K0, K1>>,
+                                           Tuple<Sequence<1>, Sequence<1, 2>>,
+                                           Tuple<Sequence<0>, Sequence<2, 0>>,
+                                           Sequence<1, 2>,
+                                           Sequence<1, 1>>{});
+#endif
     }
 
     template <typename Problem>
