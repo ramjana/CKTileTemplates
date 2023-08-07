@@ -128,33 +128,30 @@ struct GemmGemm
 
         do
         {
-            // Acc0 tile
+            // acc0 = a0 * b0
             const auto acc0_block_tile = block_gemm0_pipeline(
                 a0_dram_block_window, b0_dram_block_window, K0 / kK0PerBlock, p_smem_char);
 
-            // cast fp32 Acc0 into fp16 c0
+            // type cast acc0 into c0
             const auto c0_block_tile = tile_elementwise_in(
                 [](const auto& acc0) { return type_convert<C0DataType>(acc0); }, acc0_block_tile);
 
-            // tile GEMM on register + DRAM window
-            // c0: register
-            // b1: DRAM window
+            // acc1 += c0 * b1
             block_gemm_cr_ar_bs(acc1_block_tile, c0_block_tile, b1_dram_block_window);
 
-            // FIXME, block_gemm_pipeline should info how to reset the window
-            move_tile_window(a0_dram_block_window, {0, -K0});
-            move_tile_window(b0_dram_block_window, {kN0PerBlock, -K0});
+            // move tile windows
+            move_tile_window(b0_dram_block_window, {kN0PerBlock, 0});
             move_tile_window(b1_dram_block_window, {0, kN0PerBlock});
 
             iN0 += kN0PerBlock;
 
         } while(iN0 < N0);
 
-        // cast Acc1DataType to C1DataType
+        // type cast acc1 into c1
         const auto c1_block_tile = tile_elementwise_in(
             [](const auto& acc1) { return ck::type_convert<C1DataType>(acc1); }, acc1_block_tile);
 
-        // store C1
+        // store c1
         auto c1_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_c1, make_tuple(M0, N1), make_tuple(Ldc1, 1), Number<32>{}, Number<1>{});
 
@@ -176,11 +173,11 @@ int main(int argc, char* argv[])
     using C0DataType   = ck::half_t;
     using B1DataType   = ck::half_t;
     using Acc1DataType = float;
-    using C1DataType   = float;
+    using C1DataType   = ck::half_t;
 
-    ck::index_t M0 = 128;
-    ck::index_t N0 = 128;
-    ck::index_t K0 = 32;
+    ck::index_t M0 = 13312;
+    ck::index_t N0 = 4096;
+    ck::index_t K0 = 128;
     ck::index_t N1 = 128;
 
     if(argc == 5)
@@ -214,15 +211,9 @@ int main(int argc, char* argv[])
     Tensor<C1DataType> c1_host_ref(c1_lengths, c1_strides);
     Tensor<C1DataType> c1_host_dev(c1_lengths, c1_strides);
 
-#if 0
-    ck::utils::FillUniformDistributionIntegerValue<A0DataType>{-5.f, 5.f}(a0_host);
-    ck::utils::FillUniformDistributionIntegerValue<B0DataType>{-5.f, 5.f}(b0_host);
-    ck::utils::FillUniformDistributionIntegerValue<B1DataType>{-5.f, 5.f}(b1_host);
-#else
-    ck::utils::FillConstant<A0DataType>{1.f}(a0_host);
-    ck::utils::FillConstant<B0DataType>{1.f}(b0_host);
-    ck::utils::FillConstant<B1DataType>{1.f}(b1_host);
-#endif
+    ck::utils::FillUniformDistributionIntegerValue<A0DataType>{-3.f, 3.f}(a0_host);
+    ck::utils::FillUniformDistributionIntegerValue<B0DataType>{-3.f, 3.f}(b0_host);
+    ck::utils::FillUniformDistributionIntegerValue<B1DataType>{-3.f, 3.f}(b1_host);
 
     // reference gemm
     reference_gemm<A0DataType, B0DataType, C0DataType, float>(a0_host, b0_host, c0_host_ref);
