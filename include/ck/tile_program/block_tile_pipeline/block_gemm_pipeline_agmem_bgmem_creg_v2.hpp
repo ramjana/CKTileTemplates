@@ -9,6 +9,8 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/load_tile.hpp"
+#include "ck/tile_program/tile/store_tile.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
@@ -225,6 +227,21 @@ struct BlockGemmPipelineAGmemBGmemCRegV2
         }
 
         return c_block_tile;
+    }
+
+    template <typename ADramBlockWindowTmp, typename BDramBlockWindowTmp>
+    __host__ __device__ auto operator()(const ADramBlockWindowTmp& a_dram_block_window_tmp,
+                                        const BDramBlockWindowTmp& b_dram_block_window_tmp,
+                                        index_t num_loop,
+                                        void* p_smem) const
+    {
+        return operator()(
+            a_dram_block_window_tmp,
+            [](const ADataType& a) { return a; },
+            b_dram_block_window_tmp,
+            [](const BDataType& b) { return b; },
+            num_loop,
+            p_smem);
     }
 };
 

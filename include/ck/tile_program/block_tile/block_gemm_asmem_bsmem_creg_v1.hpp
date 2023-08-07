@@ -9,6 +9,7 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/load_tile.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
@@ -248,10 +249,6 @@ struct BlockGemmASmemBSmemCRegV1
         constexpr auto b_block_dstr = make_static_tile_distribution(b_block_dstr_encode);
         constexpr auto c_block_dstr = make_static_tile_distribution(c_block_dstr_encode);
 
-        static_assert(is_same_v<CDataType, typename WG::CDataType>, "wrong!");
-
-        auto c_block_tensor = make_static_distributed_tensor<CDataType>(c_block_dstr);
-
         // construct A/B-block-window from A/B-block-distribution
         auto a_block_window = make_tile_window(a_block_window_tmp.GetBottomTensorView(),
                                                a_block_window_tmp.GetWindowLengths(),
@@ -262,6 +259,11 @@ struct BlockGemmASmemBSmemCRegV1
                                                b_block_window_tmp.GetWindowLengths(),
                                                b_block_window_tmp.GetWindowOrigin(),
                                                b_block_dstr);
+
+        static_assert(is_same_v<CDataType, typename WG::CDataType>, "wrong!");
+
+        // Construct C-Block-Tensor
+        auto c_block_tensor = make_static_distributed_tensor<CDataType>(c_block_dstr);
 
         using AWarpDstr = typename WG::AWarpDstr;
         using BWarpDstr = typename WG::BWarpDstr;

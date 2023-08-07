@@ -26,6 +26,11 @@ struct StaticDistributedTensor
 
     static constexpr index_t kThreadElementSpaceSize = ThreadTensorDesc{}.GetElementSpaceSize();
 
+    __host__ __device__ static constexpr auto GetLengths()
+    {
+        return StaticTileDistribution::GetLengths();
+    }
+
     __host__ __device__ static constexpr auto GetTileDistribution()
     {
         return StaticTileDistribution{};
