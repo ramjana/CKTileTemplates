@@ -32,33 +32,24 @@ template <typename A0DataType,
 struct GemmGemm
 {
     // block gemm0 pipeline
-    using BlockGemm0PipelineProblem =
+    using BlockGemm0Pipeline = ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2Problem<
             A0DataType,
             B0DataType,
             Acc0DataType,
             kBlockSize,
-            ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>;
-
-    using BlockGemm0PipelinePolicy =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy;
-
-    using BlockGemm0Pipeline =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<BlockGemm0PipelineProblem,
-                                                                   BlockGemm0PipelinePolicy>;
+            ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>,
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>;
 
     // block gemm1
-    using BlockGemm1Problem = ck::tile_program::block::BlockGemmARegBSmemCRegV1Problem<
-        C0DataType,
-        B1DataType,
-        Acc1DataType,
-        kBlockSize,
-        ck::tile_program::TileGemmShape<kM0PerBlock, kN1PerBlock, kN0PerBlock>>;
-
-    using BlockGemm1Policy = ck::tile_program::block::BlockGemmARegBSmemCRegV1DefaultPolicy;
-
-    using BlockGemm1 =
-        ck::tile_program::block::BlockGemmARegBSmemCRegV1<BlockGemm1Problem, BlockGemm1Policy>;
+    using BlockGemm1 = ck::tile_program::block::BlockGemmARegBSmemCRegV1<
+        ck::tile_program::block::BlockGemmARegBSmemCRegV1Problem<
+            C0DataType,
+            B1DataType,
+            Acc1DataType,
+            kBlockSize,
+            ck::tile_program::TileGemmShape<kM0PerBlock, kN1PerBlock, kN0PerBlock>>,
+        ck::tile_program::block::BlockGemmARegBSmemCRegV1DefaultPolicy>;
 
     __host__ __device__ static constexpr ck::index_t GetStaticLdsSize()
     {
