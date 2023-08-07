@@ -9,6 +9,7 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/static_distributed_tensor.hpp"
 
 namespace ck {
 namespace tile_program {

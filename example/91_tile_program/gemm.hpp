@@ -64,11 +64,6 @@ struct Gemm
                                                                    BlockGemmPipelinePolicy>;
 #endif
 
-    __host__ __device__ static constexpr ck::index_t GetStaticLdsSize()
-    {
-        return BlockGemmPipeline::GetStaticLdsSize();
-    }
-
     __host__ __device__ void operator()(ProgramServer& ps,
                                         const ADataType* p_a,
                                         const BDataType* p_b,
@@ -136,11 +131,8 @@ struct Gemm
         auto c_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<32>{}, Number<1>{});
 
-        auto c_dram_window =
-            make_tile_window(c_dram_grid,
-                             make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}),
-                             {iM, iN},
-                             c_block_tile.GetTileDistribution());
+        auto c_dram_window = make_tile_window(
+            c_dram_grid, make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}), {iM, iN});
 
         store_tile(c_dram_window, c_block_tile);
     }

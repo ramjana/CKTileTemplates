@@ -33,6 +33,7 @@
 #include "ck/utility/transpose_vectors.hpp"
 #include "ck/utility/inner_product.hpp"
 #include "ck/utility/thread_group.hpp"
+#include "ck/utility/meta_data_buffer.hpp"
 #include "ck/utility/debug.hpp"
 
 #include "ck/utility/amd_buffer_addressing.hpp"

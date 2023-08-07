@@ -9,15 +9,12 @@
 #include "ck/host_utility/device_prop.hpp"
 
 #include "tile_program.hpp"
-#include "ck/tile_program/meta_data_buffer.hpp"
-#include "ck/tile_program/block_tensor_distribution.hpp"
-#include "ck/tile_program/block_tensor_window.hpp"
-#include "ck/tile_program/static_block_distributed_tensor.hpp"
-#include "ck/tile_program/load_block_distributed_tensor.hpp"
-#include "ck/tile_program/store_block_distributed_tensor.hpp"
-#include "ck/tile_program/block_gemm_impl_cr_as_bs.hpp"
-#include "ck/tile_program/block_gemm_impl_cr_ar_bs.hpp"
-#include "ck/tile_program/block_elementwise.hpp"
+#include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/tile_elementwise.hpp"
+#include "ck/tile_program/tile/tile_gemm_shape.hpp"
+#include "ck/tile_program/warp_tile/warp_gemm.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
+#include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1.hpp"
 
 #include "ck/library/utility/check_err.hpp"
 #include "ck/library/utility/device_memory.hpp"
@@ -25,98 +22,40 @@
 #include "ck/library/utility/host_tensor.hpp"
 #include "ck/library/utility/host_tensor_generator.hpp"
 
-template <typename ADataType, typename BDataType, typename CDataType, typename AccDataType>
-void reference_gemm(const Tensor<ADataType>& a_m_k,
-                    const Tensor<BDataType>& b_n_k,
-                    Tensor<CDataType>& c_m_n)
-{
-    auto f_mk_kn_mn = [&](auto m, auto n) {
-        const int K = a_m_k.mDesc.GetLengths()[1];
-
-        AccDataType v_acc = 0;
-
-        for(int k = 0; k < K; ++k)
-        {
-            ADataType v_a = a_m_k(m, k);
-            BDataType v_b = b_n_k(n, k);
-
-            v_acc += ck::type_convert<AccDataType>(v_a) * ck::type_convert<AccDataType>(v_b);
-        }
-
-        c_m_n(m, n) = ck::type_convert<CDataType>(v_acc);
-    };
-
-    make_ParallelTensorFunctor(f_mk_kn_mn,
-                               c_m_n.mDesc.GetLengths()[0],
-                               c_m_n.mDesc.GetLengths()[1])(std::thread::hardware_concurrency());
-}
+#include "reference_gemm.hpp"
 
 template <typename A0DataType,
           typename B0DataType,
+          typename Acc0DataType,
           typename C0DataType,
           typename B1DataType,
+          typename Acc1DataType,
           typename C1DataType,
+          ck::index_t kBlockSize,
           ck::index_t kM0PerBlock,
           ck::index_t kN0PerBlock,
           ck::index_t kK0PerBlock,
           ck::index_t kN1PerBlock>
 struct GemmGemm
 {
-    __host__ __device__ static constexpr auto MakeA0LdsBlockDescriptor()
-    {
-        using namespace ck;
+    using BlockGemm0PipelineProblem =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2Problem<
+            A0DataType,
+            B0DataType,
+            Acc0DataType,
+            kBlockSize,
+            ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>;
 
-        constexpr auto a0_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
-            make_tuple(kM0PerBlock / 2, 2, kK0PerBlock), Number<32>{});
+    using BlockGemm0PipelinePolicy =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy;
 
-        constexpr auto a0_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
-            a0_lds_block_desc_d1_d2_d3,
-            make_tuple(make_xor_transform(make_tuple(kM0PerBlock / 2, kK0PerBlock), 8),
-                       make_pass_through_transform(2)),
-            make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
-            make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
+    using BlockGemm0Pipeline =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<BlockGemm0PipelineProblem,
+                                                                   BlockGemm0PipelinePolicy>;
 
-        constexpr auto a0_lds_block_desc_m_k = transform_tensor_descriptor(
-            a0_lds_block_desc_d4_d5_d6,
-            make_tuple(make_merge_transform(make_tuple(kM0PerBlock / 2, 2)),
-                       make_pass_through_transform(kK0PerBlock)),
-            make_tuple(Sequence<0, 1>{}, Sequence<2>{}),
-            make_tuple(Sequence<0>{}, Sequence<1>{}));
-
-        return a0_lds_block_desc_m_k;
-    }
-
-    __host__ __device__ static constexpr auto MakeB0LdsBlockDescriptor()
-    {
-        using namespace ck;
-
-        constexpr auto b0_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
-            make_tuple(kN0PerBlock / 2, 2, kK0PerBlock), Number<32>{});
-
-        constexpr auto b0_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
-            b0_lds_block_desc_d1_d2_d3,
-            make_tuple(make_xor_transform(make_tuple(kN0PerBlock / 2, kK0PerBlock), 8),
-                       make_pass_through_transform(2)),
-            make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
-            make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
-
-        constexpr auto b0_lds_block_desc_n_k = transform_tensor_descriptor(
-            b0_lds_block_desc_d4_d5_d6,
-            make_tuple(make_merge_transform(make_tuple(kN0PerBlock / 2, 2)),
-                       make_pass_through_transform(kK0PerBlock)),
-            make_tuple(Sequence<0, 1>{}, Sequence<2>{}),
-            make_tuple(Sequence<0>{}, Sequence<1>{}));
-
-        return b0_lds_block_desc_n_k;
-    }
-
-    //
     __host__ __device__ static constexpr ck::index_t GetStaticLdsSize()
     {
-        return ck::math::integer_divide_ceil(
-                   sizeof(A0DataType) * MakeA0LdsBlockDescriptor().GetElementSpaceSize(), 16) *
-                   16 +
-               sizeof(B0DataType) * MakeB0LdsBlockDescriptor().GetElementSpaceSize();
+        return BlockGemm0Pipeline::GetStaticLdsSize();
     }
 
     __host__ __device__ void operator()(ProgramServer& ps,
@@ -137,8 +76,6 @@ struct GemmGemm
         using namespace ck::tile_program;
         using namespace ck::tile_program::block;
 
-        __shared__ char p_shared_char[GetStaticLdsSize()];
-
         // FIXME: assume layout A0[M0, K0], B0[N0, K0], B1[N1, N0], C1[M0, N1]
         const auto a0_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_a0, make_tuple(M0, K0), make_tuple(Lda0, 1), Number<32>{}, Number<1>{});
@@ -150,7 +87,7 @@ struct GemmGemm
             p_b1, make_tuple(N1, N0), make_tuple(Ldb1, 1), Number<32>{}, Number<1>{});
 
         // divide problem
-        const auto id_block = ps.get_block_1d_id();
+        const auto id_block = ps.get_block_id();
 
         const auto num_tile_m0 = M0 / kM0PerBlock;
         const auto num_tile_n1 = N1 / kN1PerBlock;
@@ -162,122 +99,41 @@ struct GemmGemm
         const auto iM0 = ps.read_first_lane(id_tile.At<0>() * kM0PerBlock);
         const auto iN1 = ps.read_first_lane(id_tile.At<1>() * kN1PerBlock);
 
-        // A0 tile in LDS
-        A0DataType* p_a0_lds = static_cast<A0DataType*>(static_cast<void*>(p_shared_char));
+        // A0 DRAM block window
+        auto a0_dram_block_window = make_tile_window(
+            a0_dram_grid, make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}), {iM0, 0});
 
-        // [allow optimization] allow different LDS layouts
-        constexpr auto a0_lds_block_desc = MakeA0LdsBlockDescriptor();
-
-        auto a0_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_a0_lds, a0_lds_block_desc);
-
-        constexpr index_t a0_lds_block_space_size_aligned =
-            math::integer_divide_ceil(sizeof(A0DataType) * a0_lds_block_desc.GetElementSpaceSize(),
-                                      16) *
-            16;
-
-        // B0 tile in LDS
-        B0DataType* p_b0_lds = static_cast<B0DataType*>(
-            static_cast<void*>(p_shared_char + a0_lds_block_space_size_aligned));
-
-        // [allow optimization] allow different LDS layouts
-        constexpr auto b0_lds_block_desc = MakeB0LdsBlockDescriptor();
-
-        auto b0_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_b0_lds, b0_lds_block_desc);
-
-        // A0 copy
-        // FIXME
-        constexpr auto a0_copy_dram_window_dstr = make_static_block_tensor_distribution(
-            StaticTensorDistributionEncoding<Sequence<1>,
-                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
-                                             Tuple<Sequence<1>, Sequence<1, 2>>,
-                                             Tuple<Sequence<1>, Sequence<2, 0>>,
-                                             Sequence<1, 2>,
-                                             Sequence<0, 1>>{});
-
-        constexpr auto a0_copy_lds_window_dstr = a0_copy_dram_window_dstr;
-
-        auto a0_copy_dram_window =
-            make_block_window(a0_dram_grid, {iM0, 0}, a0_copy_dram_window_dstr);
-
-        auto a0_copy_lds_window = make_block_window(a0_lds_block, {0, 0}, a0_copy_lds_window_dstr);
-
-        // B0 copy
-        // FIXME
-        constexpr auto b0_copy_dram_window_dstr = make_static_block_tensor_distribution(
-            StaticTensorDistributionEncoding<Sequence<1>,
-                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
-                                             Tuple<Sequence<1>, Sequence<1, 2>>,
-                                             Tuple<Sequence<1>, Sequence<2, 0>>,
-                                             Sequence<1, 2>,
-                                             Sequence<0, 1>>{});
-
-        constexpr auto b0_copy_lds_window_dstr = b0_copy_dram_window_dstr;
-
-        auto b0_copy_dram_window =
-            make_block_window(b0_dram_grid, {0, 0}, b0_copy_dram_window_dstr);
-
-        auto b0_copy_lds_window = make_block_window(b0_lds_block, {0, 0}, b0_copy_lds_window_dstr);
+        // B0 DRAM block window
+        auto b0_dram_block_window = make_tile_window(
+            b0_dram_grid, make_tuple(Number<kN0PerBlock>{}, Number<kK0PerBlock>{}), {0, 0});
 
         // B1 window
-        // FIXME: not needed
-        constexpr auto b1_copy_dram_window_dstr = make_static_block_tensor_distribution(
-            StaticTensorDistributionEncoding<Sequence<1>,
-                                             Tuple<Sequence<2, 4, 16>, Sequence<4, 8>>,
-                                             Tuple<Sequence<1>, Sequence<1, 2>>,
-                                             Tuple<Sequence<1>, Sequence<2, 0>>,
-                                             Sequence<1, 2>,
-                                             Sequence<0, 1>>{});
+        auto b1_dram_block_window = make_tile_window(
+            b1_dram_grid, make_tuple(Number<kN1PerBlock>{}, Number<kN0PerBlock>{}), {iN1, 0});
 
-        auto b1_dram_block_window =
-            make_block_window(b1_dram_grid, {iN1, 0}, b1_copy_dram_window_dstr);
+        // Block GEMM pipeline
+        constexpr auto block_gemm0_pipeline = BlockGemm0Pipeline{};
 
-        // FIXME
-        auto a0_lds_gemm_window = a0_copy_lds_window;
-        auto b0_lds_gemm_window = b0_copy_lds_window;
+        __shared__ char p_smem_char[block_gemm0_pipeline.GetStaticLdsSize()];
 
         // Acc1 tile
         auto acc1_block_tile = decltype(block_gemm_cr_ar_bs(
-            block_gemm_cr_as_bs(a0_lds_gemm_window, b0_lds_gemm_window), b1_dram_block_window)){};
+            block_gemm0_pipeline(a0_dram_block_window, b0_dram_block_window, 0, nullptr),
+            b1_dram_block_window)){};
 
         // init Acc1
-        block_elementwise_inout([](auto& acc1) { acc1 = 0; }, acc1_block_tile);
+        tile_elementwise_inout([](auto& acc1) { acc1 = 0; }, acc1_block_tile);
 
         index_t iN0 = 0;
 
         do
         {
             // Acc0 tile
-            auto acc0_block_tile =
-                decltype(block_gemm_cr_as_bs(a0_lds_gemm_window, b0_lds_gemm_window)){};
+            const auto acc0_block_tile = block_gemm0_pipeline(
+                a0_dram_block_window, b0_dram_block_window, K0 / kK0PerBlock, p_smem_char);
 
-            // init Acc0
-            block_elementwise_inout([](auto& acc0) { acc0 = 0; }, acc0_block_tile);
-
-            index_t iK0 = 0;
-
-            do
-            {
-                const auto a0_block_tile = load_block_tile(a0_copy_dram_window);
-                const auto b0_block_tile = load_block_tile(b0_copy_dram_window);
-
-                store_block_tile(a0_copy_lds_window, a0_block_tile);
-                store_block_tile(b0_copy_lds_window, b0_block_tile);
-
-                ps.block_sync_lds();
-
-                block_gemm_cr_as_bs(acc0_block_tile, a0_lds_gemm_window, b0_lds_gemm_window);
-
-                ps.block_sync_lds();
-
-                move_block_window(a0_copy_dram_window, {0, kK0PerBlock});
-                move_block_window(b0_copy_dram_window, {0, kK0PerBlock});
-
-                iK0 += kK0PerBlock;
-
-            } while(iK0 < K0);
-
-            // convert fp32 Acc0 into fp16 c0
-            const auto c0_block_tile = block_elementwise_in(
+            // cast fp32 Acc0 into fp16 c0
+            const auto c0_block_tile = tile_elementwise_in(
                 [](const auto& acc0) { return type_convert<C0DataType>(acc0); }, acc0_block_tile);
 
             // tile GEMM on register + DRAM window
@@ -285,42 +141,46 @@ struct GemmGemm
             // b1: DRAM window
             block_gemm_cr_ar_bs(acc1_block_tile, c0_block_tile, b1_dram_block_window);
 
-            move_block_window(a0_copy_dram_window, {0, -K0});
-            move_block_window(b0_copy_dram_window, {kN0PerBlock, -K0});
-            move_block_window(b1_dram_block_window, {0, kN0PerBlock});
+            // FIXME, block_gemm_pipeline should info how to reset the window
+            move_tile_window(a0_dram_block_window, {0, -K0});
+            move_tile_window(b0_dram_block_window, {kN0PerBlock, -K0});
+            move_tile_window(b1_dram_block_window, {0, kN0PerBlock});
 
             iN0 += kN0PerBlock;
 
         } while(iN0 < N0);
 
-        // type convert
-        const auto c1_block_tile = block_elementwise_in(
+        // cast Acc1DataType to C1DataType
+        const auto c1_block_tile = tile_elementwise_in(
             [](const auto& acc1) { return ck::type_convert<C1DataType>(acc1); }, acc1_block_tile);
 
         // store C1
         auto c1_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_c1, make_tuple(M0, N1), make_tuple(Ldc1, 1), Number<32>{}, Number<1>{});
 
-        // FIXME
-        constexpr auto c1_block_distr = c1_block_tile.GetBlockDistribution();
+        auto c1_dram_window =
+            make_tile_window(c1_dram_grid,
+                             make_tuple(Number<kM0PerBlock>{}, Number<kN1PerBlock>{}),
+                             {iM0, iN1},
+                             c1_block_tile.GetTileDistribution());
 
-        auto c1_dram_window = make_block_window(c1_dram_grid, {iM0, iN1}, c1_block_distr);
-
-        store_block_tile(c1_dram_window, c1_block_tile);
+        store_tile(c1_dram_window, c1_block_tile);
     }
 };
 
 int main(int argc, char* argv[])
 {
-    using A0DataType = ck::half_t;
-    using B0DataType = ck::half_t;
-    using B1DataType = ck::half_t;
-    using C0DataType = ck::half_t;
-    using C1DataType = float;
+    using A0DataType   = ck::half_t;
+    using B0DataType   = ck::half_t;
+    using Acc0DataType = float;
+    using C0DataType   = ck::half_t;
+    using B1DataType   = ck::half_t;
+    using Acc1DataType = float;
+    using C1DataType   = float;
 
-    ck::index_t M0 = 13312;
-    ck::index_t N0 = 4096;
-    ck::index_t K0 = 128;
+    ck::index_t M0 = 128;
+    ck::index_t N0 = 128;
+    ck::index_t K0 = 32;
     ck::index_t N1 = 128;
 
     if(argc == 5)
@@ -354,9 +214,15 @@ int main(int argc, char* argv[])
     Tensor<C1DataType> c1_host_ref(c1_lengths, c1_strides);
     Tensor<C1DataType> c1_host_dev(c1_lengths, c1_strides);
 
+#if 0
     ck::utils::FillUniformDistributionIntegerValue<A0DataType>{-5.f, 5.f}(a0_host);
     ck::utils::FillUniformDistributionIntegerValue<B0DataType>{-5.f, 5.f}(b0_host);
     ck::utils::FillUniformDistributionIntegerValue<B1DataType>{-5.f, 5.f}(b1_host);
+#else
+    ck::utils::FillConstant<A0DataType>{1.f}(a0_host);
+    ck::utils::FillConstant<B0DataType>{1.f}(b0_host);
+    ck::utils::FillConstant<B1DataType>{1.f}(b1_host);
+#endif
 
     // reference gemm
     reference_gemm<A0DataType, B0DataType, C0DataType, float>(a0_host, b0_host, c0_host_ref);
@@ -384,9 +250,12 @@ int main(int argc, char* argv[])
     float ave_time = launch(ProgramServer{},
                             GemmGemm<A0DataType,
                                      B0DataType,
+                                     Acc0DataType,
                                      C0DataType,
                                      B1DataType,
+                                     Acc1DataType,
                                      C1DataType,
+                                     kBlockSize,
                                      kM0PerBlock,
                                      kN0PerBlock,
                                      kK0PerBlock,

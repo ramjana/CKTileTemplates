@@ -153,6 +153,7 @@ struct TensorAdaptor
 
     __host__ __device__ constexpr auto GetElementSize() const { return element_size_; }
 
+    // FIXME: this logic is wrong when getting bottome dimension lengths
     template <index_t IDimHidden>
     __host__ __device__ constexpr auto GetHiddenDimensionLength(Number<IDimHidden>) const
     {
@@ -176,12 +177,15 @@ struct TensorAdaptor
         return GetHiddenDimensionLength(TopDimensionHiddenIds::At(idim_top));
     }
 
+#if 0
+    // FIXME: GetHiddenDimensionLength is wrong when getting bottome dimension lengths
     template <index_t IDimBottom>
     __host__ __device__ constexpr index_t
     GetBottomDimensionLength(Number<IDimBottom> idim_bottom) const
     {
         return GetHiddenDimensionLength(TopDimensionHiddenIds::At(idim_bottom));
     }
+#endif
 
     __host__ __device__ constexpr auto GetTopDimensionLengths() const
     {
@@ -189,11 +193,14 @@ struct TensorAdaptor
                               Number<ndim_top_>{});
     }
 
+#if 0
+    // FIXME: GetHiddenDimensionLength is wrong when getting bottome dimension lengths
     __host__ __device__ constexpr auto GetBottomDimensionLengths() const
     {
         return generate_tuple([&](auto i) { return GetBottomDimensionLength(i); },
                               Number<ndim_bottom_>{});
     }
+#endif
 
     template <typename TopIdx>
     __host__ __device__ constexpr auto CalculateBottomIndex(const TopIdx& idx_top) const

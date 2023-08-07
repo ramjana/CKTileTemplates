@@ -210,6 +210,9 @@ struct TileDistribution
     using PsYs2XsAdaptor = remove_cvref_t<PsYs2XsAdaptor_>;
     using Ys2DDescriptor = remove_cvref_t<Ys2DDescriptor_>;
 
+    static_assert(PsYs2XsAdaptor::IsStatic() && Ys2DDescriptor::IsStatic(),
+                  "wrong! should be static");
+
     using StaticTileDistributionEncoding = remove_cvref_t<StaticTileDistributionEncoding_>;
 
     static constexpr index_t NDimX = PsYs2XsAdaptor::GetNumOfBottomDimension();
@@ -223,9 +226,23 @@ struct TileDistribution
     __host__ __device__ static constexpr index_t GetNumOfDimensionY() { return NDimY; }
     __host__ __device__ static constexpr index_t GetNumOfDimensionP() { return NDimP; }
 
-    __host__ __device__ constexpr auto GetLengths() const
+    __host__ __device__ static constexpr auto GetLengths()
     {
+#if 0
+        // FIXME: TensorAdaptor::GetBottomDimensionLengths is wrong. re-enable this after it's fixed
         ps_ys_to_xs_.GetBottomDimensionLengths();
+#else
+        return generate_tuple(
+            [&](auto i) {
+                constexpr index_t x_length =
+                    container_reduce(typename StaticTileDistributionEncoding::HsLengthss{}[i],
+                                     math::multiplies{},
+                                     1);
+
+                return Number<x_length>{};
+            },
+            Number<NDimX>{});
+#endif
     }
 
     __host__ __device__ constexpr const auto& GetPsYs2XsAdaptor() const { return ps_ys_to_xs_; }
