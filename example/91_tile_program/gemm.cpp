@@ -8,16 +8,6 @@
 #include "ck/tensor_operation/gpu/element/element_wise_operation.hpp"
 #include "ck/host_utility/device_prop.hpp"
 
-#include "tile_program.hpp"
-#include "ck/utility/meta_data_buffer.hpp"
-#include "ck/tile_program/tile/tile_distribution.hpp"
-#include "ck/tile_program/tile/tile_window.hpp"
-#include "ck/tile_program/tile/static_distributed_tensor.hpp"
-#include "ck/tile_program/tile/load_tile.hpp"
-#include "ck/tile_program/tile/store_tile.hpp"
-#include "ck/tile_program/tile/tile_elementwise.hpp"
-#include "ck/tile_program/block_tile/block_gemm_asmem_bsmem_creg_v1.hpp"
-
 #include "ck/library/utility/check_err.hpp"
 #include "ck/library/utility/device_memory.hpp"
 #include "ck/library/utility/fill.hpp"

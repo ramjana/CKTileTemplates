@@ -133,6 +133,14 @@ float launch(Server server, Program f, dim3 grid_dim, dim3 block_dim, Xs... xs)
 
     printf("meta data size %d\n", server.meta_data_.size_);
 
+    printf("%s: grid_dim {%d, %d, %d}, block_dim {%d, %d, %d} \n",
+           __func__,
+           grid_dim.x,
+           grid_dim.y,
+           grid_dim.z,
+           block_dim.x,
+           block_dim.y,
+           block_dim.z);
 #if 0
     gpu_program_wrapper<Server, Program><<<grid_dim, block_dim, 0, nullptr>>>(server, f, xs...);
 #else
