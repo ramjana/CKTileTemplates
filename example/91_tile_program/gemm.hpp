@@ -77,7 +77,7 @@ struct Gemm
                                         ck::index_t Ldc,
                                         const AElementFunction& a_element_func,
                                         const BElementFunction& b_element_func,
-                                        const CElementFunction& c_element_func)
+                                        const CElementFunction& c_element_func) const
     {
         using namespace ck;
         using namespace ck::tile_program;
