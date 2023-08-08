@@ -201,13 +201,14 @@ struct Im2Col
 
         const auto iGemmM = ps.read_first_lane(i_gemmm_gemmk[0]) * kMPerBlock;
 
-        // window
+        // src window
         auto src_block_window =
             make_tile_window(src_gemmm_gemmk,
                              make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}),
                              {iGemmM, 0},
                              MakeBlockCopyTileDistribution());
 
+        // dst window
         auto dst_block_window = make_tile_window(
             dst_gemmm_gemmk, make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}), {iGemmM, 0});
 
@@ -223,6 +224,7 @@ struct Im2Col
             move_tile_window(dst_block_window, {0, kKPerBlock});
 
             iGemmK += kKPerBlock;
+
         } while(iGemmK < numGemmK);
     }
 };
@@ -233,9 +235,9 @@ int main()
 
     constexpr ck::index_t NumDimSpatial = 2;
 
-    ck::index_t N  = 32;
+    ck::index_t N  = 128;
     ck::index_t K  = 1;
-    ck::index_t C  = 192;
+    ck::index_t C  = 256;
     ck::index_t Y  = 3;
     ck::index_t X  = 3;
     ck::index_t Hi = 28;
@@ -320,8 +322,8 @@ int main()
 
     constexpr ck::index_t kBlockSize = 256;
 
-    constexpr ck::index_t kGemmMPerBlock = 128;
-    constexpr ck::index_t kGemmKPerBlock = 32;
+    constexpr ck::index_t kGemmMPerBlock = 256;
+    constexpr ck::index_t kGemmKPerBlock = 128;
 
     ck::index_t kGridSize = (N * Ho * Wo) / kGemmMPerBlock;
 
