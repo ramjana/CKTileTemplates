@@ -128,8 +128,7 @@ make_naive_tensor_view_packed(DataType* p,
     auto desc =
         make_naive_tensor_descriptor_packed(lengths, Number<GuaranteedLastDimensionVectorLength>{});
 
-    auto buffer_view =
-        make_buffer_view<BufferAddressSpace, DataType>(p, desc.GetElementSpaceSize());
+    auto buffer_view = make_buffer_view<BufferAddressSpace>(p, desc.GetElementSpaceSize());
 
     return TensorView<decltype(buffer_view), decltype(desc)>{buffer_view, desc};
 }

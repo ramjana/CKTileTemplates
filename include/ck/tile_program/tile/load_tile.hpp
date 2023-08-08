@@ -11,6 +11,7 @@
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
 #include "ck/tile_program/tile/tile_window.hpp"
+#include "ck/tile_program/tile/static_distributed_tensor.hpp"
 
 namespace ck {
 namespace tile_program {
