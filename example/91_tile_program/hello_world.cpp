@@ -16,13 +16,11 @@ struct HelloWorld
 {
     __host__ __device__ void operator()(ProgramServer& ps, int x, int y, int* res)
     {
-        auto desc0 = ps(make_naive_tensor_descriptor_packed(ck::make_tuple(x)));
-        auto desc1 = ps(make_naive_tensor_descriptor_packed(ck::make_tuple(y)));
+        // host will evaulate value inside ps(), and push the result into meta data buffer
+        // device will read the value inside ps() from meta data buffer
+        auto z = ps(x + y);
 
-        // only for testing purpose
-        // cpu should not do work here
-        res[0] = desc0.GetLength(ck::Number<0>{});
-        res[1] = desc1.GetLength(ck::Number<0>{});
+        res[0] = z;
     }
 };
 
@@ -31,7 +29,7 @@ int main()
     int x = 100;
     int y = 101;
 
-    DeviceMem res_dev_buf(2 * sizeof(int));
+    DeviceMem res_dev_buf(sizeof(int));
 
     launch(ProgramServer{},
            HelloWorld{},
@@ -41,12 +39,11 @@ int main()
            y,
            static_cast<int*>(res_dev_buf.GetDeviceBuffer()));
 
-    int res_host[2];
+    int res_host;
 
-    res_dev_buf.FromDevice(res_host);
+    res_dev_buf.FromDevice(&res_host);
 
-    printf("res_host %d\n", res_host[0]);
-    printf("res_host %d\n", res_host[1]);
+    printf("res_host %d\n", res_host);
 
     return 0;
 }
