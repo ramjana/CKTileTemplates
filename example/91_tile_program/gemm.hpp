@@ -50,7 +50,7 @@ struct Gemm
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1<BlockGemmPipelineProblem,
                                                                    BlockGemmPipelinePolicy>;
 #else
-    using GridGemmPolicy = ck::tile_program::grid::GridGemmDefaultPolicy;
+    using GridGemmPolicy = ck::tile_program::grid::GridGemmNAdaptPolicy<8>;
 
     using BlockGemmPipelineProblem =
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2Problem<
