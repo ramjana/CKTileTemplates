@@ -357,5 +357,5 @@ int main()
 
     in_mtx_buf.FromDevice(in_mtx_host_dev.mData.data());
 
-    return ck::utils::check_err(in_mtx_host_dev, in_mtx_host_ref);
+    return !ck::utils::check_err(in_mtx_host_dev, in_mtx_host_ref);
 }

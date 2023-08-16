@@ -102,5 +102,5 @@ int main(int argc, char* argv[])
 
     std::cout << "Perf: " << ave_time << " ms, " << gb_per_sec << " GB/s" << std::endl;
 
-    return ck::utils::check_err(b_host_dev, b_host_ref);
+    return !ck::utils::check_err(b_host_dev, b_host_ref);
 }

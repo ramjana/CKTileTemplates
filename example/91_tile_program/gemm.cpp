@@ -145,5 +145,5 @@ int main(int argc, char* argv[])
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
 
-    return ck::utils::check_err(c_host_dev, c_host_ref);
+    return !ck::utils::check_err(c_host_dev, c_host_ref);
 }
