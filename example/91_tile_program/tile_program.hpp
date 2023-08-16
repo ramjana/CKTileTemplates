@@ -34,11 +34,15 @@ struct MetaData
     template <typename T>
     __host__ auto push(T&& a)
     {
-        assert(size_ + sizeof(Type) <= kSize);
-
         using Type = ck::remove_cvref_t<T>;
 
-        *reinterpret_cast<Type*>(p_data_ + size_) = a;
+        static_assert(std::is_trivially_copy_constructible_v<Type> &&
+                      std::is_trivially_destructible_v<Type>);
+
+        assert(size_ + sizeof(Type) <= kSize);
+
+        // use placement new to create object copy
+        new(p_data_ + size_) Type(std::forward<T>(a));
 
         size_ += sizeof(Type);
 
@@ -52,7 +56,10 @@ struct MetaData
     {
         using Type = ck::remove_cvref_t<T>;
 
-        Type a = *reinterpret_cast<Type*>(p_data_ + pos_);
+        static_assert(std::is_trivially_copy_constructible_v<Type> &&
+                      std::is_trivially_destructible_v<Type>);
+
+        Type a(*reinterpret_cast<Type*>(p_data_ + pos_));
 
         pos_ += sizeof(Type);
 
