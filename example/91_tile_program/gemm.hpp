@@ -15,6 +15,7 @@
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
+#include "ck/tile_program/grid/grid_gemm_policy.hpp"
 
 // C = A * B
 template <typename ADataType,
@@ -49,6 +50,8 @@ struct Gemm
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1<BlockGemmPipelineProblem,
                                                                    BlockGemmPipelinePolicy>;
 #else
+    using GridGemmPolicy = ck::tile_program::grid::GridGemmDefaultPolicy;
+
     using BlockGemmPipelineProblem =
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2Problem<
             ADataType,
@@ -96,9 +99,9 @@ struct Gemm
         const auto num_tile_m = M / kMPerBlock;
         const auto num_tile_n = N / kNPerBlock;
 
-        const auto block2tile = ps(make_cluster_descriptor(make_tuple(num_tile_m, num_tile_n)));
+        const auto block2tile = ps(GridGemmPolicy::MakeBlock2TileMap(num_tile_m, num_tile_n));
 
-        const auto id_tile = block2tile.CalculateBottomIndex(make_tuple(id_block));
+        const auto id_tile = block2tile(id_block);
 
         const auto iM = ps.read_first_lane(id_tile.At<0>() * kMPerBlock);
         const auto iN = ps.read_first_lane(id_tile.At<1>() * kNPerBlock);
