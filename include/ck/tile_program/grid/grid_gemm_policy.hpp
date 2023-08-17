@@ -81,28 +81,6 @@ struct GridGemmMFastPolicy
     }
 };
 
-template <index_t RightShift = 1>
-struct GridGemmRowShiftPolicy
-{
-    __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
-                                                                index_t NumTilesN)
-    {
-        const auto unmerge = make_merge_transform(make_tuple(NumTilesM, NumTilesN));
-        const auto shift_row_to_right =
-            make_xor_transform(make_tuple(NumTilesM, NumTilesN), -RightShift);
-
-        return [unmerge, shift_row_to_right](index_t block_id) {
-            MultiIndex<2> unmerged;
-            unmerge.CalculateLowerIndex(unmerged, make_multi_index(block_id));
-
-            MultiIndex<2> shifted;
-            shift_row_to_right.CalculateLowerIndex(shifted, unmerged);
-
-            return shifted;
-        };
-    }
-};
-
 template <index_t MaxRows = 8>
 struct GridGemmMAdaptPolicy
 {
