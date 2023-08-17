@@ -134,7 +134,7 @@ struct GridGemmNAdaptPolicy
                 MaxNumCompleteArea * NumBlocksInSingleCompleteArea;
 
             const ck::index_t LastCols =
-                (block_id < MaxCompleteAreaBoundary ? MaxCols : NumTilesN - MaxNumCompleteArea);
+                (block_id < MaxCompleteAreaBoundary ? MaxCols : NumTilesN % MaxCols);
             const ck::index_t NumRemainedBlocks = block_id % NumBlocksInSingleCompleteArea;
 
             const ck::index_t idxM = NumRemainedBlocks / LastCols;
