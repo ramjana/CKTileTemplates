@@ -13,18 +13,8 @@
 
 namespace ck {
 namespace detail {
-template <typename Type, typename = void>
-struct is_block2tile_map : std::bool_constant<false>
-{
-};
-
 template <typename Type>
-struct is_block2tile_map<Type,
-                         std::void_t<decltype(std::declval<const std::remove_cvref_t<Type>&>()(
-                             std::declval<index_t>()))>>
-    : std::bool_constant<std::is_same_v<MultiIndex<2>,
-                                        decltype(std::declval<const std::remove_cvref_t<Type>&>()(
-                                            std::declval<index_t>()))>>
+struct is_block2tile_map : std::is_invocable_r<MultiIndex<2>, std::remove_cvref_t<Type>, index_t>
 {
 };
 
@@ -65,13 +55,29 @@ __host__ __device__ static auto make_desc_to_block2tile_map_adaptor(Descriptor&&
 namespace tile_program {
 namespace grid {
 
-struct GridGemmDefaultPolicy
+struct GridGemmNFastPolicy
 {
     __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
                                                                 index_t NumTilesN)
     {
         return ck::detail::make_desc_to_block2tile_map_adaptor(
             make_cluster_descriptor(make_tuple(NumTilesM, NumTilesN)));
+    }
+};
+
+struct GridGemmMFastPolicy
+{
+    __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
+                                                                index_t NumTilesN)
+    {
+        const auto unmerge = make_merge_transform(make_tuple(NumTilesN, NumTilesM));
+
+        return [unmerge](index_t block_id) {
+            MultiIndex<2> unmerged;
+            unmerge.CalculateLowerIndex(unmerged, make_multi_index(block_id));
+
+            return make_multi_index(unmerged.At<1>(), unmerged.At<0>());
+        };
     }
 };
 
@@ -145,6 +151,8 @@ struct GridGemmNAdaptPolicy
         };
     }
 };
+
+using GridGemmDefaultPolicy = GridGemmMFastPolicy;
 
 } // namespace grid
 } // namespace tile_program
