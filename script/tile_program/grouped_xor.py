@@ -72,9 +72,13 @@ v_mfma_f32_32x32x8f16  = inst_mfma_t(D.fp16, D.fp16, D.fp32, 32, 32,  8,  1, 2, 
 
 
 class grouped_xor_t(object):
-    def __init__(self, elems_per_group, elems_per_row):
+    def __init__(self, elems_per_group, elems_per_row, xor_rows = 1):
+        '''
+        a group based xor function. each row divided into multiple groups, each group can has multiple elements
+        '''
         self.elems_per_group = elems_per_group
         self.elems_per_row = elems_per_row
+        self.xor_rows = xor_rows
         self.groups_per_row = elems_per_row // elems_per_group
         # print(f'elems_per_group:{self.elems_per_group}, elems_per_row:{self.elems_per_row}, groups_per_row:{self.groups_per_row}')
 
@@ -82,7 +86,7 @@ class grouped_xor_t(object):
         i_col = linear_idx % self.elems_per_row
         i_row = linear_idx // self.elems_per_row
         i_group = i_col // self.elems_per_group
-        xor_factor = i_row % self.groups_per_row
+        xor_factor = (i_row // self.xor_rows) % self.groups_per_row
         i_xor_group = i_group ^ xor_factor
         new_idx = i_row * self.elems_per_row + i_xor_group *  self.elems_per_group
         return new_idx
@@ -149,7 +153,21 @@ def plot_banks(x_coord, y_coord, values, elem_limit, elem_total, title, fig_name
     if True:
         fontsize = 4
         cmap = matplotlib.colors.ListedColormap( [ ( get_p_colors_0(i) if i < elem_limit else get_p_colors_1(i) if i < 2 *elem_limit else "white") for i in range(elem_total + 1) ] )
-        fig, ax = plt.subplots()
+        def get_figsize():
+            figsize = [(5, 2), (5, 3.5), (5, 6.5), (5, 8.5), (5, 13)]
+            scale = values.shape[0] / (values.shape[1] * x_coord[1])
+            if scale <= 0.25:
+                s = 0
+            if scale <= 0.5:
+                s = 1
+            elif scale <= 1 : 
+                s = 2
+            elif scale <= 1.5 : 
+                s = 3
+            else:
+                s = 4
+            return figsize[s]
+        fig, ax = plt.subplots(figsize=get_figsize())
         ax.set_aspect(1) # Y/X ratio
         ax.invert_yaxis() # now Y is from top to bottom
         ax.set_title(title)
@@ -158,6 +176,9 @@ def plot_banks(x_coord, y_coord, values, elem_limit, elem_total, title, fig_name
         plt.pcolormesh(x_coord, y_coord, values, cmap=cmap, edgecolors='k')
         plt.xticks(x_coord, fontsize=fontsize)
         plt.yticks(y_coord, fontsize=fontsize)
+        #print(f'@@@@@ value.shape:{values.shape}')
+        
+
 
         #fig.tight_layout()
         for ix in range(len(x_coord) - 1):
@@ -215,7 +236,7 @@ class bank_conflict_validator_t(object):
         #print(f'tid:{tid}, x:{x}, y:{y}, g:{group}')
         #print(self.mesh)
         i_row, i_group = self.grouped_xor.idx_to_2d_as_group(offset)
-        print(f'addr:{i_row}x{i_group}, shape:{self.offsets.shape}, tid:{tid}, os:{offset}', flush=True)
+        print(f'addr:{i_row}x{i_group}, shape:{self.offsets.shape}, tid:{tid}, os:{offset}, xor_rows:{self.grouped_xor.xor_rows}', flush=True)
         self.offsets[i_row, i_group] = tid
 
     def valid_and_gen(self, base_dir, label = "test"):
@@ -256,7 +277,12 @@ class simulator_t(object):
 
         elems_per_group = self.k_pack
         elems_per_row = self.banks * (32 // data_type_bits[d_type])
-        self.grouped_xor = grouped_xor_t(elems_per_group, elems_per_row)
+        def get_xor_rows() :
+            if layout == layout_t.row_major:
+                return (k_per_block + elems_per_row - 1) // elems_per_row
+            else:
+                return 1
+        self.grouped_xor = grouped_xor_t(elems_per_group, elems_per_row, get_xor_rows())
 
         bounding_rec_sld = self.shared_block_desc.get_bounding_rec_sld(self.grouped_xor, mfma)
         self.sld_bank_conflict_validator = bank_conflict_validator_t(mfma.wave_size, banks, d_type, self.grouped_xor, bounding_rec_sld)
@@ -288,7 +314,7 @@ class simulator_t(object):
 if __name__ == '__main__':
 
     M_BLOCKS = [32, 64, 96, 128, 160, 192, 256]
-    K_BLOCKS = [8, 16, 32, 64]
+    K_BLOCKS = [8, 16, 32, 64, 128]
     LAYOUT = [layout_t.row_major, layout_t.col_major]
     DTYPE = [data_type_t.fp16]
     MFMA = [v_mfma_f32_32x32x8f16, v_mfma_f32_16x16x16f16]

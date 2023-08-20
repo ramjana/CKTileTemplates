@@ -8,7 +8,7 @@ import enum
 OUTPUT_FILE='gemm_global_load_tile_encoding_predef.hpp'
 
 B_ARRAY=[256, 128, 64]          # block size
-S_ARRAY=[32, 64, 96, 128, 160, 196, 256]  # M/N dim 
+S_ARRAY=[32, 64, 96, 128, 160, 192, 256]  # M/N dim 
 R_ARRAY=[8, 16, 32, 64, 128]     # K dim, reduce dim
 # V_ARRAY=[8, 4, 2, 1]        # vector size, alignment
 
@@ -79,30 +79,30 @@ class gemm_thread_group_desc(object):
         '''
         ws = self.wave_size
         tx_0,   _ , ty_0, ty_1 = self.t_len[0], self.t_len[1], self.t_len[2], self.t_len[3]
-        _   , cx_1, cy_0,   _  = self.c_len[0], self.c_len[1], self.c_len[2], self.c_len[3]
+        _   , cx_1,   _ , cy_1 = self.c_len[0], self.c_len[1], self.c_len[2], self.c_len[3]
 
-        if cy_0 > ws:
-            assert cy_0 % ws == 0, f't:{self.t_len}, c:{self.c_len}, ws:{ws}' # TODO: Maybe no need even divide?
+        if cy_1 > ws:
+            assert cy_1 % ws == 0, f't:{self.t_len}, c:{self.c_len}, ws:{ws}' # TODO: Maybe no need even divide?
             if ty_0 != 1:
-                dim_x, dim_y = [tx_0, cx_1], [cy_0 // ws, ws, ty_0, ty_1]
-                p_0_i, p_0_j = [1, 2], [1, 0]
-                p_1_i, p_1_j = [2], [1]
-                y_i, y_j = [1, 2, 2], [0, 2, 3]
+                dim_x, dim_y = [tx_0, cx_1], [ty_0, cy_1 // ws, ws, ty_1]
+                p_0_i, p_0_j = [1, 2], [1, 1]
+                p_1_i, p_1_j = [2], [2]
+                y_i, y_j = [1, 2, 2], [0, 0, 3]
             else:
-                dim_x, dim_y = [tx_0, cx_1], [cy_0 // ws, ws, ty_1]
+                dim_x, dim_y = [tx_0, cx_1], [cy_1 // ws, ws, ty_1]
                 p_0_i, p_0_j = [1, 2], [1, 0]
                 p_1_i, p_1_j = [2], [1]
                 y_i, y_j = [1, 2], [0, 2]
         else:
-            r = ws // cy_0
+            r = ws // cy_1
             assert cx_1 % r == 0, f't:{self.t_len}, c:{self.c_len}, r:{r}, ws:{ws}'
             if ty_0 != 1:
-                dim_x, dim_y = [tx_0, cx_1 // r, r], [cy_0, ty_0, ty_1]
+                dim_x, dim_y = [tx_0, cx_1 // r, r], [ty_0, cy_1, ty_1]
                 p_0_i, p_0_j = [1], [1]
-                p_1_i, p_1_j = [1, 2], [2, 0]
-                y_i, y_j = [1, 2, 2], [0, 1, 2]
+                p_1_i, p_1_j = [1, 2], [2, 1]
+                y_i, y_j = [1, 2, 2], [0, 0, 2]
             else:
-                dim_x, dim_y = [tx_0, cx_1 // r, r], [cy_0, ty_1]
+                dim_x, dim_y = [tx_0, cx_1 // r, r], [cy_1, ty_1]
                 p_0_i, p_0_j = [1], [1]
                 p_1_i, p_1_j = [1, 2], [2, 0]
                 y_i, y_j = [1, 2], [0, 1]
@@ -129,7 +129,7 @@ class gemm_gld_tile_enc_gen(object):
 
     def serialize(self, layout):
         # generalize into x*y dim, x0x1, y0y1, where y is fast changing dim
-        ty_array = [32, 16, 8, 6, 5, 4, 3, 2, 1]
+        ty_array = [32, 24, 16, 12, 8, 6, 5, 4, 3, 2, 1]
         vectors = [32, 16, 8, 4, 2, 1]
 
         dim_x = self.s if layout == GemmLayout.S_R else self.r
@@ -158,9 +158,9 @@ class gemm_gld_tile_enc_gen(object):
                 continue
 
             tx_0, tx_1, ty_0, ty_1 = tx,  1, ty//found_vector, found_vector
-            cx_0, cx_1, cy_0, cy_1 = 1 , cx,            cy   , 1
+            cx_0, cx_1, cy_0, cy_1 = 1 , cx,             1   , cy
 
-            assert tx_1 == 1 and cx_0 == 1 and cy_1 == 1, 'no need to split further'
+            assert tx_1 == 1 and cx_0 == 1 and cy_0== 1, 'no need to split further'
 
             result_desc_array.append(gemm_thread_group_desc(self.b, [tx_0, tx_1, ty_0, ty_1], [cx_0, cx_1, cy_0, cy_1], layout, WAVE_SIZE))
         return result_desc_array
