@@ -8,9 +8,99 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
-
 namespace ck {
 namespace tile_program {
+
+template <typename RsLengths_,    // Sequence<...>
+          typename HsLengthss_,   // Tuple<Sequence<...>, ...>
+          typename Ps2RHssMajor_, // Tuple<Sequence<...>, ...>
+          typename Ps2RHssMinor_, // Tuple<Sequence<...>, ...>
+          typename Ys2RHsMajor_,  // Sequence<...>
+          typename Ys2RHsMinor_   // Sequence<...>
+          >
+struct StaticTileDistributionEncoding
+{
+    using RsLengths    = remove_cvref_t<RsLengths_>;
+    using HsLengthss   = remove_cvref_t<HsLengthss_>;
+    using Ps2RHssMajor = remove_cvref_t<Ps2RHssMajor_>;
+    using Ps2RHssMinor = remove_cvref_t<Ps2RHssMinor_>;
+    using Ys2RHsMajor  = remove_cvref_t<Ys2RHsMajor_>;
+    using Ys2RHsMinor  = remove_cvref_t<Ys2RHsMinor_>;
+
+    static_assert(Ps2RHssMajor::Size() == Ps2RHssMinor::Size(), "wrong!");
+    static_assert(Ys2RHsMajor::Size() == Ys2RHsMinor::Size(), "wrong!");
+
+    static constexpr index_t NDimX = HsLengthss::Size();
+    static constexpr index_t NDimP = Ps2RHssMajor::Size();
+    static constexpr index_t NDimY = Ys2RHsMajor::Size();
+};
+
+template <typename PsYs2XsAdaptor_,
+          typename Ys2DDescriptor_,
+          typename StaticTileDistributionEncoding_>
+struct TileDistribution
+{
+    using PsYs2XsAdaptor = remove_cvref_t<PsYs2XsAdaptor_>;
+    using Ys2DDescriptor = remove_cvref_t<Ys2DDescriptor_>;
+
+    static_assert(PsYs2XsAdaptor::IsStatic() && Ys2DDescriptor::IsStatic(),
+                  "wrong! should be static");
+
+    using StaticTileDistributionEncoding = remove_cvref_t<StaticTileDistributionEncoding_>;
+
+    static constexpr index_t NDimX = PsYs2XsAdaptor::GetNumOfBottomDimension();
+    static constexpr index_t NDimY = Ys2DDescriptor::GetNumOfTopDimension();
+    static constexpr index_t NDimP = PsYs2XsAdaptor::GetNumOfTopDimension() - NDimY;
+
+    PsYs2XsAdaptor ps_ys_to_xs_;
+    Ys2DDescriptor ys_to_d_;
+
+    __host__ __device__ static constexpr index_t GetNumOfDimensionX() { return NDimX; }
+    __host__ __device__ static constexpr index_t GetNumOfDimensionY() { return NDimY; }
+    __host__ __device__ static constexpr index_t GetNumOfDimensionP() { return NDimP; }
+
+    __host__ __device__ static constexpr auto GetLengths()
+    {
+#if 0
+        // FIXME: TensorAdaptor::GetBottomDimensionLengths is wrong. re-enable this after it's fixed
+        ps_ys_to_xs_.GetBottomDimensionLengths();
+#else
+        return generate_tuple(
+            [&](auto i) {
+                constexpr index_t x_length =
+                    container_reduce(typename StaticTileDistributionEncoding::HsLengthss{}[i],
+                                     math::multiplies{},
+                                     1);
+
+                return Number<x_length>{};
+            },
+            Number<NDimX>{});
+#endif
+    }
+
+    __host__ __device__ constexpr const auto& GetPsYs2XsAdaptor() const { return ps_ys_to_xs_; }
+
+    __host__ __device__ constexpr const auto& GetYs2DDescriptor() const { return ys_to_d_; }
+
+    __host__ __device__ static constexpr auto GetStaticTileDistributionEncoding()
+    {
+        return StaticTileDistributionEncoding{};
+    }
+
+    __host__ __device__ static constexpr bool IsStatic()
+    {
+        return PsYs2XsAdaptor::IsStatic() && Ys2DDescriptor::IsStatic();
+    }
+
+    __host__ __device__ void Print() const
+    {
+        printf("{");
+        printf("TileDistribution, ");
+        ps_ys_to_xs_.Print();
+        ys_to_d_.Print();
+        printf("}");
+    }
+};
 
 namespace detail {
 
@@ -202,97 +292,6 @@ __host__ __device__ constexpr auto
 }
 
 } // namespace detail
-
-template <typename PsYs2XsAdaptor_,
-          typename Ys2DDescriptor_,
-          typename StaticTileDistributionEncoding_>
-struct TileDistribution
-{
-    using PsYs2XsAdaptor = remove_cvref_t<PsYs2XsAdaptor_>;
-    using Ys2DDescriptor = remove_cvref_t<Ys2DDescriptor_>;
-
-    static_assert(PsYs2XsAdaptor::IsStatic() && Ys2DDescriptor::IsStatic(),
-                  "wrong! should be static");
-
-    using StaticTileDistributionEncoding = remove_cvref_t<StaticTileDistributionEncoding_>;
-
-    static constexpr index_t NDimX = PsYs2XsAdaptor::GetNumOfBottomDimension();
-    static constexpr index_t NDimY = Ys2DDescriptor::GetNumOfTopDimension();
-    static constexpr index_t NDimP = PsYs2XsAdaptor::GetNumOfTopDimension() - NDimY;
-
-    PsYs2XsAdaptor ps_ys_to_xs_;
-    Ys2DDescriptor ys_to_d_;
-
-    __host__ __device__ static constexpr index_t GetNumOfDimensionX() { return NDimX; }
-    __host__ __device__ static constexpr index_t GetNumOfDimensionY() { return NDimY; }
-    __host__ __device__ static constexpr index_t GetNumOfDimensionP() { return NDimP; }
-
-    __host__ __device__ static constexpr auto GetLengths()
-    {
-#if 0
-        // FIXME: TensorAdaptor::GetBottomDimensionLengths is wrong. re-enable this after it's fixed
-        ps_ys_to_xs_.GetBottomDimensionLengths();
-#else
-        return generate_tuple(
-            [&](auto i) {
-                constexpr index_t x_length =
-                    container_reduce(typename StaticTileDistributionEncoding::HsLengthss{}[i],
-                                     math::multiplies{},
-                                     1);
-
-                return Number<x_length>{};
-            },
-            Number<NDimX>{});
-#endif
-    }
-
-    __host__ __device__ constexpr const auto& GetPsYs2XsAdaptor() const { return ps_ys_to_xs_; }
-
-    __host__ __device__ constexpr const auto& GetYs2DDescriptor() const { return ys_to_d_; }
-
-    __host__ __device__ static constexpr auto GetStaticTileDistributionEncoding()
-    {
-        return StaticTileDistributionEncoding{};
-    }
-
-    __host__ __device__ static constexpr bool IsStatic()
-    {
-        return PsYs2XsAdaptor::IsStatic() && Ys2DDescriptor::IsStatic();
-    }
-
-    __host__ __device__ void Print() const
-    {
-        printf("{");
-        printf("TileDistribution, ");
-        ps_ys_to_xs_.Print();
-        ys_to_d_.Print();
-        printf("}");
-    }
-};
-
-template <typename RsLengths_,    // Sequence<...>
-          typename HsLengthss_,   // Tuple<Sequence<...>, ...>
-          typename Ps2RHssMajor_, // Tuple<Sequence<...>, ...>
-          typename Ps2RHssMinor_, // Tuple<Sequence<...>, ...>
-          typename Ys2RHsMajor_,  // Sequence<...>
-          typename Ys2RHsMinor_   // Sequence<...>
-          >
-struct StaticTileDistributionEncoding
-{
-    using RsLengths    = remove_cvref_t<RsLengths_>;
-    using HsLengthss   = remove_cvref_t<HsLengthss_>;
-    using Ps2RHssMajor = remove_cvref_t<Ps2RHssMajor_>;
-    using Ps2RHssMinor = remove_cvref_t<Ps2RHssMinor_>;
-    using Ys2RHsMajor  = remove_cvref_t<Ys2RHsMajor_>;
-    using Ys2RHsMinor  = remove_cvref_t<Ys2RHsMinor_>;
-
-    static_assert(Ps2RHssMajor::Size() == Ps2RHssMinor::Size(), "wrong!");
-    static_assert(Ys2RHsMajor::Size() == Ys2RHsMinor::Size(), "wrong!");
-
-    static constexpr index_t NDimX = HsLengthss::Size();
-    static constexpr index_t NDimP = Ps2RHssMajor::Size();
-    static constexpr index_t NDimY = Ys2RHsMajor::Size();
-};
 
 // this returns a constexpr TileDistribution
 template <typename StaticTileDistributionEncoding_>

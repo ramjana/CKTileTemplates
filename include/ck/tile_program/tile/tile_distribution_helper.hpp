@@ -7,14 +7,12 @@
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
 
-
 namespace ck {
 namespace tile_program {
 namespace detail {
 
-
 template <typename OuterDstr, typename InnerDstr>
-__host__ __device__ constexpr auto embed_tile_distribution_encoding(OuterDstr, InnerDstr)
+__host__ __device__ constexpr auto make_embed_tile_distribution_encoding(OuterDstr, InnerDstr)
 {
     static_assert(OuterDstr::NDimX == InnerDstr::NDimX, "wrong!");
 
@@ -119,6 +117,16 @@ __host__ __device__ constexpr auto embed_tile_distribution_encoding(OuterDstr, I
                                           remove_cvref_t<decltype(ys_2_rhs_minor)>>{};
 }
 
+#if 0
+template <typename InDstr, index_t... ReduceDims>
+__host__ __device__ constexpr auto make_reduce_tile_distribution_encoding(InDstr,
+                                                                          Sequence<ReduceDims...>)
+{
+
+
+    return OutDstr;
+}
+#endif
 
 } // namespace detail
 } // namespace tile_program

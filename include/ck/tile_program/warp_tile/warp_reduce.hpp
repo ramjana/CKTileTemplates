@@ -10,7 +10,7 @@ namespace tile_program {
 namespace warp {
 
 // 2D to 1D reduce
-template <typename ReduceFuncIn,typename OutDataType_, typename InTileDistribution_>
+template <typename ReduceFuncIn, typename OutDataType_, typename InTileDistribution_>
 __device__ auto
 warp_tile_reduce_in(const ReduceFuncIn& reduce_func_in,
                     const OutDataType_& reduce_init,
