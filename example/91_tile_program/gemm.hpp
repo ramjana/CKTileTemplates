@@ -15,6 +15,7 @@
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
 #include "ck/tile_program/grid/grid_gemm_policy.hpp"
 
 // C = A * B
@@ -52,13 +53,12 @@ struct Gemm
 #else
     using GridGemmPolicy = ck::tile_program::grid::GridGemmDefaultPolicy;
 
-    using BlockGemmPipelineProblem =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2Problem<
-            ADataType,
-            BDataType,
-            AccDataType,
-            kBlockSize,
-            ck::tile_program::TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
+    using BlockGemmPipelineProblem = ck::tile_program::block::BlockGemmPipelineProblem<
+        ADataType,
+        BDataType,
+        AccDataType,
+        kBlockSize,
+        ck::tile_program::TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
 
     using BlockGemmPipelinePolicy =
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy;
