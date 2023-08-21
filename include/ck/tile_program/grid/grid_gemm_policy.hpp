@@ -10,11 +10,12 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 
 #include "ck/utility/multi_index.hpp"
+#include "ck/utility/type.hpp"
 
 namespace ck {
 namespace detail {
 template <typename Type>
-struct is_block2tile_map : std::is_invocable_r<MultiIndex<2>, std::remove_cvref_t<Type>, index_t>
+struct is_block2tile_map : std::is_invocable_r<MultiIndex<2>, remove_cvref_t<Type>, index_t>
 {
 };
 
@@ -24,11 +25,10 @@ inline constexpr bool is_block2tile_map_v = is_block2tile_map<Type>::value;
 template <typename Descriptor>
 class DescToBlock2TileMapAdaptor
 {
-    static_assert(
-        std::is_same_v<
-            MultiIndex<2>,
-            std::remove_cvref_t<decltype(std::declval<const Descriptor&>().CalculateBottomIndex(
-                std::declval<MultiIndex<1>>()))>>);
+    static_assert(std::is_same_v<
+                  MultiIndex<2>,
+                  remove_cvref_t<decltype(std::declval<const Descriptor&>().CalculateBottomIndex(
+                      std::declval<MultiIndex<1>>()))>>);
 
     Descriptor descriptor_;
 
