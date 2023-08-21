@@ -52,7 +52,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
 
         return b_lds_block_desc;
     }
-#elif 0
+#elif 1
     // 3d + padding
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeALdsBlockDescriptor()

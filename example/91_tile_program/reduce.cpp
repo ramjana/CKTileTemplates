@@ -37,7 +37,6 @@ void reference_reduce(const Tensor<ADataType>& a_m_n, Tensor<BDataType>& b_m)
     make_ParallelTensorFunctor(f, b_m.mDesc.GetLengths()[0])(std::thread::hardware_concurrency());
 }
 
-
 int main(int argc, char* argv[])
 {
     using ADataType   = ck::half_t;

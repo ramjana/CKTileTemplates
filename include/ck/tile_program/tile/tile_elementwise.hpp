@@ -15,8 +15,8 @@ namespace ck {
 namespace tile_program {
 
 // TODO: support tensors with different distribution
-template <typename InOutElementOp, typename... InOutDstrTensors>
-__host__ __device__ void tile_elementwise_inout(const InOutElementOp& inout_element_op,
+template <typename InOutElementFunc, typename... InOutDstrTensors>
+__host__ __device__ void tile_elementwise_inout(const InOutElementFunc& inout_element_func,
                                                 InOutDstrTensors&... inout_dstr_tensors)
 {
     // TODO: make sure all distributed tensors have same lengths and distribution
@@ -26,14 +26,14 @@ __host__ __device__ void tile_elementwise_inout(const InOutElementOp& inout_elem
         type_pack_element<0, InOutDstrTensors...>::GetThreadBufferSize();
 
     static_for<0, thread_buffer_size, 1>{}(
-        [&](auto i) { inout_element_op(inout_dstr_tensors.GetThreadBuffer()(i)...); });
+        [&](auto i) { inout_element_func(inout_dstr_tensors.GetThreadBuffer()(i)...); });
 }
 
-template <typename InElementOp, typename... InDstrTensors>
-__host__ __device__ auto tile_elementwise_in(const InElementOp& in_element_op,
+template <typename InElementFunc, typename... InDstrTensors>
+__host__ __device__ auto tile_elementwise_in(const InElementFunc& in_element_func,
                                              const InDstrTensors&... in_dstr_tensors)
 {
-    using OutDataType = decltype(in_element_op(typename InDstrTensors::DataType{}...));
+    using OutDataType = decltype(in_element_func(typename InDstrTensors::DataType{}...));
 
     // TODO: make sure all distributed tensors have same lengths and distribution
     // static_assert(xxx);
@@ -46,7 +46,7 @@ __host__ __device__ auto tile_elementwise_in(const InElementOp& in_element_op,
 
     static_for<0, thread_buffer_size, 1>{}([&](auto i) {
         out_dstr_tensor.GetThreadBuffer()(i) =
-            in_element_op(in_dstr_tensors.GetThreadBuffer()[i]...);
+            in_element_func(in_dstr_tensors.GetThreadBuffer()[i]...);
     });
 
     return out_dstr_tensor;

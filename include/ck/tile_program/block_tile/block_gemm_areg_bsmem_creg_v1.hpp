@@ -9,14 +9,17 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/tile_distribution_helper.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1_default_policy.hpp"
 
+
 namespace ck {
 namespace tile_program {
 namespace block {
+
 
 // Problem Description for BlockGemmARegBSmemCRegV1
 template <typename ADataType_,
@@ -101,13 +104,13 @@ struct BlockGemmARegBSmemCRegV1
             Sequence<1, 2>,
             Sequence<0, 0>>{};
 
-        constexpr auto a_block_dstr_encode = embed_tile_distribution_encoding(
+        constexpr auto a_block_dstr_encode = detail::embed_tile_distribution_encoding(
             a_block_outer_dstr_encoding, typename WG::AWarpDstrEncoding{});
 
-        constexpr auto b_block_dstr_encode = embed_tile_distribution_encoding(
+        constexpr auto b_block_dstr_encode = detail::embed_tile_distribution_encoding(
             b_block_outer_dstr_encoding, typename WG::BWarpDstrEncoding{});
 
-        constexpr auto c_block_dstr_encode = embed_tile_distribution_encoding(
+        constexpr auto c_block_dstr_encode = detail::embed_tile_distribution_encoding(
             c_block_outer_dstr_encoding, typename WG::CWarpDstrEncoding{});
 
         constexpr auto a_block_dstr = make_static_tile_distribution(a_block_dstr_encode);
@@ -246,13 +249,13 @@ struct BlockGemmARegBSmemCRegV1
             Sequence<1, 2>,
             Sequence<0, 0>>{};
 
-        constexpr auto a_block_dstr_encode = embed_tile_distribution_encoding(
+        constexpr auto a_block_dstr_encode = detail::embed_tile_distribution_encoding(
             a_block_outer_dstr_encoding, typename WG::AWarpDstrEncoding{});
 
-        constexpr auto b_block_dstr_encode = embed_tile_distribution_encoding(
+        constexpr auto b_block_dstr_encode = detail::embed_tile_distribution_encoding(
             b_block_outer_dstr_encoding, typename WG::BWarpDstrEncoding{});
 
-        constexpr auto c_block_dstr_encode = embed_tile_distribution_encoding(
+        constexpr auto c_block_dstr_encode = detail::embed_tile_distribution_encoding(
             c_block_outer_dstr_encoding, typename WG::CWarpDstrEncoding{});
 
         constexpr auto a_block_dstr = make_static_tile_distribution(a_block_dstr_encode);
@@ -377,7 +380,7 @@ struct BlockGemmARegBSmemCRegV1
             Sequence<1, 2>,
             Sequence<0, 0>>{};
 
-        constexpr auto c_block_dstr_encode = embed_tile_distribution_encoding(
+        constexpr auto c_block_dstr_encode = detail::embed_tile_distribution_encoding(
             c_block_outer_dstr_encoding, typename WG::CWarpDstrEncoding{});
 
         constexpr auto c_block_dstr = make_static_tile_distribution(c_block_dstr_encode);
@@ -397,6 +400,7 @@ struct BlockGemmARegBSmemCRegV1
         return c_block_tensor;
     }
 };
+
 
 } // namespace block
 } // namespace tile_program

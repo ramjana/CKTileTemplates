@@ -214,7 +214,7 @@ struct GemmGemm
         // init Acc1
         tile_elementwise_inout([](auto& acc1) { acc1 = 0; }, acc1_block_tile);
 
-#if 1
+#if 0
         index_t iN0 = 0;
 
         do
