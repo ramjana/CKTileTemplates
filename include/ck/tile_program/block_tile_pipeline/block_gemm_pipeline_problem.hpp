@@ -17,10 +17,12 @@ template <typename ADataType_,
           typename BlockGemmShape_>
 struct BlockGemmPipelineProblem
 {
-    using ADataType      = remove_cvref_t<ADataType_>;
-    using BDataType      = remove_cvref_t<BDataType_>;
-    using CDataType      = remove_cvref_t<CDataType_>;
     using BlockGemmShape = remove_cvref_t<BlockGemmShape_>;
+    using Sub            = BlockGemmShape;
+
+    using ADataType = remove_cvref_t<ADataType_>;
+    using BDataType = remove_cvref_t<BDataType_>;
+    using CDataType = remove_cvref_t<CDataType_>;
 
     static constexpr index_t kBlockSize = kBlockSize_;
 };

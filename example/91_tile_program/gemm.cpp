@@ -100,20 +100,22 @@ int main(int argc, char* argv[])
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-    const auto gemm_kernel = Gemm<ADataType,
-                                  BDataType,
-                                  AccDataType,
-                                  CDataType,
-                                  ck::tensor_layout::gemm::RowMajor,
-                                  ck::tensor_layout::gemm::ColumnMajor,
-                                  ck::tensor_layout::gemm::RowMajor,
-                                  AElementFunction,
-                                  BElementFunction,
-                                  CElementFunction,
-                                  kBlockSize,
-                                  kGemmMPerBlock,
-                                  kGemmNPerBlock,
-                                  kGemmKPerBlock>{};
+    using BlockGemmShape =
+        ck::tile_program::TileGemmShape<kGemmMPerBlock, kGemmNPerBlock, kGemmKPerBlock>;
+
+    using Problem = ck::tile_program::grid::GridGemmProblem<ADataType,
+                                                            BDataType,
+                                                            AccDataType,
+                                                            CDataType,
+                                                            ck::tensor_layout::gemm::RowMajor,
+                                                            ck::tensor_layout::gemm::ColumnMajor,
+                                                            ck::tensor_layout::gemm::RowMajor,
+                                                            kBlockSize,
+                                                            BlockGemmShape>;
+    using Policy  = GridGemmPolicy;
+
+    const auto gemm_kernel =
+        Gemm<Problem, Policy, AElementFunction, BElementFunction, CElementFunction>{};
 
     float ave_time = launch(ProgramServer{},
                             gemm_kernel,

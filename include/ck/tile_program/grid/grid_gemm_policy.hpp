@@ -14,13 +14,6 @@
 
 namespace ck {
 namespace detail {
-template <typename Type>
-struct is_block2tile_map : std::is_invocable_r<MultiIndex<2>, remove_cvref_t<Type>, index_t>
-{
-};
-
-template <typename Type>
-inline constexpr bool is_block2tile_map_v = is_block2tile_map<Type>::value;
 
 template <typename Descriptor>
 class DescToBlock2TileMapAdaptor
@@ -55,7 +48,7 @@ __host__ __device__ static auto make_desc_to_block2tile_map_adaptor(Descriptor&&
 namespace tile_program {
 namespace grid {
 
-struct GridGemmNFastPolicy
+struct Block2TileMapNFast
 {
     __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
                                                                 index_t NumTilesN)
@@ -65,7 +58,7 @@ struct GridGemmNFastPolicy
     }
 };
 
-struct GridGemmMFastPolicy
+struct Block2TileMapMFast
 {
     __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
                                                                 index_t NumTilesN)
@@ -81,31 +74,8 @@ struct GridGemmMFastPolicy
     }
 };
 
-template <index_t MaxRows = 8>
-struct GridGemmMAdaptPolicy
-{
-    __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
-                                                                index_t NumTilesN)
-    {
-        return [=](index_t block_id) {
-            index_t idx_N0 = block_id % NumTilesN;
-            index_t idx_M0 = block_id / NumTilesN;
-
-            const auto M01_adapt =
-                (idx_M0 < NumTilesM - NumTilesM % MaxRows) ? MaxRows : NumTilesM % MaxRows;
-
-            index_t idx_M00          = idx_M0 / MaxRows;
-            index_t idx_M01          = idx_M0 % MaxRows;
-            index_t idx_N0_M01_local = idx_N0 + idx_M01 * NumTilesN;
-
-            return make_multi_index(idx_N0_M01_local % M01_adapt + idx_M00 * MaxRows,
-                                    idx_N0_M01_local / M01_adapt);
-        };
-    }
-};
-
 template <index_t MaxCols = 8>
-struct GridGemmNAdaptPolicy
+struct Block2TileMapNAdapt
 {
     __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
                                                                 index_t NumTilesN)
@@ -130,7 +100,30 @@ struct GridGemmNAdaptPolicy
     }
 };
 
-using GridGemmDefaultPolicy = GridGemmMFastPolicy;
+template <index_t MaxRows = 8>
+struct Block2TileMapMAdapt
+{
+    __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
+                                                                index_t NumTilesN)
+    {
+        return [=](index_t block_id) {
+            index_t idx_N0 = block_id % NumTilesN;
+            index_t idx_M0 = block_id / NumTilesN;
+
+            const auto M01_adapt =
+                (idx_M0 < NumTilesM - NumTilesM % MaxRows) ? MaxRows : NumTilesM % MaxRows;
+
+            index_t idx_M00          = idx_M0 / MaxRows;
+            index_t idx_M01          = idx_M0 % MaxRows;
+            index_t idx_N0_M01_local = idx_N0 + idx_M01 * NumTilesN;
+
+            return make_multi_index(idx_N0_M01_local % M01_adapt + idx_M00 * MaxRows,
+                                    idx_N0_M01_local / M01_adapt);
+        };
+    }
+};
+
+using DefaultBlock2TileMap = Block2TileMapMFast;
 
 } // namespace grid
 } // namespace tile_program

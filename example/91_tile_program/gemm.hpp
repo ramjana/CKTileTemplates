@@ -17,22 +17,23 @@
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
 #include "ck/tile_program/grid/grid_gemm_policy.hpp"
+#include "ck/tile_program/grid/grid_gemm_problem.hpp"
+
+struct GridGemmPolicy : ck::tile_program::grid::DefaultBlock2TileMap,
+                        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy
+{
+    template <typename Problem>
+    using BlockGemmPipeline =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<typename Problem::Sub,
+                                                                   GridGemmPolicy>;
+};
 
 // C = A * B
-template <typename ADataType,
-          typename BDataType,
-          typename AccDataType,
-          typename CDataType,
-          typename ALayout,
-          typename BLayout,
-          typename CLayout,
+template <typename Problem,
+          typename Policy,
           typename AElementFunction,
           typename BElementFunction,
-          typename CElementFunction,
-          ck::index_t kBlockSize,
-          ck::index_t kMPerBlock,
-          ck::index_t kNPerBlock,
-          ck::index_t kKPerBlock>
+          typename CElementFunction>
 struct Gemm
 {
 #if 0
@@ -51,21 +52,15 @@ struct Gemm
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1<BlockGemmPipelineProblem,
                                                                    BlockGemmPipelinePolicy>;
 #else
-    using GridGemmPolicy = ck::tile_program::grid::GridGemmDefaultPolicy;
+    using ADataType = ck::tile_program::grid::GetADataType<Problem>;
+    using BDataType = ck::tile_program::grid::GetBDataType<Problem>;
+    using CDataType = ck::tile_program::grid::GetCDataType<Problem>;
 
-    using BlockGemmPipelineProblem = ck::tile_program::block::BlockGemmPipelineProblem<
-        ADataType,
-        BDataType,
-        AccDataType,
-        kBlockSize,
-        ck::tile_program::TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
+    static constexpr auto kMPerBlock = ck::tile_program::grid::GetMPerBlock<Problem>;
+    static constexpr auto kNPerBlock = ck::tile_program::grid::GetNPerBlock<Problem>;
+    static constexpr auto kKPerBlock = ck::tile_program::grid::GetKPerBlock<Problem>;
 
-    using BlockGemmPipelinePolicy =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy;
-
-    using BlockGemmPipeline =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<BlockGemmPipelineProblem,
-                                                                   BlockGemmPipelinePolicy>;
+    using BlockGemmPipeline = typename Policy::template BlockGemmPipeline<Problem>;
 #endif
 
     __host__ __device__ void operator()(ProgramServer& ps,
@@ -99,12 +94,12 @@ struct Gemm
         const auto num_tile_m = M / kMPerBlock;
         const auto num_tile_n = N / kNPerBlock;
 
-        const auto block2tile = ps(GridGemmPolicy::MakeBlock2TileMap(num_tile_m, num_tile_n));
+        const auto block2tile = ps(Policy::MakeBlock2TileMap(num_tile_m, num_tile_n));
 
         const auto id_tile = block2tile(id_block);
 
-        const auto iM = ps.read_first_lane(id_tile.At<0>() * kMPerBlock);
-        const auto iN = ps.read_first_lane(id_tile.At<1>() * kNPerBlock);
+        const auto iM = ps.read_first_lane(id_tile.template At<0>() * kMPerBlock);
+        const auto iN = ps.read_first_lane(id_tile.template At<1>() * kNPerBlock);
 
         // A DRAM block window
         auto a_dram_block_window = make_tile_window(
