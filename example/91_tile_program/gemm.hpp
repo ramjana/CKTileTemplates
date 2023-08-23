@@ -91,9 +91,6 @@ struct Gemm
                    a_dram_grid,
                    b_dram_grid,
                    c_dram_grid,
-                   M,
-                   N,
-                   K,
                    a_element_func,
                    b_element_func,
                    c_element_func);

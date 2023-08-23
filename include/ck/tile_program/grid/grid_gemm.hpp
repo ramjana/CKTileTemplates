@@ -28,9 +28,6 @@ struct GridGemm
                                         const AGridTensorView& a_grid,
                                         const BGridTensorView& b_grid,
                                         CGridTensorView& c_grid,
-                                        ck::index_t M,
-                                        ck::index_t N,
-                                        ck::index_t K,
                                         const AElementFunction& a_element_func,
                                         const BElementFunction& b_element_func,
                                         const CElementFunction& c_element_func) const
@@ -38,6 +35,10 @@ struct GridGemm
         using namespace ck;
         using namespace ck::tile_program;
         using namespace ck::tile_program::block;
+
+        const auto M = a_grid.desc_.GetLength(Number<0>{});
+        const auto N = c_grid.desc_.GetLength(Number<1>{});
+        const auto K = a_grid.desc_.GetLength(Number<1>{});
 
         // divide problem
         const auto id_block = ps.get_block_id();
