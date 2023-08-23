@@ -15,6 +15,9 @@
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
+#include "ck/tile_program/grid/grid_gemm.hpp"
+#include "ck/tile_program/grid/grid_gemm_policy.hpp"
+#include "ck/tile_program/grid/grid_gemm_problem.hpp"
 
 // C = A * B
 template <typename ADataType,
@@ -33,37 +36,28 @@ template <typename ADataType,
           ck::index_t kKPerBlock>
 struct Gemm
 {
-#if 0
-    using BlockGemmPipelineProblem =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1Problem<
-            ADataType,
-            BDataType,
-            AccDataType,
-            kBlockSize,
-            ck::tile_program::TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
+    static_assert(std::is_same_v<ALayout, ck::tensor_layout::gemm::RowMajor> &&
+                  std::is_same_v<BLayout, ck::tensor_layout::gemm::ColumnMajor> &&
+                  std::is_same_v<CLayout, ck::tensor_layout::gemm::RowMajor>);
 
-    using BlockGemmPipelinePolicy =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy;
+    using Problem = ck::tile_program::grid::GridGemmProblem<ADataType,
+                                                            BDataType,
+                                                            AccDataType,
+                                                            CDataType,
+                                                            AElementFunction,
+                                                            BElementFunction,
+                                                            CElementFunction>;
 
-    using BlockGemmPipeline =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1<BlockGemmPipelineProblem,
-                                                                   BlockGemmPipelinePolicy>;
-#else
-    using BlockGemmPipelineProblem =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2Problem<
-            ADataType,
-            BDataType,
-            AccDataType,
-            kBlockSize,
-            ck::tile_program::TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
+    using Policy = ck::tile_program::grid::GridGemmPolicy<
+        kBlockSize,
+        kMPerBlock,
+        kNPerBlock,
+        kKPerBlock,
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2,
+        ck::Tuple<ck::tile_program::grid::DefaultBlock2TileMap,
+                  ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>>;
 
-    using BlockGemmPipelinePolicy =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy;
-
-    using BlockGemmPipeline =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<BlockGemmPipelineProblem,
-                                                                   BlockGemmPipelinePolicy>;
-#endif
+    using GridGemm = ck::tile_program::grid::GridGemm<Problem, Policy>;
 
     __host__ __device__ void operator()(ProgramServer& ps,
                                         const ADataType* p_a,
@@ -90,51 +84,15 @@ struct Gemm
         const auto b_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_b, make_tuple(N, K), make_tuple(Ldb, 1), Number<32>{}, Number<1>{});
 
-        // divide problem
-        const auto id_block = ps.get_block_id();
-
-        const auto num_tile_m = M / kMPerBlock;
-        const auto num_tile_n = N / kNPerBlock;
-
-        const auto block2tile = ps(make_cluster_descriptor(make_tuple(num_tile_m, num_tile_n)));
-
-        const auto id_tile = block2tile.CalculateBottomIndex(make_tuple(id_block));
-
-        const auto iM = ps.read_first_lane(id_tile.At<0>() * kMPerBlock);
-        const auto iN = ps.read_first_lane(id_tile.At<1>() * kNPerBlock);
-
-        // A DRAM block window
-        auto a_dram_block_window = make_tile_window(
-            a_dram_grid, make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}), {iM, 0});
-
-        // B DRAM block window
-        auto b_dram_block_window = make_tile_window(
-            b_dram_grid, make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}), {iN, 0});
-
-        // Block GEMM pipeline
-        constexpr auto block_gemm_pipeline = BlockGemmPipeline{};
-
-        __shared__ char p_smem_char[block_gemm_pipeline.GetStaticLdsSize()];
-
-        const auto acc_block_tile = block_gemm_pipeline(a_dram_block_window,
-                                                        a_element_func,
-                                                        b_dram_block_window,
-                                                        b_element_func,
-                                                        K / kKPerBlock,
-                                                        p_smem_char);
-
-        // cast to CDataType and apply CElementFunction
-        const auto c_block_tile = tile_elementwise_in(
-            [&](const auto& acc) { return c_element_func(type_convert<CDataType>(acc)); },
-            acc_block_tile);
-
-        // store C
         auto c_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<32>{}, Number<1>{});
 
-        auto c_dram_window = make_tile_window(
-            c_dram_grid, make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}), {iM, iN});
-
-        store_tile(c_dram_window, c_block_tile);
+        GridGemm{}(ps,
+                   a_dram_grid,
+                   b_dram_grid,
+                   c_dram_grid,
+                   a_element_func,
+                   b_element_func,
+                   c_element_func);
     }
 };

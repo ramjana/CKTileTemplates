@@ -18,22 +18,6 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
-// Problem Description for BlockGemmPipelineAGmemBGmemCRegV1
-template <typename ADataType_,
-          typename BDataType_,
-          typename CDataType_,
-          index_t kBlockSize_,
-          typename BlockGemmShape_>
-struct BlockGemmPipelineAGmemBGmemCRegV1Problem
-{
-    using ADataType      = remove_cvref_t<ADataType_>;
-    using BDataType      = remove_cvref_t<BDataType_>;
-    using CDataType      = remove_cvref_t<CDataType_>;
-    using BlockGemmShape = remove_cvref_t<BlockGemmShape_>;
-
-    static constexpr index_t kBlockSize = kBlockSize_;
-};
-
 //  A Tile Window: global memory
 //  B Tile Window: global memory
 //  C Distributed tensor: register
