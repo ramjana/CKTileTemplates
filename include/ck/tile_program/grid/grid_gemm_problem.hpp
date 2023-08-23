@@ -3,11 +3,6 @@
 
 #pragma once
 
-#include "ck/ck.hpp"
-#include "ck/utility/type.hpp"
-
-#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
-
 namespace ck {
 namespace tile_program {
 namespace grid {
