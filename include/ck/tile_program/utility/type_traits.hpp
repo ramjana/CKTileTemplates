@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #define PP_DEFINE_INDIRECT_MEMBER_TYPE_GETTER(traits, path, member) \
 template <typename T, typename = void> \
 struct traits##_impl { \
