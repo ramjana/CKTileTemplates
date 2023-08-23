@@ -7,36 +7,32 @@
 #include "ck/utility/type.hpp"
 
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
-#include "ck/tile_program/utility/type_traits.hpp"
 
 namespace ck {
 namespace tile_program {
 namespace grid {
 
-template <typename ADataType,
-          typename BDataType,
-          typename AccDataType,
+template <typename ADataType_,
+          typename BDataType_,
+          typename AccDataType_,
           typename CDataType_,
           typename ALayout,
           typename BLayout,
           typename CLayout,
-          index_t kBlockSize_,
-          typename BlockGemmShape>
+          typename AElementFunction_,
+          typename BElementFunction_,
+          typename CElementFunction_>
 struct GridGemmProblem
 {
-    using Sub = block::
-        BlockGemmPipelineProblem<ADataType, BDataType, AccDataType, kBlockSize_, BlockGemmShape>;
+    using ADataType   = ADataType_;
+    using BDataType   = BDataType_;
+    using AccDataType = AccDataType_;
+    using CDataType   = CDataType_;
 
-    using CDataType = CDataType_;
+    using AElementFunction = AElementFunction_;
+    using BElementFunction = BElementFunction_;
+    using CElementFunction = CElementFunction_;
 };
-
-PP_DEFINE_INDIRECT_MEMBER_TYPE_GETTER(GetADataType, Sub, ADataType);
-PP_DEFINE_INDIRECT_MEMBER_TYPE_GETTER(GetBDataType, Sub, BDataType);
-PP_DEFINE_INDIRECT_MEMBER_TYPE_GETTER(GetCDataType, Sub, CDataType);
-
-PP_DEFINE_INDIRECT_MEMBER_GETTER(GetMPerBlock, Sub, kM);
-PP_DEFINE_INDIRECT_MEMBER_GETTER(GetNPerBlock, Sub, kN);
-PP_DEFINE_INDIRECT_MEMBER_GETTER(GetKPerBlock, Sub, kK);
 
 } // namespace grid
 } // namespace tile_program

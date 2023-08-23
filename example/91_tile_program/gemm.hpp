@@ -19,21 +19,23 @@
 #include "ck/tile_program/grid/grid_gemm_policy.hpp"
 #include "ck/tile_program/grid/grid_gemm_problem.hpp"
 
-struct GridGemmPolicy : ck::tile_program::grid::DefaultBlock2TileMap,
-                        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy
+template <ck::index_t kBlockSize,
+          ck::index_t kMPerBlock,
+          ck::index_t kNPerBlock,
+          ck::index_t kKPerBlock>
+struct GridGemmPolicy : ck::tile_program::grid::GridGemmPolicy<
+                            kBlockSize,
+                            kMPerBlock,
+                            kNPerBlock,
+                            kKPerBlock,
+                            ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2,
+                            ck::tile_program::grid::DefaultBlock2TileMap,
+                            ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>
 {
-    template <typename Problem>
-    using BlockGemmPipeline =
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<typename Problem::Sub,
-                                                                   GridGemmPolicy>;
 };
 
 // C = A * B
-template <typename Problem,
-          typename Policy,
-          typename AElementFunction,
-          typename BElementFunction,
-          typename CElementFunction>
+template <typename Problem, typename Policy>
 struct Gemm
 {
 #if 0
@@ -52,13 +54,16 @@ struct Gemm
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV1<BlockGemmPipelineProblem,
                                                                    BlockGemmPipelinePolicy>;
 #else
-    using ADataType = ck::tile_program::grid::GetADataType<Problem>;
-    using BDataType = ck::tile_program::grid::GetBDataType<Problem>;
-    using CDataType = ck::tile_program::grid::GetCDataType<Problem>;
+    using ADataType        = typename Problem::ADataType;
+    using BDataType        = typename Problem::BDataType;
+    using CDataType        = typename Problem::CDataType;
+    using AElementFunction = typename Problem::AElementFunction;
+    using BElementFunction = typename Problem::BElementFunction;
+    using CElementFunction = typename Problem::CElementFunction;
 
-    static constexpr auto kMPerBlock = ck::tile_program::grid::GetMPerBlock<Problem>;
-    static constexpr auto kNPerBlock = ck::tile_program::grid::GetNPerBlock<Problem>;
-    static constexpr auto kKPerBlock = ck::tile_program::grid::GetKPerBlock<Problem>;
+    static constexpr auto kMPerBlock = Policy::kMPerBlock;
+    static constexpr auto kNPerBlock = Policy::kNPerBlock;
+    static constexpr auto kKPerBlock = Policy::kKPerBlock;
 
     using BlockGemmPipeline = typename Policy::template BlockGemmPipeline<Problem>;
 #endif

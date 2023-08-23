@@ -8,9 +8,11 @@
 
 #include "ck/tensor_description/tensor_descriptor.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
-
 #include "ck/utility/multi_index.hpp"
 #include "ck/utility/type.hpp"
+
+#include "ck/tile_program/tile/tile_gemm_shape.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
 
 namespace ck {
 namespace detail {
@@ -124,6 +126,32 @@ struct Block2TileMapMAdapt
 };
 
 using DefaultBlock2TileMap = Block2TileMapMFast;
+
+template <index_t kBlockSize_,
+          index_t kMPerBlock_,
+          index_t kNPerBlock_,
+          index_t kKPerBlock_,
+          template <typename /* BlockGemmPipelineProblem */, typename /* BlockGemmPipelinePolicy */>
+          class BlockGemmPipeline_,
+          typename... ExtraPolicies>
+struct GridGemmPolicy : remove_cvref_t<ExtraPolicies>...
+{
+    static constexpr auto kBlockSize = kBlockSize_;
+    static constexpr auto kMPerBlock = kMPerBlock_;
+    static constexpr auto kNPerBlock = kNPerBlock_;
+    static constexpr auto kKPerBlock = kKPerBlock_;
+
+    template <typename Problem>
+    using BlockGemmPipelineProblem =
+        block::BlockGemmPipelineProblem<typename Problem::ADataType,
+                                        typename Problem::BDataType,
+                                        typename Problem::AccDataType,
+                                        kBlockSize,
+                                        TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
+
+    template <typename Problem>
+    using BlockGemmPipeline = BlockGemmPipeline_<BlockGemmPipelineProblem<Problem>, GridGemmPolicy>;
+};
 
 } // namespace grid
 } // namespace tile_program

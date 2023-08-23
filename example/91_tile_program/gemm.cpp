@@ -100,9 +100,6 @@ int main(int argc, char* argv[])
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-    using BlockGemmShape =
-        ck::tile_program::TileGemmShape<kGemmMPerBlock, kGemmNPerBlock, kGemmKPerBlock>;
-
     using Problem = ck::tile_program::grid::GridGemmProblem<ADataType,
                                                             BDataType,
                                                             AccDataType,
@@ -110,12 +107,12 @@ int main(int argc, char* argv[])
                                                             ck::tensor_layout::gemm::RowMajor,
                                                             ck::tensor_layout::gemm::ColumnMajor,
                                                             ck::tensor_layout::gemm::RowMajor,
-                                                            kBlockSize,
-                                                            BlockGemmShape>;
-    using Policy  = GridGemmPolicy;
+                                                            AElementFunction,
+                                                            BElementFunction,
+                                                            CElementFunction>;
+    using Policy  = ::GridGemmPolicy<kBlockSize, kGemmMPerBlock, kGemmNPerBlock, kGemmKPerBlock>;
 
-    const auto gemm_kernel =
-        Gemm<Problem, Policy, AElementFunction, BElementFunction, CElementFunction>{};
+    const auto gemm_kernel = Gemm<Problem, Policy>{};
 
     float ave_time = launch(ProgramServer{},
                             gemm_kernel,
