@@ -104,9 +104,9 @@ int main(int argc, char* argv[])
                                                             BDataType,
                                                             AccDataType,
                                                             CDataType,
-                                                            ck::tensor_layout::gemm::RowMajor,
-                                                            ck::tensor_layout::gemm::ColumnMajor,
-                                                            ck::tensor_layout::gemm::RowMajor,
+                                                            // ck::tensor_layout::gemm::RowMajor,
+                                                            // ck::tensor_layout::gemm::ColumnMajor,
+                                                            // ck::tensor_layout::gemm::RowMajor,
                                                             AElementFunction,
                                                             BElementFunction,
                                                             CElementFunction>;
