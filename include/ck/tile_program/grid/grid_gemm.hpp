@@ -23,11 +23,11 @@ struct GridGemm
 
     using BlockGemmPipeline = typename Policy::template BlockGemmPipeline<Problem>;
 
-    template <typename ADramGrid, typename BDramGrid, typename CDramGrid>
+    template <typename AGridTensorView, typename BGridTensorView, typename CGridTensorView>
     __host__ __device__ void operator()(ProgramServer& ps,
-                                        const ADramGrid& a_dram_grid,
-                                        const BDramGrid& b_dram_grid,
-                                        CDramGrid& c_dram_grid,
+                                        const AGridTensorView& a_grid,
+                                        const BGridTensorView& b_grid,
+                                        CGridTensorView& c_grid,
                                         ck::index_t M,
                                         ck::index_t N,
                                         ck::index_t K,
@@ -52,22 +52,22 @@ struct GridGemm
         const auto iM = ps.read_first_lane(id_tile.template At<0>() * kMPerBlock);
         const auto iN = ps.read_first_lane(id_tile.template At<1>() * kNPerBlock);
 
-        // A DRAM block window
-        auto a_dram_block_window = make_tile_window(
-            a_dram_grid, make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}), {iM, 0});
+        // A block window
+        auto a_block_window = make_tile_window(
+            a_grid, make_tuple(Number<kMPerBlock>{}, Number<kKPerBlock>{}), {iM, 0});
 
-        // B DRAM block window
-        auto b_dram_block_window = make_tile_window(
-            b_dram_grid, make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}), {iN, 0});
+        // B block window
+        auto b_block_window = make_tile_window(
+            b_grid, make_tuple(Number<kNPerBlock>{}, Number<kKPerBlock>{}), {iN, 0});
 
         // Block GEMM pipeline
         constexpr auto block_gemm_pipeline = BlockGemmPipeline{};
 
         __shared__ char p_smem_char[block_gemm_pipeline.GetStaticLdsSize()];
 
-        const auto acc_block_tile = block_gemm_pipeline(a_dram_block_window,
+        const auto acc_block_tile = block_gemm_pipeline(a_block_window,
                                                         a_element_func,
-                                                        b_dram_block_window,
+                                                        b_block_window,
                                                         b_element_func,
                                                         K / kKPerBlock,
                                                         p_smem_char);
@@ -78,10 +78,10 @@ struct GridGemm
             acc_block_tile);
 
         // store C
-        auto c_dram_window = make_tile_window(
-            c_dram_grid, make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}), {iM, iN});
+        auto c_window = make_tile_window(
+            c_grid, make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}), {iM, iN});
 
-        store_tile(c_dram_window, c_block_tile);
+        store_tile(c_window, c_block_tile);
     }
 };
 
