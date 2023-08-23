@@ -10,6 +10,7 @@
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/utility/multi_index.hpp"
 #include "ck/utility/type.hpp"
+#include "ck/utility/tuple.hpp"
 
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
@@ -127,14 +128,24 @@ struct Block2TileMapMAdapt
 
 using DefaultBlock2TileMap = Block2TileMapMFast;
 
+namespace detail {
+template <typename TupleOfBaseTypes>
+struct InheritFromBaseTypes;
+
+template <typename... BaseTypes>
+struct InheritFromBaseTypes<Tuple<BaseTypes...>> : remove_cvref_t<BaseTypes>...
+{
+};
+} // namespace detail
+
 template <index_t kBlockSize_,
           index_t kMPerBlock_,
           index_t kNPerBlock_,
           index_t kKPerBlock_,
           template <typename /* BlockGemmPipelineProblem */, typename /* BlockGemmPipelinePolicy */>
           class BlockGemmPipeline_,
-          typename... ExtraPolicies>
-struct GridGemmPolicy : remove_cvref_t<ExtraPolicies>...
+          typename TupleOfExtraPolicies>
+struct GridGemmPolicy : detail::InheritFromBaseTypes<TupleOfExtraPolicies>
 {
     static constexpr auto kBlockSize = kBlockSize_;
     static constexpr auto kMPerBlock = kMPerBlock_;

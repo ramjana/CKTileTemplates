@@ -22,14 +22,15 @@ template <ck::index_t kBlockSize,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock,
           ck::index_t kKPerBlock>
-struct GridGemmPolicy : ck::tile_program::grid::GridGemmPolicy<
-                            kBlockSize,
-                            kMPerBlock,
-                            kNPerBlock,
-                            kKPerBlock,
-                            ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2,
-                            ck::tile_program::grid::DefaultBlock2TileMap,
-                            ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>
+struct GridGemmPolicy
+    : ck::tile_program::grid::GridGemmPolicy<
+          kBlockSize,
+          kMPerBlock,
+          kNPerBlock,
+          kKPerBlock,
+          ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2,
+          ck::Tuple<ck::tile_program::grid::DefaultBlock2TileMap,
+                    ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>>
 {
 };
 
