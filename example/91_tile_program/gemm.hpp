@@ -15,7 +15,6 @@
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
-#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
 #include "ck/tile_program/grid/grid_gemm_policy.hpp"
 #include "ck/tile_program/grid/grid_gemm_problem.hpp"
 
