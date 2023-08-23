@@ -152,16 +152,17 @@ struct GridGemmPolicy : detail::InheritFromBaseTypes<TupleOfExtraPolicies>
     static constexpr auto kNPerBlock = kNPerBlock_;
     static constexpr auto kKPerBlock = kKPerBlock_;
 
-    template <typename Problem>
+    template <typename GridGemmProblem>
     using BlockGemmPipelineProblem =
-        block::BlockGemmPipelineProblem<typename Problem::ADataType,
-                                        typename Problem::BDataType,
-                                        typename Problem::AccDataType,
+        block::BlockGemmPipelineProblem<typename GridGemmProblem::ADataType,
+                                        typename GridGemmProblem::BDataType,
+                                        typename GridGemmProblem::AccDataType,
                                         kBlockSize,
                                         TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
 
-    template <typename Problem>
-    using BlockGemmPipeline = BlockGemmPipeline_<BlockGemmPipelineProblem<Problem>, GridGemmPolicy>;
+    template <typename GridGemmProblem>
+    using BlockGemmPipeline =
+        BlockGemmPipeline_<BlockGemmPipelineProblem<GridGemmProblem>, GridGemmPolicy>;
 };
 
 } // namespace grid
