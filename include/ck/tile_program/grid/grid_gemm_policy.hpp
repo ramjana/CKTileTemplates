@@ -77,55 +77,6 @@ struct Block2TileMapMFast
     }
 };
 
-template <index_t MaxCols = 8>
-struct Block2TileMapNAdapt
-{
-    __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
-                                                                index_t NumTilesN)
-    {
-        return [=](index_t block_id) {
-            const ck::index_t NumBlocksInSingleCompleteArea = NumTilesM * MaxCols;
-
-            const ck::index_t MaxNumCompleteArea = NumTilesN / MaxCols;
-            const ck::index_t MaxCompleteAreaBoundary =
-                MaxNumCompleteArea * NumBlocksInSingleCompleteArea;
-
-            const ck::index_t LastCols =
-                (block_id < MaxCompleteAreaBoundary ? MaxCols : NumTilesN % MaxCols);
-            const ck::index_t NumRemainedBlocks = block_id % NumBlocksInSingleCompleteArea;
-
-            const ck::index_t idxM = NumRemainedBlocks / LastCols;
-            const ck::index_t idxN =
-                ((block_id - NumRemainedBlocks) / NumTilesM) + (NumRemainedBlocks % LastCols);
-
-            return make_multi_index(idxM, idxN);
-        };
-    }
-};
-
-template <index_t MaxRows = 8>
-struct Block2TileMapMAdapt
-{
-    __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
-                                                                index_t NumTilesN)
-    {
-        return [=](index_t block_id) {
-            index_t idx_N0 = block_id % NumTilesN;
-            index_t idx_M0 = block_id / NumTilesN;
-
-            const auto M01_adapt =
-                (idx_M0 < NumTilesM - NumTilesM % MaxRows) ? MaxRows : NumTilesM % MaxRows;
-
-            index_t idx_M00          = idx_M0 / MaxRows;
-            index_t idx_M01          = idx_M0 % MaxRows;
-            index_t idx_N0_M01_local = idx_N0 + idx_M01 * NumTilesN;
-
-            return make_multi_index(idx_N0_M01_local % M01_adapt + idx_M00 * MaxRows,
-                                    idx_N0_M01_local / M01_adapt);
-        };
-    }
-};
-
 using DefaultBlock2TileMap = Block2TileMapMFast;
 
 namespace detail {
