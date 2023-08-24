@@ -77,6 +77,8 @@ struct Block2TileMapMFast
     }
 };
 
+/// NOTICE: This map will be compiled into considerable amount of instructions.
+///         Use with caution or replace it with more efficient implementation.
 template <index_t MaxCols = 8>
 struct Block2TileMapNAdapt
 {
@@ -100,6 +102,8 @@ struct Block2TileMapNAdapt
     }
 };
 
+/// NOTICE: This map will be compiled into considerable amount of instructions.
+///         Use with caution or replace it with more efficient implementation.
 template <index_t MaxRows = 8>
 struct Block2TileMapMAdapt
 {
