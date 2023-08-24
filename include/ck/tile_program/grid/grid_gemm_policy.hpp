@@ -113,15 +113,15 @@ struct Block2TileMapMAdapt
             index_t idx_N0 = block_id % NumTilesN;
             index_t idx_M0 = block_id / NumTilesN;
 
-            const auto M01_adapt =
+            const auto LastRows =
                 (idx_M0 < NumTilesM - NumTilesM % MaxRows) ? MaxRows : NumTilesM % MaxRows;
 
             index_t idx_M00          = idx_M0 / MaxRows;
             index_t idx_M01          = idx_M0 % MaxRows;
             index_t idx_N0_M01_local = idx_N0 + idx_M01 * NumTilesN;
 
-            return make_multi_index(idx_N0_M01_local % M01_adapt + idx_M00 * MaxRows,
-                                    idx_N0_M01_local / M01_adapt);
+            return make_multi_index(idx_N0_M01_local % LastRows + idx_M00 * MaxRows,
+                                    idx_N0_M01_local / LastRows);
         };
     }
 };
