@@ -77,6 +77,56 @@ struct Block2TileMapMFast
     }
 };
 
+/// NOTICE: This map will be compiled into considerable amount of instructions.
+///         Use with caution or replace it with more efficient implementation.
+template <index_t MaxCols = 8>
+struct Block2TileMapNAdapt
+{
+    __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
+                                                                index_t NumTilesN)
+    {
+        return [=](index_t block_id) {
+            index_t idx_M0 = block_id % NumTilesM;
+            index_t idx_N0 = block_id / NumTilesM;
+
+            const auto LastCols =
+                (idx_N0 < NumTilesN - NumTilesN % MaxCols) ? MaxCols : NumTilesN % MaxCols;
+
+            index_t idx_N00          = idx_N0 / MaxCols;
+            index_t idx_N01          = idx_N0 % MaxCols;
+            index_t idx_M0_N01_local = idx_M0 + idx_N01 * NumTilesM;
+
+            return make_multi_index(idx_M0_N01_local / LastCols,
+                                    idx_M0_N01_local % LastCols + idx_N00 * MaxCols);
+        };
+    }
+};
+
+/// NOTICE: This map will be compiled into considerable amount of instructions.
+///         Use with caution or replace it with more efficient implementation.
+template <index_t MaxRows = 8>
+struct Block2TileMapMAdapt
+{
+    __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
+                                                                index_t NumTilesN)
+    {
+        return [=](index_t block_id) {
+            index_t idx_N0 = block_id % NumTilesN;
+            index_t idx_M0 = block_id / NumTilesN;
+
+            const auto LastRows =
+                (idx_M0 < NumTilesM - NumTilesM % MaxRows) ? MaxRows : NumTilesM % MaxRows;
+
+            index_t idx_M00          = idx_M0 / MaxRows;
+            index_t idx_M01          = idx_M0 % MaxRows;
+            index_t idx_N0_M01_local = idx_N0 + idx_M01 * NumTilesN;
+
+            return make_multi_index(idx_N0_M01_local % LastRows + idx_M00 * MaxRows,
+                                    idx_N0_M01_local / LastRows);
+        };
+    }
+};
+
 using DefaultBlock2TileMap = Block2TileMapMFast;
 
 namespace detail {
