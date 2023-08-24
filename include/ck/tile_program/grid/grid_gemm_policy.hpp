@@ -84,21 +84,18 @@ struct Block2TileMapNAdapt
                                                                 index_t NumTilesN)
     {
         return [=](index_t block_id) {
-            const ck::index_t NumBlocksInSingleCompleteArea = NumTilesM * MaxCols;
+            index_t idx_M0 = block_id % NumTilesM;
+            index_t idx_N0 = block_id / NumTilesM;
 
-            const ck::index_t MaxNumCompleteArea = NumTilesN / MaxCols;
-            const ck::index_t MaxCompleteAreaBoundary =
-                MaxNumCompleteArea * NumBlocksInSingleCompleteArea;
+            const auto LastCols =
+                (idx_N0 < NumTilesN - NumTilesN % MaxCols) ? MaxCols : NumTilesN % MaxCols;
 
-            const ck::index_t LastCols =
-                (block_id < MaxCompleteAreaBoundary ? MaxCols : NumTilesN % MaxCols);
-            const ck::index_t NumRemainedBlocks = block_id % NumBlocksInSingleCompleteArea;
+            index_t idx_N00          = idx_N0 / MaxCols;
+            index_t idx_N01          = idx_N0 % MaxCols;
+            index_t idx_M0_N01_local = idx_M0 + idx_N01 * NumTilesM;
 
-            const ck::index_t idxM = NumRemainedBlocks / LastCols;
-            const ck::index_t idxN =
-                ((block_id - NumRemainedBlocks) / NumTilesM) + (NumRemainedBlocks % LastCols);
-
-            return make_multi_index(idxM, idxN);
+            return make_multi_index(idx_M0_N01_local / LastCols,
+                                    idx_M0_N01_local % LastCols + idx_N00 * MaxCols);
         };
     }
 };
