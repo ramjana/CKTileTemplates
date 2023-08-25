@@ -14,6 +14,7 @@
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1.hpp"
 
 // C1 = A0 * B0 * B1
@@ -33,7 +34,7 @@ struct GemmGemm
 {
     // block gemm0 pipeline
     using BlockGemm0Pipeline = ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2Problem<
+        ck::tile_program::block::BlockGemmPipelineProblem<
             A0DataType,
             B0DataType,
             Acc0DataType,

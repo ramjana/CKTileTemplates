@@ -30,6 +30,8 @@ struct Reduce
         (void)M;
         (void)N;
 #else
+        using namespace ck;
+
         const auto a_m_n = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_a, make_tuple(M, N), make_tuple(N, 1), Number<32>{}, Number<1>{});
 
@@ -52,11 +54,10 @@ struct Reduce
 
         // B tile
         auto b_block_tile =
-            decltype(block_tile_reduce_in(a_block_tile, ck::math::max<AccDataType, ADataType>)){};
+            decltype(block_tile_reduce_in(a_block_tile, math::max<AccDataType, ADataType>)){};
 
         // init B tile
-        tile_elementwise_inout([](auto& b) { b = NumericLimits<ADataType>::Min(); } i,
-                               b_block_tile);
+        tile_elementwise_inout([](auto& b) { b = NumericLimits<ADataType>::Min(); }, b_block_tile);
 
         // loop
         index_t iN = 0;
@@ -65,8 +66,7 @@ struct Reduce
         {
             const auto a_block_tile = load_tile(a_block_window);
 
-            block_tile_reduce_inout(
-                b_block_tile, a_block_tile, ck::math::max<AccDataType, ADataType>);
+            block_tile_reduce_inout(b_block_tile, a_block_tile, math::max<AccDataType, ADataType>);
 
             move_tile_window(a_block_window, {0, kNPerBlock});
 
