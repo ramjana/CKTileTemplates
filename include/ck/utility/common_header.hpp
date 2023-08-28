@@ -23,6 +23,7 @@
 #include "ck/utility/math_ext.hpp"
 #include "ck/utility/number.hpp"
 #include "ck/utility/sequence.hpp"
+#include "ck/utility/macro_func_array_to_sequence.hpp"
 #include "ck/utility/sequence_helper.hpp"
 #include "ck/utility/tuple.hpp"
 #include "ck/utility/tuple_helper.hpp"

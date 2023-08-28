@@ -119,9 +119,8 @@ __host__ __device__ constexpr auto make_embed_tile_distribution_encoding(OuterDs
 
 template <typename InDstr, index_t... InReduceDimXs>
 __host__ __device__ constexpr auto
-make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce_dim_xs_in)
+make_reduce_tile_distribution_encoding_impl(InDstr, Sequence<InReduceDimXs...> reduce_dim_xs_in)
 {
-#if 1
     constexpr auto I1 = Number<1>{};
 
     // FIXME
@@ -135,6 +134,10 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
     constexpr index_t ndim_y_in        = InDstr::NDimY;
     constexpr index_t ndim_rh_major_in = InDstr::NDimX + 1;
     constexpr index_t ndim_x_out       = ndim_x_in - sizeof...(InReduceDimXs);
+
+    // ndims_ps_low
+    constexpr auto ndims_ps_low = generate_array(
+        [&](auto i) { return InDstr::ps_to_rhss_major_[i].Size(); }, Number<ndim_p>{});
 
     // is_rh_major_in_for_reduce
     Array<bool, ndim_rh_major_in> is_rh_major_in_for_reduce{false};
@@ -190,9 +193,6 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
         }
     }
 
-    // ndim_rh_major_out
-    const index_t ndim_rh_major_out = cnt_ndim_rh_major_out;
-
     // rs_lengths_out, in2out_rh_minor
     Array<index_t, max_ndim_r_out> rs_lengths_out{-1};
     Array<Array<index_t, max_ndim_rh_minor_in>, ndim_rh_major_in> in2out_rh_minor{{-1}};
@@ -211,7 +211,9 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
     index_t cnt_ndim_r_out = InDstr::rs_lengths_.Size();
 
     static_for<1, ndim_rh_major_in, 1>{}([&](auto rh_major_in) {
-        constexpr index_t ndim_rh_minor_in = InDstr::hs_lengthss_[rh_major_in - I1].Size();
+        constexpr auto h_major_in = rh_major_in - I1;
+
+        constexpr index_t ndim_rh_minor_in = InDstr::hs_lengthss_[h_major_in].Size();
 
         if(is_rh_major_in_for_reduce[rh_major_in])
         {
@@ -219,6 +221,9 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
             {
                 if(not is_rh_minor_in_for_y_reduce[rh_major_in][rh_minor_in])
                 {
+                    // rs_lengths_out
+                    rs_lengths_out(cnt_ndim_r_out) = InDstr::hs_lengthss_[h_major_in][rh_minor_in];
+
                     // in2out_rh_minor
                     in2out_rh_minor(rh_major_in)(rh_minor_in) = cnt_ndim_r_out;
 
@@ -239,7 +244,8 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
     // ndim_r_out
     const index_t ndim_r_out = cnt_ndim_r_out;
 
-    // hs_lengthss_out
+    // ndims_hs_minor_out, hs_lengthss_out
+    Array<index_t, ndim_x_out> ndims_hs_minor_out{-1};
     Array<Array<index_t, max_ndim_rh_minor_in>, ndim_x_out> hs_lengthss_out{{-1}};
 
     index_t cnt_ndim_x_out = 0;
@@ -247,6 +253,10 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
     static_for<0, ndim_x_in, 1>{}([&](auto i) {
         if(not is_rh_major_in_for_reduce[i + I1])
         {
+            // ndims_hs_minor_out
+            ndims_hs_minor_out(cnt_ndim_x_out) = InDstr::hs_lengthss_[i].Size();
+
+            // hs_lengthss_out
             static_for<0, InDstr::hs_lengthss_[i].Size(), 1>{}(
                 [&](auto j) { hs_lengthss_out(cnt_ndim_x_out)(j) = InDstr::hs_lengthss_[i][j]; });
 
@@ -290,62 +300,101 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
     // ndim_y_out
     const index_t ndim_y_out = cnt_ndim_y_out;
 
+    //
+    return make_tuple(ndim_x_out,
+                      ndim_p,
+                      ndim_y_out,
+                      ndim_r_out,
+                      ndims_hs_minor_out,
+                      ndims_ps_low,
+                      rs_lengths_out,
+                      hs_lengthss_out,
+                      ps_to_rhss_major_out,
+                      ps_to_rhss_minor_out,
+                      ys_to_rhs_major_out,
+                      ys_to_rhs_minor_out);
+}
+
+template <typename InDstr, index_t... InReduceDimXs>
+__host__ __device__ constexpr auto
+make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce_dim_xs_in)
+{
+    constexpr auto impl = make_reduce_tile_distribution_encoding_impl(InDstr{}, reduce_dim_xs_in);
+
+    constexpr index_t ndim_x             = impl.template At<0>();
+    constexpr index_t ndim_p             = impl.template At<1>();
+    constexpr index_t ndim_y             = impl.template At<2>();
+    constexpr index_t ndim_r             = impl.template At<3>();
+    constexpr auto ndims_hs_minor        = impl.template At<4>();
+    constexpr auto ndims_ps_low          = impl.template At<5>();
+    constexpr auto rs_lengths_impl       = impl.template At<6>();
+    constexpr auto hs_lengthss_impl      = impl.template At<7>();
+    constexpr auto ps_to_rhss_major_impl = impl.template At<8>();
+    constexpr auto ps_to_rhss_minor_impl = impl.template At<9>();
+    constexpr auto ys_to_rhs_major_impl  = impl.template At<10>();
+    constexpr auto ys_to_rhs_minor_impl  = impl.template At<11>();
+
+    constexpr auto rs_lengths = TO_SEQUENCE(rs_lengths_impl, ndim_r);
+#if 0
+    constexpr auto hs_lengthss = TO_TUPLE_OF_SEQUENCE(hs_lengthss_impl, ndim_x, ndims_hs_minor);
+    constexpr auto ps_to_rhss_major = TO_TUPLE_OF_SEQUENCE(ps_to_rhss_major_impl, ndim_p, ndims_ps_low);
+    constexpr auto ps_to_rhss_minor = TO_TUPLE_OF_SEQUENCE(ps_to_rhss_minor_impl, ndim_p, ndims_ps_low);
+#endif
+    constexpr auto ys_to_rhs_major = TO_SEQUENCE(ys_to_rhs_major_impl, ndim_y);
+    constexpr auto ys_to_rhs_minor = TO_SEQUENCE(ys_to_rhs_minor_impl, ndim_y);
+
+#if 0
+#else
     if(ProgramServer::get_block_id() == 0 && ProgramServer::get_thread_id() == 0)
     {
-        printf("ndim_rh_major_out: ");
-        print(ndim_rh_major_out);
+        printf("ndim_x: ");
+        print(ndim_x);
         printf("\n");
 
-        printf("ndim_r_out: ");
-        print(ndim_r_out);
+        printf("ndim_p: ");
+        print(ndim_p);
         printf("\n");
 
-        printf("ndim_y_out: ");
-        print(ndim_y_out);
+        printf("ndim_y: ");
+        print(ndim_y);
         printf("\n");
 
-        printf("is_y_in_for_reduce: ");
-        print(is_y_in_for_reduce);
+        printf("ndim_r: ");
+        print(ndim_r);
         printf("\n");
 
-        printf("is_rh_major_in_for_reduce: ");
-        print(is_rh_major_in_for_reduce);
+        printf("ndims_hs_minor: ");
+        print(ndims_hs_minor);
         printf("\n");
 
-        printf("is_rh_minor_in_for_y_reduce: ");
-        print(is_rh_minor_in_for_y_reduce);
+        printf("ndims_ps_low: ");
+        print(ndims_ps_low);
         printf("\n");
 
-        printf("in2out_rh_major: ");
-        print(in2out_rh_major);
+        printf("rs_lengths: ");
+        print(rs_lengths);
         printf("\n");
 
-        printf("in2out_rh_minor: ");
-        print(in2out_rh_minor);
+        printf("hs_lengthss: ");
+        print(hs_lengthss_impl);
         printf("\n");
 
-        printf("hs_lengthss_out: ");
-        print(hs_lengthss_out);
+        printf("ps_to_rhss_major: ");
+        print(ps_to_rhss_major_impl);
         printf("\n");
 
-        printf("ps_to_rhss_major_out: ");
-        print(ps_to_rhss_major_out);
+        printf("ps_to_rhss_minor: ");
+        print(ps_to_rhss_minor_impl);
         printf("\n");
 
-        printf("ps_to_rhss_minor_out: ");
-        print(ps_to_rhss_minor_out);
+        printf("ys_to_rhs_major: ");
+        print(ys_to_rhs_major);
         printf("\n");
 
-        printf("ys_to_rhs_major_out: ");
-        print(ys_to_rhs_major_out);
-        printf("\n");
-
-        printf("ys_to_rhs_minor_out: ");
-        print(ys_to_rhs_minor_out);
+        printf("ys_to_rhs_minor: ");
+        print(ys_to_rhs_minor);
         printf("\n");
     }
-#else
-    (void)reduce_dim_xs_in;
 #endif
 }
 

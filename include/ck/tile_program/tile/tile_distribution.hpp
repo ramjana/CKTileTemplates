@@ -7,6 +7,7 @@
 #include "ck/tensor_description/tensor_descriptor.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
 #include "ck/tensor_description/tensor_adaptor.hpp"
+#include "ck/tensor_description/macro_func_tensor_adaptor_from_encoding.hpp"
 
 namespace ck {
 namespace tile_program {
