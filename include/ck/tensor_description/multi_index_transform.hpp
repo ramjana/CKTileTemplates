@@ -134,10 +134,13 @@ struct PassThrough : public BaseTransform<1, 1>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("PassThrough, ");
-        printf("up_lengths_");
-        print_multi_index(up_lengths_);
+        printf("PassThrough{");
+
+        //
+        printf("up_lengths_:");
+        print(up_lengths_);
+
+        //
         printf("}");
     }
 };
@@ -220,12 +223,22 @@ struct Pad : public BaseTransform<1, 1>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("Pad, ");
-        printf("up_lengths_");
-        print_multi_index(up_lengths_);
-        printf("left_pad_length %d", index_t{left_pad_length_});
-        printf("right_pad_length %d", index_t{right_pad_length_});
+        printf("Pad{");
+
+        //
+        printf("up_lengths_: ");
+        print(up_lengths_);
+        printf(", ");
+
+        //
+        printf("left_pad_length_: ");
+        print(left_pad_length_);
+        printf(", ");
+
+        //
+        printf("right_pad_length_: ");
+        print(right_pad_length_);
+
         printf("}");
     }
 };
@@ -298,11 +311,17 @@ struct LeftPad
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("LeftPad, ");
-        printf("up_lengths_");
-        print_multi_index(up_lengths_);
-        printf("left_pad_length_ %d", index_t{left_pad_length_});
+        printf("LeftPad{");
+
+        //
+        printf("up_lengths_: ");
+        print(up_lengths_);
+        printf(", ");
+
+        //
+        printf("left_pad_length_: ");
+        print(left_pad_length_);
+
         printf("}");
     }
 };
@@ -379,12 +398,17 @@ struct RightPad : public BaseTransform<1, 1>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("RightPad, ");
-        printf("up_lengths_");
-        print_multi_index(up_lengths_);
-        printf("low_length_ %d", index_t{low_length_});
-        printf("left_pad_length_ %d", index_t{right_pad_length_});
+        printf("LeftPad{");
+
+        //
+        printf("up_lengths_: ");
+        print(up_lengths_);
+        printf(", ");
+
+        //
+        printf("right_pad_length_: ");
+        print(right_pad_length_);
+
         printf("}");
     }
 };
@@ -472,12 +496,17 @@ struct Embed : public BaseTransform<1, UpLengths::Size()>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("Embed, ");
-        printf("up_lengths_ ");
-        print_multi_index(up_lengths_);
-        printf("coefficients_ ");
-        print_multi_index(coefficients_);
+        printf("Embed{");
+
+        //
+        printf("up_lengths_: ");
+        print(up_lengths_);
+        printf(", ");
+
+        //
+        printf("coefficients_: ");
+        print(coefficients_);
+
         printf("}");
     }
 };
@@ -628,12 +657,17 @@ struct Merge_v2_magic_division : public BaseTransform<LowLengths::Size(), 1>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("Merge_v2_magic_division, ");
+        printf("Merge_v2_magic_division{");
+
+        //
         printf("low_lengths_ ");
-        print_multi_index(low_lengths_);
+        print(low_lengths_);
+        printf(", ");
+
+        //
         printf("up_lengths_ ");
-        print_multi_index(up_lengths_);
+        print(up_lengths_);
+
         printf("}");
     }
 };
@@ -753,14 +787,22 @@ struct Merge_v3_division_mod : public BaseTransform<LowLengths::Size(), 1>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("Merge_v3_direct_division_mod, ");
+        printf("Merge_v3_direct_division_mod{");
+
+        //
         printf("low_lengths_ ");
-        print_multi_index(low_lengths_);
+        print(low_lengths_);
+        printf(", ");
+
+        //
         printf("low_lengths_scan_ ");
-        print_multi_index(low_lengths_scan_);
+        print(low_lengths_scan_);
+        printf(", ");
+
+        //
         printf("up_lengths_ ");
-        print_multi_index(up_lengths_);
+        print(up_lengths_);
+
         printf("}");
     }
 };
@@ -870,12 +912,17 @@ struct UnMerge : public BaseTransform<1, UpLengths::Size()>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("UnMerge, ");
+        printf("UnMerge{");
+
+        //
         printf("up_lengths_");
-        print_multi_index(up_lengths_);
+        print(up_lengths_);
+        printf(", ");
+
+        //
         printf("up_lengths_scan_");
-        print_multi_index(up_lengths_scan_);
+        print(up_lengths_scan_);
+
         printf("}");
     }
 };
@@ -929,8 +976,13 @@ struct Freeze : public BaseTransform<1, 0>
 
     __host__ __device__ void Print() const
     {
-        printf("Freeze");
-        printf("low_idx_ %d", index_t{low_idx_});
+        printf("Freeze{");
+
+        //
+        printf("low_idx_: ");
+        print(low_idx_);
+
+        printf("}");
     }
 };
 
@@ -983,8 +1035,13 @@ struct Replicate : public BaseTransform<0, UpLengths::Size()>
 
     __host__ __device__ void Print() const
     {
-        printf("Replicate");
-        print_multi_index(up_lengths_);
+        printf("Replicate{");
+
+        //
+        printf("up_lengths_: ");
+        print(up_lengths_);
+
+        printf("}");
     }
 
     //
@@ -1063,15 +1120,25 @@ struct Slice : public BaseTransform<1, 1>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("Slice, ");
-        printf("up_lengths_");
-        print_multi_index(up_lengths_);
-        printf("slice_begin_ %d", index_t{slice_begin_});
-        printf("slice_end %d", index_t{slice_end_});
+        printf("Slice{");
+
+        //
+        printf("up_lengths_: ");
+        print(up_lengths_);
+        printf(", ");
+
+        //
+        printf("slice_begin_: ");
+        print(slice_begin_);
+        printf(", ");
+
+        //
+        printf("slice_end_: ");
+        print(slice_end_);
+
         printf("}");
-    }
-};
+    } // namespace ck
+};    // namespace ck
 
 /*
  * \brief lower_idx = upper_idx % modulus.
@@ -1142,10 +1209,12 @@ struct Modulo : public BaseTransform<1, 1>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("Modulus, ");
-        printf("up_lengths_");
-        print_multi_index(up_lengths_);
+        printf("Modulus{");
+
+        //
+        printf("up_lengths_: ");
+        print(up_lengths_);
+
         printf("}");
     }
 };
@@ -1250,11 +1319,17 @@ struct Xor : public BaseTransform<2, 2>
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("Xor, ");
-        printf("up_lengths_");
-        print_multi_index(up_lengths_);
-        printf("right_shift_ %d", index_t{right_shift_});
+        printf("Xor{");
+
+        //
+        printf("up_lengths_: ");
+        print(up_lengths_);
+        printf(", ");
+
+        //
+        printf("right_shift_: ");
+        print(right_shift_);
+
         printf("}");
     }
 };

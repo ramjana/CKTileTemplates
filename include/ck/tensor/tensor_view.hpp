@@ -76,6 +76,22 @@ struct TensorView
                              x);
     }
 
+    __host__ __device__ void Print() const
+    {
+        printf("TensorView{");
+
+        // buf_
+        printf("buf_: ");
+        print(buf_);
+        printf(", ");
+
+        // desc_
+        printf("desc_: ");
+        print(desc_);
+
+        printf("}");
+    }
+
     // member
     BufferView buf_;
     TensorDesc desc_;

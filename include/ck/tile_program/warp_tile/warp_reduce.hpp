@@ -5,27 +5,40 @@
 
 #include "ck/utility/common_header.hpp"
 
+#include "ck/tile_program/tile/tile_distribution_helper.hpp"
+#include "ck/tile_program/tile/static_distributed_tensor.hpp"
+
 namespace ck {
 namespace tile_program {
 namespace warp {
 
 // 2D to 1D reduce
-template <typename ReduceFuncIn, typename OutDataType_, typename InTileDistribution_>
-__device__ auto
-warp_tile_reduce_in(const ReduceFuncIn& reduce_func_in,
-                    const OutDataType_& reduce_init,
-                    const StaticDistributedTensor<remove_cvref_t<InDataType_>,
-                                                  remove_cvref_t<InTileDistribution_>>& in_tensor)
+template <typename OutDataType_,
+          typename StaticDistributedTensor_,
+          index_t... InReduceDims,
+          typename ReduceFuncIn,
+          typename InDataType_>
+__device__ auto warp_tile_reduce_in(const StaticDistributedTensor_& in_tensor,
+                                    Sequence<InReduceDims...> in_reduce_dims,
+                                    const ReduceFuncIn& /* reduce_func_in */,
+                                    const InDataType_& reduce_init)
 {
+    using namespace ck::tile_program;
+
+    using InDataType  = typename StaticDistributedTensor_::DataType;
     using OutDataType = remove_cvref_t<OutDataType_>;
 
+    static_assert(is_same_v<InDataType, remove_cvref_t<InDataType_>>, "wrong!");
+
     // declare out_warp_tensor
-    // FIXME
-    auto out_tensor = make_static_distributed_tensor<OutDataType>(XXXX);
+    constexpr auto out_dstr = detail::make_reduce_tile_distribution_encoding(
+        in_tensor.GetTileDistribution(), in_reduce_dims);
+
+    auto out_tensor = make_static_distributed_tensor<OutDataType>(out_dstr);
 
     // initialize out_warp_tensor
-    tile_elementwise_inout([](auto& out) { out = type_convert<OutDataType>(reduce_init); },
-                           out_warp_tensor);
+    tile_elementwise_inout([&](auto& out) { out = type_convert<OutDataType>(reduce_init); },
+                           out_tensor);
 
     // in-thread reduction
 #if 0
@@ -35,7 +48,8 @@ warp_tile_reduce_in(const ReduceFuncIn& reduce_func_in,
         const auto out_range_idx = get_range_subset(in_range_idx, Sequence<0>{});
 
         // FIXME
-        out_tensor(out_range_idx) = reduce_func_inout(out_tensor[out_range_idx], in_tensor[in_range_idx]);
+        out_tensor(out_range_idx) =
+            reduce_func_inout(out_tensor[out_range_idx], in_tensor[in_range_idx]);
     });
 #endif
 

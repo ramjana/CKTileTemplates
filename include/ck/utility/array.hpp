@@ -76,6 +76,23 @@ struct Array
 
         return *this;
     }
+
+    __host__ __device__ void Print() const
+    {
+        printf("Array{size: %d, data: [", NSize);
+
+        for(index_t i = 0; i < NSize; i++)
+        {
+            print(mData[i]);
+
+            if(i < NSize - 1)
+            {
+                printf(", ");
+            }
+        }
+
+        printf("]}");
+    }
 };
 
 // empty Array
@@ -88,6 +105,8 @@ struct Array<TData, 0>
     __host__ __device__ constexpr Array() {}
 
     __host__ __device__ static constexpr index_t Size() { return 0; }
+
+    __host__ __device__ void Print() const { printf("Array{size: 0, data: []}"); }
 };
 
 template <typename T, typename... Xs>

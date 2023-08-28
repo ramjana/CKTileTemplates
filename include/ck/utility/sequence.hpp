@@ -42,8 +42,9 @@ struct Sequence
 
     static constexpr index_t mSize = sizeof...(Is);
 
-    __host__ __device__ static constexpr auto Size() { return Number<mSize>{}; }
+    __host__ __device__ static constexpr index_t Size() { return mSize; }
 
+    // TODO: deprecate
     __host__ __device__ static constexpr auto GetSize() { return Size(); }
 
     __host__ __device__ static constexpr index_t At(index_t I)
@@ -181,10 +182,19 @@ struct Sequence
 
     __host__ __device__ static void Print()
     {
-        printf("{");
-        printf("size %d, ", index_t{Size()});
-        static_for<0, Size(), 1>{}([&](auto i) { printf("%d ", At(i).value); });
-        printf("}");
+        printf("Sequence{size: %d, data: [", Size());
+
+        for(index_t i = 0; i < Size(); i++)
+        {
+            print(At(i));
+
+            if(i < Size() - 1)
+            {
+                printf(", ");
+            }
+        }
+
+        printf("]}");
     }
 };
 

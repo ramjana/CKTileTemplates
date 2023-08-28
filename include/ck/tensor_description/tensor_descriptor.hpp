@@ -128,9 +128,16 @@ struct TensorDescriptor : public TensorAdaptor<Transforms,
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("TensorDescriptor, ");
+        printf("TensorDescriptor{");
+
+        // TensorAdaptor
         Base::Print();
+        printf(", ");
+
+        // element_space_size_
+        printf("element_space_size_: ");
+        print(element_space_size_);
+
         printf("}");
     }
 

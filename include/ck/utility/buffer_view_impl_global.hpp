@@ -292,6 +292,28 @@ struct BufferView<AddressSpaceEnum::Global,
 
     // FIXME: remove
     __device__ static constexpr bool IsDynamicBuffer() { return true; }
+
+    __host__ __device__ void Print() const
+    {
+        printf("BufferView{");
+
+        // AddressSpace
+        printf("AddressSpace: Global, ");
+
+        // p_data_
+        printf("p_data_: %p, ", static_cast<void*>(const_cast<remove_cvref_t<T>*>(p_data_)));
+
+        // buffer_size_
+        printf("buffer_size_: ");
+        print(buffer_size_);
+        printf(", ");
+
+        // invalid_element_value_
+        printf("invalid_element_value_: ");
+        print(invalid_element_value_);
+
+        printf("}");
+    }
 };
 
 } // namespace ck

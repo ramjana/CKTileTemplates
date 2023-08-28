@@ -296,21 +296,32 @@ struct TensorAdaptor
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("TensorAdaptor, ");
-        printf("transforms: ");
-        static_for<0, ntransform_, 1>{}([&](auto i) {
-            transforms_[i].Print();
-            printf("LowerDimensionHiddenIds:");
-            LowerDimensionHiddenIdss{}.At(i).Print();
-            printf("UpperDimensionHiddenIds:");
-            UpperDimensionHiddenIdss{}.At(i).Print();
-        });
+        printf("TensorAdaptor{");
 
-        printf("BottomDimensionHiddenIds:");
-        BottomDimensionHiddenIds::Print();
-        printf("TopDimensionHiddenIds:");
-        TopDimensionHiddenIds::Print();
+        //
+        printf("transforms: ");
+        print(transforms_);
+        printf(", ");
+
+        //
+        printf("LowerDimensionHiddenIds: ");
+        print(LowerDimensionHiddenIdss{});
+        printf(", ");
+
+        //
+        printf("UpperDimensionHiddenIds: ");
+        print(UpperDimensionHiddenIdss{});
+        printf(", ");
+
+        //
+        printf("BottomDimensionHiddenIds: ");
+        print(BottomDimensionHiddenIds{});
+        printf(", ");
+
+        //
+        printf("TopDimensionHiddenIds: ");
+        print(TopDimensionHiddenIds{});
+
         printf("}");
     }
 

@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
 
     a_buf.ToDevice(a_host.mData.data());
 
-    constexpr ck::index_t kMPerBlock = 256;
+    constexpr ck::index_t kMPerBlock = 128;
     constexpr ck::index_t kNPerBlock = 128;
 
     constexpr ck::index_t kBlockSize = 256;

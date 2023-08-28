@@ -208,6 +208,22 @@ struct Tuple : detail::TupleImpl<typename arithmetic_sequence_gen<0, sizeof...(X
 
     // FIXME: remove
     __host__ __device__ static constexpr bool IsStaticBuffer() { return true; }
+
+    __host__ __device__ void Print() const
+    {
+        printf("Tuple{size: %d, data: [", static_cast<index_t>(Size()));
+
+        static_for<0, Size(), 1>{}([&](auto i) {
+            print(At(i));
+
+            if(i < Size() - 1)
+            {
+                printf(", ");
+            }
+        });
+
+        printf("]}");
+    }
 };
 
 template <>

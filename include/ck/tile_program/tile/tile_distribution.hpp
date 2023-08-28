@@ -33,6 +33,13 @@ struct StaticTileDistributionEncoding
     static constexpr index_t NDimX = HsLengthss::Size();
     static constexpr index_t NDimP = Ps2RHssMajor::Size();
     static constexpr index_t NDimY = Ys2RHsMajor::Size();
+
+    static constexpr auto rs_lengths_       = RsLengths{};
+    static constexpr auto hs_lengthss_      = HsLengthss{};
+    static constexpr auto ps_to_rhss_major_ = Ps2RHssMajor{};
+    static constexpr auto ps_to_rhss_minor_ = Ps2RHssMinor{};
+    static constexpr auto ys_to_rhs_major_  = Ys2RHsMajor{};
+    static constexpr auto ys_to_rhs_minor_  = Ys2RHsMinor{};
 };
 
 template <typename PsYs2XsAdaptor_,

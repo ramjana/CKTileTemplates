@@ -10,7 +10,11 @@
 
 #include "tile_program.hpp"
 #include "ck/tile_program/tile/tile_distribution.hpp"
+#include "ck/tile_program/tile/tile_window.hpp"
+#include "ck/tile_program/tile/load_tile.hpp"
+#include "ck/tile_program/tile/store_tile.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
+#include "ck/tile_program/warp_tile/warp_reduce.hpp"
 
 template <typename ADataType,
           typename AccDataType,
@@ -20,17 +24,26 @@ template <typename ADataType,
           ck::index_t kNPerBlock>
 struct Reduce
 {
+    __host__ __device__ static constexpr auto MakeABlockTileDistribution()
+    {
+        using namespace ck;
+        using namespace ck::tile_program;
+
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<>,
+                                           Tuple<Sequence<2, 2, 4, 2, 4>, Sequence<2, 2, 32>>,
+                                           Tuple<Sequence<1, 2>, Sequence<1, 2>>,
+                                           Tuple<Sequence<1, 1>, Sequence<3, 2>>,
+                                           Sequence<1, 2, 1, 1>,
+                                           Sequence<0, 0, 2, 4>>{});
+    }
+
     __host__ __device__ void operator()(
         ProgramServer& ps, const ADataType* p_a, BDataType* p_b, ck::index_t M, ck::index_t N) const
     {
-#if 0
-        (void)ps;
-        (void)p_a;
-        (void)p_b;
-        (void)M;
-        (void)N;
-#else
         using namespace ck;
+        using namespace ck::tile_program;
+        using namespace ck::tile_program::warp;
 
         const auto a_m_n = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_a, make_tuple(M, N), make_tuple(N, 1), Number<32>{}, Number<1>{});
@@ -52,9 +65,13 @@ struct Reduce
                              {iM, 0},
                              MakeABlockTileDistribution());
 
+        auto f_max = [](AccDataType acc, ADataType a) { return acc > a ? acc : a; };
+
+#if 0
         // B tile
-        auto b_block_tile =
-            decltype(block_tile_reduce_in(a_block_tile, math::max<AccDataType, ADataType>)){};
+        // FIXME: block_tile_reduce_in
+        auto b_block_tile = decltype(warp_tile_reduce_in<AccDataType>(
+            load_tile(a_block_window), Sequence<1>{}, f_max, NumericLimits<ADataType>::Min())){};
 
         // init B tile
         tile_elementwise_inout([](auto& b) { b = NumericLimits<ADataType>::Min(); }, b_block_tile);
@@ -74,11 +91,24 @@ struct Reduce
 
         } while(iN < N);
 
+        // B
+        const auto b_m = make_naive_tensor_view_packed<AddressSpaceEnum::Global>(
+            p_b, make_tuple(M), Number<32>{});
+
         // B window
-        auto b_block_window = make_tile_window(b_m, make_tuple(Number<kMPerBlock>{}), {iM});
+        auto b_block_window =
+            make_tile_window(b_block_tile, make_tuple(Number<kMPerBlock>{}), {iM});
 
         // store B
         store_tile(b_block_window, b_block_tile);
+#else
+        (void)p_b;
+        (void)a_block_window;
+        (void)f_max;
+
+        ck::tile_program::detail::make_reduce_tile_distribution_encoding(
+            a_block_window.GetTileDistribution().GetStaticTileDistributionEncoding(),
+            Sequence<0>{});
 #endif
     }
 };
