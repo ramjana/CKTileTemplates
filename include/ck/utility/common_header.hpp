@@ -32,7 +32,7 @@
 #include "ck/utility/type_convert.hpp"
 #include "ck/utility/magic_division.hpp"
 #include "ck/utility/c_style_pointer_cast.hpp"
-#include "ck/utility/is_known_at_compile_time.hpp"
+#include "ck/utility/is_static.hpp"
 #include "ck/utility/transpose_vectors.hpp"
 #include "ck/utility/inner_product.hpp"
 #include "ck/utility/thread_group.hpp"

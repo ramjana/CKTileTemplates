@@ -123,17 +123,17 @@ make_reduce_tile_distribution_encoding_impl(InDstr, Sequence<InReduceDimXs...> r
 {
     constexpr auto I1 = Number<1>{};
 
-    // FIXME
-    constexpr index_t max_ndim_rh_minor_in = 20;
-    constexpr index_t max_ndim_r_out       = 20;
-    constexpr index_t max_ndim_y_out       = 20;
+    // FIXME: increase if fail
+    constexpr index_t max_ndim_r_out = 20;
+    constexpr index_t max_ndim_y_out = 20;
 
     //
-    constexpr index_t ndim_p           = InDstr::NDimP;
-    constexpr index_t ndim_x_in        = InDstr::NDimX;
-    constexpr index_t ndim_y_in        = InDstr::NDimY;
-    constexpr index_t ndim_rh_major_in = InDstr::NDimX + 1;
-    constexpr index_t ndim_x_out       = ndim_x_in - sizeof...(InReduceDimXs);
+    constexpr index_t ndim_p               = InDstr::NDimP;
+    constexpr index_t ndim_x_in            = InDstr::NDimX;
+    constexpr index_t ndim_y_in            = InDstr::NDimY;
+    constexpr index_t ndim_rh_major_in     = InDstr::NDimX + 1;
+    constexpr index_t ndim_x_out           = ndim_x_in - sizeof...(InReduceDimXs);
+    constexpr index_t max_ndim_rh_minor_in = InDstr::Detail::max_ndim_rh_minor_;
 
     // ndims_ps_low
     constexpr auto ndims_ps_low = generate_array(
@@ -343,14 +343,14 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
     constexpr auto ys_to_rhs_major = TO_SEQUENCE(ys_to_rhs_major_impl, ndim_y);
     constexpr auto ys_to_rhs_minor = TO_SEQUENCE(ys_to_rhs_minor_impl, ndim_y);
 
-#if 1
     return StaticTileDistributionEncoding<remove_cvref_t<decltype(rs_lengths)>,
                                           remove_cvref_t<decltype(hs_lengthss)>,
                                           remove_cvref_t<decltype(ps_to_rhss_major)>,
                                           remove_cvref_t<decltype(ps_to_rhss_minor)>,
                                           remove_cvref_t<decltype(ys_to_rhs_major)>,
                                           remove_cvref_t<decltype(ys_to_rhs_minor)>>{};
-#else
+
+#if 0
     if(ProgramServer::get_block_id() == 0 && ProgramServer::get_thread_id() == 0)
     {
         printf("ndim_x: ");

@@ -42,6 +42,43 @@ struct StaticTileDistributionEncoding
     static constexpr auto ys_to_rhs_major_  = Ys2RHsMajor{};
     static constexpr auto ys_to_rhs_minor_  = Ys2RHsMinor{};
 
+    // redundant but useful info
+    struct Detail
+    {
+        static constexpr index_t ndim_rh_major_ = NDimX + 1;
+
+        // Array
+        static constexpr auto ndims_rhs_minor_ = generate_array(
+            [](auto i) {
+                if constexpr(i.value == 0)
+                {
+                    return rs_lengths_.Size();
+                }
+                else
+                {
+                    return hs_lengthss_[i - Number<1>{}].Size();
+                }
+            },
+            Number<NDimX + 1>{});
+
+        static constexpr index_t max_ndim_rh_minor_ =
+            container_reduce(ndims_rhs_minor_, math::maximize<index_t>{}, 1);
+
+        // Array of Array
+        static constexpr auto rhs_major_minor_to_ys_ = [] {
+            Array<Array<index_t, max_ndim_rh_minor_>, NDimX + 1> rhs_major_minor_to_ys_tmp{{-1}};
+
+            static_for<0, NDimY, 1>{}([&](auto i) {
+                constexpr index_t rh_major = ys_to_rhs_major_[i];
+                constexpr index_t rh_minor = ys_to_rhs_minor_[i];
+
+                rhs_major_minor_to_ys_tmp(rh_major)(rh_minor) = i;
+            });
+
+            return rhs_major_minor_to_ys_tmp;
+        }();
+    };
+
     __host__ __device__ void Print() const
     {
         printf("StaticTileDistributionEncoding{");
@@ -81,6 +118,47 @@ struct StaticTileDistributionEncoding
         printf("}");
     }
 };
+
+#if 0
+template <typename StaticTileDistributionEncoding_>
+__host__ __device__ constexpr auto get_distributed_range(StaticTileDistributionEncoding_)
+{
+    using Dstr = remove_cvref_t<StaticTileDistributionEncoding_>;
+
+    // FIXME if fail
+    constexpr index_t max_ndim_rh_minor = 20;
+
+    constexpr index_t ndim_x = Dstr::NDimX;
+    constexpr index_t ndim_y = Dstr::NDimY;
+
+    constexpr auto impl = [&] {
+        Array<index_t, ndim_x> ndims_rh_minor_for_x_ranges{0};
+        Array<Array<index_t, max_ndim_rh_minor>, ndim_x> lengthss_for_x_ranges{{-1}};
+
+        static_for<0, ndim_y, 1>{}([&](auto i) {
+            const index_t rh_major = Dstr::ys_to_rhs_major_[i];
+            const index_t rh_minor = Dstr::ys_to_rhs_minor_[i];
+
+            const index_t idim_x = rh_major - 1;
+
+            lengthss_for_x_ranges(idim_x)(ndims_rh_minor_for_x_ranges[idim_x]) =
+                Dstr::hs_lengthss_[Number<idim_x>{}][Number<rh_minor>{}];
+
+            ndims_rh_minor_for_x_ranges(idim_x)++;
+        });
+
+        return make_tuple(ndims_rh_minor_for_x_ranges, lengthss_for_x_ranges);
+    }();
+
+    constexpr auto ndims_rh_minor_for_x_ranges_impl = impl.template At<0>();
+    constexpr auto lengthss_for_x_ranges_impl       = impl.template At<1>();
+
+    constexpr auto lengthss_for_x_ranges = TO_TUPLE_OF_SEQUENCE(
+        lengthss_for_x_ranges_for_x_ranges_impl, ndim_x, ndims_rh_minor_for_x_ranges_impl);
+
+    return lengthss_for_x_ranges;
+}
+#endif
 
 template <typename PsYs2XsAdaptor_,
           typename Ys2DDescriptor_,
@@ -133,6 +211,32 @@ struct TileDistribution
     {
         return StaticTileDistributionEncoding{};
     }
+
+#if 0
+    __host__ __device__ static constexpr auto GetDistributedRange()
+    {
+        return get_distributed_range(StaticTileDistributionEncoding{});
+    }
+
+    // FIXME: it's hacky to get Ys index from Range index
+    template <typename DistributedRangeIdx>
+    __host__ __device__ static constexpr auto
+    GetYsIndexFromDistributedRangeIndex(DistributedRangeIndex dstr_range_idx)
+    {
+        using Dstr = GetStaticTileDistributionEncoding;
+
+        static_assert(IsStatic<DistributedRangeIdx>::value, "wrong!");
+
+        Array<index_t, NDimY> y_idx;
+
+        static_for<0, NDimY, 1>{}([&](auto i) {
+            constexpr index_t h_major = Dstr::ys_to_rhs_major_[i] - 1;
+            constexpr index_t h_minor = Dstr::ys_to_rhs_minor_[i];
+
+            y_idx(i) = h_major_minor_to_y_idx[h_major][h_minor];
+        });
+    }
+#endif
 
     __host__ __device__ static constexpr bool IsStatic()
     {

@@ -26,6 +26,11 @@ struct StaticDistributedTensor
 
     static constexpr index_t kThreadElementSpaceSize = ThreadTensorDesc{}.GetElementSpaceSize();
 
+    __host__ __device__ static constexpr auto GetNumOfDimension()
+    {
+        return StaticTileDistribution::GetNumOfDimensionX();
+    }
+
     __host__ __device__ static constexpr auto GetLengths()
     {
         return StaticTileDistribution::GetLengths();
@@ -34,6 +39,11 @@ struct StaticDistributedTensor
     __host__ __device__ static constexpr auto GetTileDistribution()
     {
         return StaticTileDistribution{};
+    }
+
+    __host__ __device__ static constexpr auto GetDistributedRange()
+    {
+        return StaticTileDistribution::GetDistributedRange();
     }
 
     __host__ __device__ void Initialize(const DataType& x) { thread_buf_.Initialize(x); }
@@ -94,6 +104,14 @@ struct StaticDistributedTensor
                 sliced_thread_data[Number<sliced_thread_tensor_desc.CalculateOffset(idx)>{}];
         });
     }
+
+#if 0
+    //
+    template<typename DistributedRangeIndex>
+    __host__ __device__ void GetElementFromDistributedRangeIndex(DistributdRangeIndex) const
+    {
+    }
+#endif
 
     //
     StaticBuffer<AddressSpaceEnum::Vgpr, DataType, kThreadElementSpaceSize, true> thread_buf_;
