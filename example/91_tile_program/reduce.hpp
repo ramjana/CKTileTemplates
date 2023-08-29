@@ -65,12 +65,14 @@ struct Reduce
                              {iM, 0},
                              MakeABlockTileDistribution());
 
-        auto f_max = [](AccDataType acc, ADataType a) { return acc > a ? acc : a; };
+        const auto f_max = [](AccDataType acc, ADataType a) { return acc > a ? acc : a; };
+
+        constexpr auto reduce_dims = Sequence<1>{};
 
         // Acc tile
         // FIXME: block_tile_reduce_in
         auto acc_block_tile = decltype(warp_tile_reduce_in<AccDataType>(
-            load_tile(a_block_window), Sequence<1>{}, f_max, NumericLimits<ADataType>::Lowest())){};
+            load_tile(a_block_window), reduce_dims, f_max, NumericLimits<ADataType>::Lowest())){};
 
         // init Acc tile
         tile_elementwise_inout(
@@ -84,11 +86,8 @@ struct Reduce
         {
             const auto a_block_tile = load_tile(a_block_window);
 
-#if 0
-            block_tile_reduce_inout(acc_block_tile, a_block_tile, math::max<AccDataType, ADataType>);
-#else
-            (void)a_block_tile;
-#endif
+            // FIXME: block_tile_reduce_in
+            warp_tile_reduce_acc_in(acc_block_tile, a_block_tile, reduce_dims, f_max);
 
             move_tile_window(a_block_window, {0, kNPerBlock});
 
@@ -96,7 +95,7 @@ struct Reduce
 
         } while(iN < N);
 
-        // Acc to B
+        // convert acc_block_tile to b_block_tile
         const auto b_block_tile = tile_elementwise_in(
             [](const auto& acc) { return type_convert<BDataType>(acc); }, acc_block_tile);
 
@@ -107,7 +106,7 @@ struct Reduce
         // B window
         auto b_block_window = make_tile_window(b_m, make_tuple(Number<kMPerBlock>{}), {iM});
 
-        // store B
+        // store B tile
         store_tile(b_block_window, b_block_tile);
 
 #if 0

@@ -12,38 +12,23 @@ namespace ck {
 namespace tile_program {
 namespace warp {
 
-// 2D to 1D reduce
-template <typename OutDataType_,
-          typename StaticDistributedTensor_,
+// FIXME: this is for 2D to 1D reduce only, need to support n-D
+template <typename AccDistributedTensor_,
+          typename InDistributedTensor_,
           index_t... InReduceDims,
-          typename ReduceFuncIn,
-          typename InDataType_>
-__device__ auto warp_tile_reduce_in(const StaticDistributedTensor_& in_tensor,
-                                    Sequence<InReduceDims...>,
-                                    const ReduceFuncIn& reduce_func_in,
-                                    const InDataType_& reduce_init)
+          typename ReduceFuncAccIn>
+__host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tensor,
+                                                 const InDistributedTensor_& in_tensor,
+                                                 Sequence<InReduceDims...>,
+                                                 const ReduceFuncAccIn& reduce_func_acc_in)
 {
-    (void)in_tensor;
-    (void)reduce_func_in;
-
     using namespace ck::tile_program;
 
-    using InDataType  = typename StaticDistributedTensor_::DataType;
-    using OutDataType = remove_cvref_t<OutDataType_>;
-
-    static_assert(is_same_v<InDataType, remove_cvref_t<InDataType_>>, "wrong!");
-
-    // declare out_tensor
-    constexpr auto out_dstr =
-        make_static_tile_distribution(detail::make_reduce_tile_distribution_encoding(
-            StaticDistributedTensor_::GetTileDistribution().GetStaticTileDistributionEncoding(),
-            Sequence<InReduceDims...>{}));
-
-    auto out_tensor = make_static_distributed_tensor<OutDataType>(out_dstr);
-
-    // initialize out_tensor
-    tile_elementwise_inout([&](auto& out) { out = type_convert<OutDataType>(reduce_init); },
-                           out_tensor);
+#if 1
+    (void)acc_tensor;
+    (void)reduce_func_acc_in;
+    (void)in_tensor;
+#endif
 
     // in-thread reduction
 #if 0
@@ -62,8 +47,41 @@ __device__ auto warp_tile_reduce_in(const StaticDistributedTensor_& in_tensor,
 #if 0
     sync_reduce_warp_distributed_tensor(reduce_func, out_tensor);
 #endif
+}
 
-    return out_tensor;
+template <typename AccDataType_,
+          typename InDistributedTensor_,
+          index_t... InReduceDims,
+          typename ReduceFuncAccIn,
+          typename InDataType_>
+__host__ __device__ auto warp_tile_reduce_in(const InDistributedTensor_& in_tensor,
+                                             Sequence<InReduceDims...> in_reduce_dims,
+                                             const ReduceFuncAccIn& reduce_func_acc_in,
+                                             const InDataType_& reduce_init)
+{
+    using namespace ck::tile_program;
+
+    using InDataType  = typename InDistributedTensor_::DataType;
+    using AccDataType = remove_cvref_t<AccDataType_>;
+
+    static_assert(is_same_v<InDataType, remove_cvref_t<InDataType_>>, "wrong!");
+
+    // declare acc_tensor
+    constexpr auto acc_dstr =
+        make_static_tile_distribution(detail::make_reduce_tile_distribution_encoding(
+            InDistributedTensor_::GetTileDistribution().GetStaticTileDistributionEncoding(),
+            Sequence<InReduceDims...>{}));
+
+    auto acc_tensor = make_static_distributed_tensor<AccDataType>(acc_dstr);
+
+    // init acc_tensor
+    tile_elementwise_inout([&](auto& acc) { acc = type_convert<AccDataType>(reduce_init); },
+                           acc_tensor);
+
+    // reduce
+    warp_tile_reduce_acc_in(acc_tensor, in_tensor, in_reduce_dims, reduce_func_acc_in);
+
+    return acc_tensor;
 }
 
 } // namespace warp
