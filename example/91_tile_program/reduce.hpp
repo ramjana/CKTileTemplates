@@ -67,14 +67,15 @@ struct Reduce
 
         auto f_max = [](AccDataType acc, ADataType a) { return acc > a ? acc : a; };
 
-#if 0
-        // B tile
+        // Acc tile
         // FIXME: block_tile_reduce_in
-        auto b_block_tile = decltype(warp_tile_reduce_in<AccDataType>(
-            load_tile(a_block_window), Sequence<1>{}, f_max, NumericLimits<ADataType>::Min())){};
+        auto acc_block_tile = decltype(warp_tile_reduce_in<AccDataType>(
+            load_tile(a_block_window), Sequence<1>{}, f_max, NumericLimits<ADataType>::Lowest())){};
 
-        // init B tile
-        tile_elementwise_inout([](auto& b) { b = NumericLimits<ADataType>::Min(); }, b_block_tile);
+        // init Acc tile
+        tile_elementwise_inout(
+            [](auto& acc) { acc = type_convert<ADataType>(NumericLimits<ADataType>::Lowest()); },
+            acc_block_tile);
 
         // loop
         index_t iN = 0;
@@ -83,7 +84,11 @@ struct Reduce
         {
             const auto a_block_tile = load_tile(a_block_window);
 
-            block_tile_reduce_inout(b_block_tile, a_block_tile, math::max<AccDataType, ADataType>);
+#if 0
+            block_tile_reduce_inout(acc_block_tile, a_block_tile, math::max<AccDataType, ADataType>);
+#else
+            (void)a_block_tile;
+#endif
 
             move_tile_window(a_block_window, {0, kNPerBlock});
 
@@ -91,28 +96,24 @@ struct Reduce
 
         } while(iN < N);
 
+        // Acc to B
+        const auto b_block_tile = tile_elementwise_in(
+            [](const auto& acc) { return type_convert<BDataType>(acc); }, acc_block_tile);
+
         // B
         const auto b_m = make_naive_tensor_view_packed<AddressSpaceEnum::Global>(
             p_b, make_tuple(M), Number<32>{});
 
         // B window
-        auto b_block_window =
-            make_tile_window(b_block_tile, make_tuple(Number<kMPerBlock>{}), {iM});
+        auto b_block_window = make_tile_window(b_m, make_tuple(Number<kMPerBlock>{}), {iM});
 
         // store B
         store_tile(b_block_window, b_block_tile);
-#else
-        (void)p_b;
-        (void)a_block_window;
-        (void)f_max;
 
-        constexpr auto in_dstr = ck::tile_program::detail::make_reduce_tile_distribution_encoding(
-            a_block_window.GetTileDistribution().GetStaticTileDistributionEncoding(),
-            Sequence<0>{});
-
+#if 0
         if(ProgramServer::get_block_id() == 0 && ProgramServer::get_thread_id() == 0)
         {
-            print(in_dstr);
+            print(b_block_tile.GetTileDistribution().GetStaticTileDistributionEncoding());
             printf("\n");
         }
 #endif

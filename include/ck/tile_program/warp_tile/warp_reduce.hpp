@@ -19,10 +19,13 @@ template <typename OutDataType_,
           typename ReduceFuncIn,
           typename InDataType_>
 __device__ auto warp_tile_reduce_in(const StaticDistributedTensor_& in_tensor,
-                                    Sequence<InReduceDims...> in_reduce_dims,
-                                    const ReduceFuncIn& /* reduce_func_in */,
+                                    Sequence<InReduceDims...>,
+                                    const ReduceFuncIn& reduce_func_in,
                                     const InDataType_& reduce_init)
 {
+    (void)in_tensor;
+    (void)reduce_func_in;
+
     using namespace ck::tile_program;
 
     using InDataType  = typename StaticDistributedTensor_::DataType;
@@ -30,13 +33,15 @@ __device__ auto warp_tile_reduce_in(const StaticDistributedTensor_& in_tensor,
 
     static_assert(is_same_v<InDataType, remove_cvref_t<InDataType_>>, "wrong!");
 
-    // declare out_warp_tensor
-    constexpr auto out_dstr = detail::make_reduce_tile_distribution_encoding(
-        in_tensor.GetTileDistribution(), in_reduce_dims);
+    // declare out_tensor
+    constexpr auto out_dstr =
+        make_static_tile_distribution(detail::make_reduce_tile_distribution_encoding(
+            StaticDistributedTensor_::GetTileDistribution().GetStaticTileDistributionEncoding(),
+            Sequence<InReduceDims...>{}));
 
     auto out_tensor = make_static_distributed_tensor<OutDataType>(out_dstr);
 
-    // initialize out_warp_tensor
+    // initialize out_tensor
     tile_elementwise_inout([&](auto& out) { out = type_convert<OutDataType>(reduce_init); },
                            out_tensor);
 
