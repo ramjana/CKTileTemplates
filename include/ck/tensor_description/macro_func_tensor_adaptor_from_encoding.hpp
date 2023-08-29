@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2018-2023, Advanced Micro Devices, Inc. All rights reserved.
 
+#pragma once
+
 // Macro function
 // construct constexpr TensorAdaptor from constexpr encoding
 // encoded_tensor_adaptor are Tuple of following objects:
@@ -17,7 +19,7 @@
 //    5. encoded top dimension Ids (Array of fixed size)
 //    6. num of top dimension (index_t)
 #define CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_tensor_adaptor)                            \
-    [&encoded_tensor_adaptor]() {                                                                 \
+    [encoded_tensor_adaptor]() {                                                                  \
         using namespace ck;                                                                       \
                                                                                                   \
         constexpr auto encoded_transforms  = encoded_tensor_adaptor.template At<0>();             \
@@ -140,7 +142,7 @@
 //    5. encoded top dimension Ids (Array of fixed size)
 //    6. num of top dimension (index_t)
 #define CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(encoded_tensor_adaptor)                      \
-    [&encoded_tensor_adaptor]() {                                                                  \
+    [encoded_tensor_adaptor]() {                                                                   \
         using namespace ck;                                                                        \
                                                                                                    \
         constexpr auto encoded_transforms  = encoded_tensor_adaptor.template At<0>();              \

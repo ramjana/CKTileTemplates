@@ -334,16 +334,22 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
     constexpr auto ys_to_rhs_major_impl  = impl.template At<10>();
     constexpr auto ys_to_rhs_minor_impl  = impl.template At<11>();
 
-    constexpr auto rs_lengths = TO_SEQUENCE(rs_lengths_impl, ndim_r);
-#if 0
+    constexpr auto rs_lengths  = TO_SEQUENCE(rs_lengths_impl, ndim_r);
     constexpr auto hs_lengthss = TO_TUPLE_OF_SEQUENCE(hs_lengthss_impl, ndim_x, ndims_hs_minor);
-    constexpr auto ps_to_rhss_major = TO_TUPLE_OF_SEQUENCE(ps_to_rhss_major_impl, ndim_p, ndims_ps_low);
-    constexpr auto ps_to_rhss_minor = TO_TUPLE_OF_SEQUENCE(ps_to_rhss_minor_impl, ndim_p, ndims_ps_low);
-#endif
+    constexpr auto ps_to_rhss_major =
+        TO_TUPLE_OF_SEQUENCE(ps_to_rhss_major_impl, ndim_p, ndims_ps_low);
+    constexpr auto ps_to_rhss_minor =
+        TO_TUPLE_OF_SEQUENCE(ps_to_rhss_minor_impl, ndim_p, ndims_ps_low);
     constexpr auto ys_to_rhs_major = TO_SEQUENCE(ys_to_rhs_major_impl, ndim_y);
     constexpr auto ys_to_rhs_minor = TO_SEQUENCE(ys_to_rhs_minor_impl, ndim_y);
 
-#if 0
+#if 1
+    return StaticTileDistributionEncoding<remove_cvref_t<decltype(rs_lengths)>,
+                                          remove_cvref_t<decltype(hs_lengthss)>,
+                                          remove_cvref_t<decltype(ps_to_rhss_major)>,
+                                          remove_cvref_t<decltype(ps_to_rhss_minor)>,
+                                          remove_cvref_t<decltype(ys_to_rhs_major)>,
+                                          remove_cvref_t<decltype(ys_to_rhs_minor)>>{};
 #else
     if(ProgramServer::get_block_id() == 0 && ProgramServer::get_thread_id() == 0)
     {
@@ -376,15 +382,15 @@ make_reduce_tile_distribution_encoding(InDstr, Sequence<InReduceDimXs...> reduce
         printf("\n");
 
         printf("hs_lengthss: ");
-        print(hs_lengthss_impl);
+        print(hs_lengthss);
         printf("\n");
 
         printf("ps_to_rhss_major: ");
-        print(ps_to_rhss_major_impl);
+        print(ps_to_rhss_major);
         printf("\n");
 
         printf("ps_to_rhss_minor: ");
-        print(ps_to_rhss_minor_impl);
+        print(ps_to_rhss_minor);
         printf("\n");
 
         printf("ys_to_rhs_major: ");

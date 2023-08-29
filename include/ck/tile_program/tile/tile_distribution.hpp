@@ -41,6 +41,45 @@ struct StaticTileDistributionEncoding
     static constexpr auto ps_to_rhss_minor_ = Ps2RHssMinor{};
     static constexpr auto ys_to_rhs_major_  = Ys2RHsMajor{};
     static constexpr auto ys_to_rhs_minor_  = Ys2RHsMinor{};
+
+    __host__ __device__ void Print() const
+    {
+        printf("StaticTileDistributionEncoding{");
+
+        //
+        printf("NDimX: %d, NDimP: %d, NDimY: %d, ", NDimX, NDimP, NDimY);
+
+        //
+        printf("rs_lengths_: ");
+        print(rs_lengths_);
+        printf(", ");
+
+        //
+        printf("hs_lengthss_: ");
+        print(hs_lengthss_);
+        printf(", ");
+
+        //
+        printf("ps_to_rhss_major_: ");
+        print(ps_to_rhss_major_);
+        printf(", ");
+
+        //
+        printf("ps_to_rhss_minor_: ");
+        print(ps_to_rhss_minor_);
+        printf(", ");
+
+        //
+        printf("ys_to_rhs_major_: ");
+        print(ys_to_rhs_major_);
+        printf(", ");
+
+        //
+        printf("ys_to_rhs_minor_: ");
+        print(ys_to_rhs_minor_);
+
+        printf("}");
+    }
 };
 
 template <typename PsYs2XsAdaptor_,
@@ -102,10 +141,22 @@ struct TileDistribution
 
     __host__ __device__ void Print() const
     {
-        printf("{");
-        printf("TileDistribution, ");
-        ps_ys_to_xs_.Print();
-        ys_to_d_.Print();
+        printf("TileDistribution{");
+
+        //
+        printf("StaticTileDistributionEncoding: ");
+        print(StaticTileDistributionEncoding{});
+        printf(", ");
+
+        //
+        printf("ps_ys_to_xs_: ");
+        print(ps_ys_to_xs_);
+        printf(", ");
+
+        //
+        printf("ys_to_d_: ");
+        print(ys_to_d_);
+
         printf("}");
     }
 };

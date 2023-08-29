@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2018-2023, Advanced Micro Devices, Inc. All rights reserved.
 
+#pragma once
+
 // Macro function
 // convert constexpr Array to Sequence
 #define TO_SEQUENCE(a, n)                                                                      \
-    [&a, &n] {                                                                                 \
+    [a, n] {                                                                                   \
         static_assert(a.Size() >= n, "wrong! out of bound");                                   \
                                                                                                \
         static_assert(n <= 10, "not implemented");                                             \

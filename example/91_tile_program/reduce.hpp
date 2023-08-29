@@ -106,9 +106,15 @@ struct Reduce
         (void)a_block_window;
         (void)f_max;
 
-        ck::tile_program::detail::make_reduce_tile_distribution_encoding(
+        constexpr auto in_dstr = ck::tile_program::detail::make_reduce_tile_distribution_encoding(
             a_block_window.GetTileDistribution().GetStaticTileDistributionEncoding(),
             Sequence<0>{});
+
+        if(ProgramServer::get_block_id() == 0 && ProgramServer::get_thread_id() == 0)
+        {
+            print(in_dstr);
+            printf("\n");
+        }
 #endif
     }
 };
