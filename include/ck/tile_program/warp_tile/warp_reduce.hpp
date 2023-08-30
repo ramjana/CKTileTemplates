@@ -29,7 +29,7 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
 #endif
 
     // in-thread reduction
-#if 0
+#if 1
     constexpr auto in_reduce_dims = Sequence<InReduceDims...>{};
 
     constexpr index_t ndim_in        = InDistributedTensor_::GetNumOfDimension();

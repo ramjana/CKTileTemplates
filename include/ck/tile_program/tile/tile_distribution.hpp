@@ -45,7 +45,8 @@ struct StaticTileDistributionEncoding
     // redundant but useful info
     struct Detail
     {
-        static constexpr index_t ndim_rh_major_ = NDimX + 1;
+        static constexpr index_t ndim_rh_major_    = NDimX + 1;
+        static constexpr index_t ndim_range_major_ = NDimX;
 
         // Array
         static constexpr auto ndims_rhs_minor_ = generate_array(
@@ -61,8 +62,9 @@ struct StaticTileDistributionEncoding
             },
             Number<NDimX + 1>{});
 
+        //
         static constexpr index_t max_ndim_rh_minor_ =
-            container_reduce(ndims_rhs_minor_, math::maximize<index_t>{}, 1);
+            container_reduce(ndims_rhs_minor_, math::maximize<index_t>{}, 0);
 
         // Array of Array
         static constexpr auto rhs_major_minor_to_ys_ = [] {
@@ -77,88 +79,184 @@ struct StaticTileDistributionEncoding
 
             return rhs_major_minor_to_ys_tmp;
         }();
+
+        // Array
+        static constexpr auto ndims_range_minor_ = [] {
+            Array<index_t, NDimX> ndims_range_minor{0};
+
+            for(index_t i = 0; i < NDimY; i++)
+            {
+                const index_t range_major = ys_to_rhs_major_[i] - 1;
+
+                ndims_range_minor(range_major)++;
+            }
+
+            return ndims_range_minor;
+        }();
+
+        //
+        static constexpr index_t max_ndim_range_minor_ =
+            container_reduce(ndims_range_minor_, math::maximize<index_t>{}, 0);
+
+        // Array
+        static constexpr auto rhs_major_minor_to_range_minor_ = [] {
+            Array<Array<index_t, max_ndim_rh_minor_>, ndim_rh_major_>
+                rhs_major_minor_to_range_minor{{-1}};
+
+            static_for<0, ndim_rh_major_, 1>{}([&](auto rh_major) {
+                constexpr index_t ndim_rh_minor = ndims_rhs_minor_[rh_major];
+
+                index_t cnt_ndim_range_minor = 0;
+
+                static_for<0, ndim_rh_minor, 1>{}([&](auto rh_minor) {
+                    constexpr index_t idim_y = rhs_major_minor_to_ys_[rh_major][rh_minor];
+
+                    if(idim_y >= 0)
+                    {
+                        rhs_major_minor_to_range_minor(rh_major)(rh_minor) = cnt_ndim_range_minor;
+
+                        cnt_ndim_range_minor++;
+                    }
+                });
+            });
+
+            return rhs_major_minor_to_range_minor;
+        }();
+
+        // Array
+        static constexpr auto ys_to_range_major_ =
+            generate_array([](auto i) { return ys_to_rhs_major_[i] - 1; }, Number<NDimY>{});
+
+        //
+        static constexpr auto ys_to_range_minor_ = generate_array(
+            [](auto i) {
+                return rhs_major_minor_to_range_minor_[ys_to_rhs_major_[i]][ys_to_rhs_minor_[i]];
+            },
+            Number<NDimY>{});
+
+        //
+        static constexpr auto distributed_ranges_lengthss_ = [] {
+            Array<Array<index_t, max_ndim_range_minor_>, ndim_range_major_>
+                distributed_ranges_lengthss{{-1}};
+
+            static_for<0, NDimY, 1>{}([&](auto i) {
+                const index_t rh_major = ys_to_rhs_major_[i];
+                const index_t rh_minor = ys_to_rhs_minor_[i];
+
+                const index_t h_length = hs_lengthss_[Number<rh_major - 1>{}][rh_minor];
+
+                const index_t range_major = rh_major - 1;
+                const index_t range_minor = rhs_major_minor_to_range_minor_[rh_major][rh_minor];
+
+                distributed_ranges_lengthss(range_major)(range_minor) = h_length;
+            });
+
+            return distributed_ranges_lengthss;
+        }();
+
+        static constexpr auto ndims_distributed_ranges_minor_ = [] {
+            Array<index_t, ndim_range_major_> ndims_distributed_ranges_minor{0};
+
+            static_for<0, NDimY, 1>{}([&](auto i) {
+                const index_t range_major = ys_to_rhs_major_[i] - 1;
+
+                ndims_distributed_ranges_minor(range_major)++;
+            });
+
+            return ndims_distributed_ranges_minor;
+        }();
+
+        __host__ __device__ void Print() const
+        {
+            printf("StaticTileDistributionEncoding::Detail{");
+            //
+            printf("ndim_rh_major_: ");
+            print(ndim_rh_major_);
+            printf(", ");
+            //
+            printf("ndim_range_major_: ");
+            print(ndim_range_major_);
+            printf(", ");
+            //
+            printf("ndims_rhs_minor_: ");
+            print(ndims_rhs_minor_);
+            printf(", ");
+            //
+            printf("ndim_rh_major_: ");
+            print(ndim_rh_major_);
+            printf(", ");
+            //
+            printf("max_ndim_rh_minor_: ");
+            print(max_ndim_rh_minor_);
+            printf(", ");
+            //
+            printf("rhs_major_minor_to_ys_: ");
+            print(rhs_major_minor_to_ys_);
+            printf(", ");
+            //
+            printf("ndims_range_minor_: ");
+            print(ndims_range_minor_);
+            printf(", ");
+            //
+            printf("max_ndim_range_minor_: ");
+            print(max_ndim_range_minor_);
+            printf(", ");
+            //
+            printf("ys_to_range_major_: ");
+            print(ys_to_range_major_);
+            printf(", ");
+            //
+            printf("ys_to_range_minor_: ");
+            print(ys_to_range_minor_);
+            printf(", ");
+            //
+            printf("distributed_ranges_lengthss_: ");
+            print(distributed_ranges_lengthss_);
+            printf(", ");
+            //
+            printf("ndims_distributed_ranges_minor_: ");
+            print(ndims_distributed_ranges_minor_);
+            //
+            printf("}");
+        }
     };
 
     __host__ __device__ void Print() const
     {
         printf("StaticTileDistributionEncoding{");
-
         //
         printf("NDimX: %d, NDimP: %d, NDimY: %d, ", NDimX, NDimP, NDimY);
-
         //
         printf("rs_lengths_: ");
         print(rs_lengths_);
         printf(", ");
-
         //
         printf("hs_lengthss_: ");
         print(hs_lengthss_);
         printf(", ");
-
         //
         printf("ps_to_rhss_major_: ");
         print(ps_to_rhss_major_);
         printf(", ");
-
         //
         printf("ps_to_rhss_minor_: ");
         print(ps_to_rhss_minor_);
         printf(", ");
-
         //
         printf("ys_to_rhs_major_: ");
         print(ys_to_rhs_major_);
         printf(", ");
-
         //
         printf("ys_to_rhs_minor_: ");
         print(ys_to_rhs_minor_);
-
+        printf(", ");
+        //
+        printf("Detail: ");
+        print(Detail{});
+        //
         printf("}");
     }
 };
-
-#if 0
-template <typename StaticTileDistributionEncoding_>
-__host__ __device__ constexpr auto get_distributed_range(StaticTileDistributionEncoding_)
-{
-    using Dstr = remove_cvref_t<StaticTileDistributionEncoding_>;
-
-    // FIXME if fail
-    constexpr index_t max_ndim_rh_minor = 20;
-
-    constexpr index_t ndim_x = Dstr::NDimX;
-    constexpr index_t ndim_y = Dstr::NDimY;
-
-    constexpr auto impl = [&] {
-        Array<index_t, ndim_x> ndims_rh_minor_for_x_ranges{0};
-        Array<Array<index_t, max_ndim_rh_minor>, ndim_x> lengthss_for_x_ranges{{-1}};
-
-        static_for<0, ndim_y, 1>{}([&](auto i) {
-            const index_t rh_major = Dstr::ys_to_rhs_major_[i];
-            const index_t rh_minor = Dstr::ys_to_rhs_minor_[i];
-
-            const index_t idim_x = rh_major - 1;
-
-            lengthss_for_x_ranges(idim_x)(ndims_rh_minor_for_x_ranges[idim_x]) =
-                Dstr::hs_lengthss_[Number<idim_x>{}][Number<rh_minor>{}];
-
-            ndims_rh_minor_for_x_ranges(idim_x)++;
-        });
-
-        return make_tuple(ndims_rh_minor_for_x_ranges, lengthss_for_x_ranges);
-    }();
-
-    constexpr auto ndims_rh_minor_for_x_ranges_impl = impl.template At<0>();
-    constexpr auto lengthss_for_x_ranges_impl       = impl.template At<1>();
-
-    constexpr auto lengthss_for_x_ranges = TO_TUPLE_OF_SEQUENCE(
-        lengthss_for_x_ranges_for_x_ranges_impl, ndim_x, ndims_rh_minor_for_x_ranges_impl);
-
-    return lengthss_for_x_ranges;
-}
-#endif
 
 template <typename PsYs2XsAdaptor_,
           typename Ys2DDescriptor_,
@@ -167,11 +265,10 @@ struct TileDistribution
 {
     using PsYs2XsAdaptor = remove_cvref_t<PsYs2XsAdaptor_>;
     using Ys2DDescriptor = remove_cvref_t<Ys2DDescriptor_>;
+    using DstrEncode     = remove_cvref_t<StaticTileDistributionEncoding_>;
 
     static_assert(PsYs2XsAdaptor::IsStatic() && Ys2DDescriptor::IsStatic(),
                   "wrong! should be static");
-
-    using StaticTileDistributionEncoding = remove_cvref_t<StaticTileDistributionEncoding_>;
 
     static constexpr index_t NDimX = PsYs2XsAdaptor::GetNumOfBottomDimension();
     static constexpr index_t NDimY = Ys2DDescriptor::GetNumOfTopDimension();
@@ -193,9 +290,7 @@ struct TileDistribution
         return generate_tuple(
             [&](auto i) {
                 constexpr index_t x_length =
-                    container_reduce(typename StaticTileDistributionEncoding::HsLengthss{}[i],
-                                     math::multiplies{},
-                                     1);
+                    container_reduce(typename DstrEncode::HsLengthss{}[i], math::multiplies{}, 1);
 
                 return Number<x_length>{};
             },
@@ -209,34 +304,39 @@ struct TileDistribution
 
     __host__ __device__ static constexpr auto GetStaticTileDistributionEncoding()
     {
-        return StaticTileDistributionEncoding{};
+        return DstrEncode{};
     }
 
-#if 0
-    __host__ __device__ static constexpr auto GetDistributedRange()
+    __host__ __device__ static constexpr auto GetDistributedRanges()
     {
-        return get_distributed_range(StaticTileDistributionEncoding{});
+        constexpr auto distributed_ranges_impl = DstrEncode::Detail::distributed_ranges_lengthss_;
+        constexpr index_t ndim_range           = DstrEncode::Detail::ndim_range_major_;
+        constexpr auto ndims_ranges_minor = DstrEncode::Detail::ndims_distributed_ranges_minor_;
+
+        constexpr auto distributed_ranges =
+            TO_TUPLE_OF_SEQUENCE(distributed_ranges_impl, ndim_range, ndims_ranges_minor);
+
+        return distributed_ranges;
     }
 
     // FIXME: it's hacky to get Ys index from Range index
-    template <typename DistributedRangeIdx>
+    template <typename DistributedRangeIndex>
     __host__ __device__ static constexpr auto
     GetYsIndexFromDistributedRangeIndex(DistributedRangeIndex dstr_range_idx)
     {
-        using Dstr = GetStaticTileDistributionEncoding;
-
-        static_assert(IsStatic<DistributedRangeIdx>::value, "wrong!");
+        static_assert(is_static_v<DistributedRangeIndex>, "wrong!");
 
         Array<index_t, NDimY> y_idx;
 
         static_for<0, NDimY, 1>{}([&](auto i) {
-            constexpr index_t h_major = Dstr::ys_to_rhs_major_[i] - 1;
-            constexpr index_t h_minor = Dstr::ys_to_rhs_minor_[i];
+            constexpr index_t range_major = DstrEncode::Detail::ys_to_range_major_[i];
+            constexpr index_t range_minor = DstrEncode::Detail::ys_to_range_minor_[i];
 
-            y_idx(i) = h_major_minor_to_y_idx[h_major][h_minor];
+            y_idx(i) = dstr_range_idx[Number<range_major>{}][Number<range_minor>{}];
         });
+
+        return y_idx;
     }
-#endif
 
     __host__ __device__ static constexpr bool IsStatic()
     {
@@ -246,21 +346,18 @@ struct TileDistribution
     __host__ __device__ void Print() const
     {
         printf("TileDistribution{");
-
         //
         printf("StaticTileDistributionEncoding: ");
-        print(StaticTileDistributionEncoding{});
+        print(DstrEncode{});
         printf(", ");
-
         //
         printf("ps_ys_to_xs_: ");
         print(ps_ys_to_xs_);
         printf(", ");
-
         //
         printf("ys_to_d_: ");
         print(ys_to_d_);
-
+        //
         printf("}");
     }
 };

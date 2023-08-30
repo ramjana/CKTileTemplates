@@ -112,7 +112,13 @@ struct Reduce
 #if 0
         if(ProgramServer::get_block_id() == 0 && ProgramServer::get_thread_id() == 0)
         {
-            print(b_block_tile.GetTileDistribution().GetStaticTileDistributionEncoding());
+            print(load_tile(a_block_window)
+                      .GetTileDistribution()
+                      .GetStaticTileDistributionEncoding());
+            printf("\n");
+
+            print(load_tile(a_block_window).GetDistributedRanges());
+
             printf("\n");
         }
 #endif

@@ -41,9 +41,9 @@ struct StaticDistributedTensor
         return StaticTileDistribution{};
     }
 
-    __host__ __device__ static constexpr auto GetDistributedRange()
+    __host__ __device__ static constexpr auto GetDistributedRanges()
     {
-        return StaticTileDistribution::GetDistributedRange();
+        return StaticTileDistribution::GetDistributedRanges();
     }
 
     __host__ __device__ void Initialize(const DataType& x) { thread_buf_.Initialize(x); }
