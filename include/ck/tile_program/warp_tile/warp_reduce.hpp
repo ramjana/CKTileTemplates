@@ -5,8 +5,8 @@
 
 #include "ck/utility/common_header.hpp"
 
-#include "ck/tile_program/tile/tile_distribution_helper.hpp"
 #include "ck/tile_program/tile/static_distributed_tensor.hpp"
+#include "ck/tile_program/tile/static_tile_distribution_encoding_helper.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -28,8 +28,11 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
     (void)in_tensor;
 #endif
 
+    constexpr auto I0 = Number<0>{};
+    constexpr auto I1 = Number<1>{};
+
     // in-thread reduction
-#if 1
+#if 0
     constexpr auto in_reduce_dims = Sequence<InReduceDims...>{};
 
     constexpr index_t ndim_in        = InDistributedTensor_::GetNumOfDimension();
@@ -62,16 +65,30 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
     }();
 
     constexpr auto in_free_dims = TO_SEQUENCE(is_free_dims_arr, ndim_in_free);
+#endif
 
-    distributed_range_over(in_tensor.GetDistributedRange(), [&](auto in_range_idx) {
-        const auto acc_range_idx = get_container_subset(in_range_idx, in_free_dims);
+#if 1
+    constexpr auto ranges = InDistributedTensor_::GetDistributedRanges();
 
-        const auto in = in_tensor.GetElement(in_range_idx);
-        auto acc      = acc_tensor.GetElement(acc_range_idx);
+    using Range0 = remove_cvref_t<decltype(ranges[I0])>;
+    using Range1 = remove_cvref_t<decltype(ranges[I1])>;
 
-        reduce_func_acc_in(acc, in);
+    // FIXME
+    static_ford<Range0>{}([&](auto range_i0) {
+        constexpr auto acc_range_idx = make_tuple(range_i0);
 
-        acc_tensor.SetElement(acc_range_idx, acc);
+        auto acc = acc_tensor.GetElementFromDistributedRangeIndex(acc_range_idx);
+
+        //  FIXME
+        static_ford<Range1>{}([&](auto range_i1) {
+            constexpr auto in_range_idx = make_tuple(range_i0, range_i1);
+
+            const auto in = in_tensor.GetElementFromDistributedRangeIndex(in_range_idx);
+
+            reduce_func_acc_in(acc, in);
+        });
+
+        acc_tensor.SetElementFromDistributedRangeIndex(acc_range_idx, acc);
     });
 #endif
 

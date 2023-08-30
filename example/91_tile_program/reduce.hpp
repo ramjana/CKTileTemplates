@@ -24,6 +24,7 @@ template <typename ADataType,
           ck::index_t kNPerBlock>
 struct Reduce
 {
+#if 1
     __host__ __device__ static constexpr auto MakeABlockTileDistribution()
     {
         using namespace ck;
@@ -37,6 +38,21 @@ struct Reduce
                                            Sequence<1, 2, 1, 1>,
                                            Sequence<0, 0, 2, 4>>{});
     }
+#else
+    __host__ __device__ static constexpr auto MakeABlockTileDistribution()
+    {
+        using namespace ck;
+        using namespace ck::tile_program;
+
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<>,
+                                           Tuple<Sequence<2, 2, 32>, Sequence<2, 2, 4, 2, 4>>,
+                                           Tuple<Sequence<2, 1>, Sequence<2, 1>>,
+                                           Tuple<Sequence<1, 1>, Sequence<3, 2>>,
+                                           Sequence<2, 1, 2, 2>,
+                                           Sequence<0, 0, 2, 4>>{});
+    }
+#endif
 
     __host__ __device__ void operator()(
         ProgramServer& ps, const ADataType* p_a, BDataType* p_b, ck::index_t M, ck::index_t N) const
@@ -65,7 +81,11 @@ struct Reduce
                              {iM, 0},
                              MakeABlockTileDistribution());
 
-        const auto f_max = [](AccDataType acc, ADataType a) { return acc > a ? acc : a; };
+#if 0
+        const auto f_max = [](AccDataType& acc, const ADataType& a) { acc = acc > a ? acc : a; };
+#else
+        const auto f_max = [](AccDataType& acc, const ADataType& a) { acc = max(acc, a); };
+#endif
 
         constexpr auto reduce_dims = Sequence<1>{};
 

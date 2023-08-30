@@ -105,11 +105,40 @@ struct StaticDistributedTensor
         });
     }
 
-#if 0
-    //
-    template<typename DistributedRangeIndex>
-    __host__ __device__ void GetElementFromDistributedRangeIndex(DistributdRangeIndex) const
+#if 1
+    template <index_t... Ys>
+    __host__ __device__ auto GetElementFromYsIndex(Sequence<Ys...> idx_ys) const
     {
+        return thread_buf_[Number<ThreadTensorDesc{}.CalculateOffset(idx_ys)>{}];
+    }
+
+    template <index_t... Ys>
+    __host__ __device__ void SetElementFromYsIndex(Sequence<Ys...> idx_ys, const DataType& v)
+    {
+        thread_buf_(Number<ThreadTensorDesc{}.CalculateOffset(idx_ys)>{}) = v;
+    }
+
+    template <typename DistributedRangeIndex>
+    __host__ __device__ auto GetElementFromDistributedRangeIndex(DistributedRangeIndex) const
+    {
+        static_assert(is_static_v<DistributedRangeIndex>, "wrong!");
+
+        constexpr auto y_idx =
+            GetTileDistribution().GetYsIndexFromDistributedRangeIndex(DistributedRangeIndex{});
+
+        return GetElementFromYsIndex(y_idx);
+    }
+
+    template <typename DistributedRangeIndex>
+    __host__ __device__ void SetElementFromDistributedRangeIndex(DistributedRangeIndex,
+                                                                 const DataType& v)
+    {
+        static_assert(is_static_v<DistributedRangeIndex>, "wrong!");
+
+        constexpr auto y_idx =
+            GetTileDistribution().GetYsIndexFromDistributedRangeIndex(DistributedRangeIndex{});
+
+        return SetElementFromYsIndex(y_idx, v);
     }
 #endif
 

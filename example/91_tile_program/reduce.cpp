@@ -39,9 +39,9 @@ void reference_reduce(const Tensor<ADataType>& a_m_n, Tensor<BDataType>& b_m)
 
 int main(int argc, char* argv[])
 {
-    using ADataType   = ck::half_t;
+    using ADataType   = float;
     using AccDataType = float;
-    using BDataType   = ck::half_t;
+    using BDataType   = float;
 
     ck::index_t M = 3328;
     ck::index_t N = 4096;
