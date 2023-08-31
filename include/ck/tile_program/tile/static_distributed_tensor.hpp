@@ -117,25 +117,25 @@ struct StaticDistributedTensor
         thread_buf_(Number<ThreadTensorDesc{}.CalculateOffset(idx_ys)>{}) = v;
     }
 
-    template <typename TileDistributedIndex_>
-    __host__ __device__ auto GetElementFromTileDistributedIndex(TileDistributedIndex_) const
+    template <typename TileDistributedIndices>
+    __host__ __device__ auto GetElementFromTileDistributedIndices(TileDistributedIndices) const
     {
-        static_assert(is_static_v<TileDistributedIndex_>, "wrong!");
+        static_assert(is_static_v<TileDistributedIndices>, "wrong!");
 
         constexpr auto y_idx =
-            GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndex_{});
+            GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndices{});
 
         return GetElementFromYsIndex(y_idx);
     }
 
-    template <typename TileDistributedIndex_>
-    __host__ __device__ void SetElementFromTileDistributedIndex(TileDistributedIndex_,
-                                                                const DataType& v)
+    template <typename TileDistributedIndices>
+    __host__ __device__ void SetElementFromTileDistributedIndices(TileDistributedIndices,
+                                                                  const DataType& v)
     {
-        static_assert(is_static_v<TileDistributedIndex_>, "wrong!");
+        static_assert(is_static_v<TileDistributedIndices>, "wrong!");
 
         constexpr auto y_idx =
-            GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndex_{});
+            GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndices{});
 
         return SetElementFromYsIndex(y_idx, v);
     }
