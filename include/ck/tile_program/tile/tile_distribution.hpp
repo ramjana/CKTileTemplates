@@ -14,6 +14,40 @@
 namespace ck {
 namespace tile_program {
 
+// distributed span
+template <index_t... PartialHsLengths>
+struct TileDistributedSpan
+{
+    using Impl = Sequence<PartialHsLengths...>;
+
+    static constexpr auto impl_ = Impl{};
+};
+
+// distributed index
+template <index_t... PartialHsIndices>
+struct TileDistributedIndex
+{
+    using Impl = Sequence<PartialHsIndices...>;
+
+    static constexpr auto impl_ = Impl{};
+};
+
+namespace detail {
+
+template <index_t... Is>
+__host__ __device__ constexpr auto make_tile_distributed_span(Sequence<Is...>)
+{
+    return TileDistributedSpan<Is...>{};
+}
+
+template <index_t... Is>
+__host__ __device__ constexpr auto make_tile_distributed_index(Sequence<Is...>)
+{
+    return TileDistributedIndex<Is...>{};
+}
+
+} // namespace detail
+
 template <typename PsYs2XsAdaptor_,
           typename Ys2DDescriptor_,
           typename StaticTileDistributionEncoding_>
@@ -63,44 +97,47 @@ struct TileDistribution
         return DstrEncode{};
     }
 
-    __host__ __device__ static constexpr auto GetDistributedRanges()
+    __host__ __device__ static constexpr auto GetDistributedSpans()
     {
-        constexpr auto distributed_ranges_impl = DstrEncode::Detail::distributed_ranges_lengthss_;
-        constexpr index_t ndim_range           = DstrEncode::Detail::ndim_range_major_;
-        constexpr auto ndims_ranges_minor = DstrEncode::Detail::ndims_distributed_ranges_minor_;
+        constexpr auto distributed_spans_impl = DstrEncode::Detail::distributed_spans_lengthss_;
+        constexpr auto ndims_spans_minor      = DstrEncode::Detail::ndims_distributed_spans_minor_;
 
-        constexpr auto distributed_ranges =
-            TO_TUPLE_OF_SEQUENCE(distributed_ranges_impl, ndim_range, ndims_ranges_minor);
+        return generate_tuple(
+            [&](auto i) {
+                constexpr auto span_impl          = distributed_spans_impl[i];
+                constexpr index_t ndim_span_minor = ndims_spans_minor[i];
 
-        return distributed_ranges;
+                constexpr auto span = TO_SEQUENCE(span_impl, ndim_span_minor);
+
+#if 0
+                return detail::make_tile_distributed_span(span))>>{};
+#else
+                return span;
+#endif
+            },
+            Number<NDimX>{});
     }
 
-    // FIXME: it's hacky to get Ys index from Range index
-    // return is Sequence<...>
-    template <typename DistributedRangeIndex>
-    __host__ __device__ static constexpr auto
-        GetYsIndexFromDistributedRangeIndex(DistributedRangeIndex)
+    // FIXME: it's hacky to get Y index from Distributed-Index
+    template <typename DistributedIndices>
+    __host__ __device__ static constexpr auto GetYIndicesFromDistributedIndices(DistributedIndices)
     {
-        static_assert(is_static_v<DistributedRangeIndex>, "wrong!");
-
-        constexpr auto y_idx_arr = [] {
-            Array<index_t, NDimY> y_idx;
+        constexpr auto ys_idx_arr = [] {
+            Array<index_t, NDimY> ys_idx;
 
             static_for<0, NDimY, 1>{}([&](auto i) {
-                constexpr index_t range_major = DstrEncode::Detail::ys_to_range_major_[i];
-                constexpr index_t range_minor = DstrEncode::Detail::ys_to_range_minor_[i];
+                constexpr index_t span_major = DstrEncode::Detail::ys_to_span_major_[i];
+                constexpr index_t span_minor = DstrEncode::Detail::ys_to_span_minor_[i];
 
-                y_idx(i) = DistributedRangeIndex{}[Number<range_major>{}][Number<range_minor>{}];
+                ys_idx(i) = DistributedIndices{}[Number<span_major>{}][Number<span_minor>{}];
             });
 
-            return y_idx;
+            return ys_idx;
         }();
 
         constexpr index_t ndim_y = NDimY;
 
-        constexpr auto y_idx_seq = TO_SEQUENCE(y_idx_arr, ndim_y);
-
-        return y_idx_seq;
+        return TO_SEQUENCE(ys_idx_arr, ndim_y);
     }
 
     __host__ __device__ static constexpr bool IsStatic()

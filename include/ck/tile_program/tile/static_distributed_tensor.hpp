@@ -41,9 +41,9 @@ struct StaticDistributedTensor
         return StaticTileDistribution{};
     }
 
-    __host__ __device__ static constexpr auto GetDistributedRanges()
+    __host__ __device__ static constexpr auto GetDistributedSpans()
     {
-        return StaticTileDistribution::GetDistributedRanges();
+        return StaticTileDistribution::GetDistributedSpans();
     }
 
     __host__ __device__ void Initialize(const DataType& x) { thread_buf_.Initialize(x); }
@@ -118,25 +118,25 @@ struct StaticDistributedTensor
         thread_buf_(Number<ThreadTensorDesc{}.CalculateOffset(idx_ys)>{}) = v;
     }
 
-    template <typename DistributedRangeIndex>
-    __host__ __device__ auto GetElementFromDistributedRangeIndex(DistributedRangeIndex) const
+    template <typename TileDistributedIndex_>
+    __host__ __device__ auto GetElementFromTileDistributedIndex(TileDistributedIndex_) const
     {
-        static_assert(is_static_v<DistributedRangeIndex>, "wrong!");
+        static_assert(is_static_v<TileDistributedIndex_>, "wrong!");
 
         constexpr auto y_idx =
-            GetTileDistribution().GetYsIndexFromDistributedRangeIndex(DistributedRangeIndex{});
+            GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndex_{});
 
         return GetElementFromYsIndex(y_idx);
     }
 
-    template <typename DistributedRangeIndex>
-    __host__ __device__ void SetElementFromDistributedRangeIndex(DistributedRangeIndex,
-                                                                 const DataType& v)
+    template <typename TileDistributedIndex_>
+    __host__ __device__ void SetElementFromTileDistributedIndex(TileDistributedIndex_,
+                                                                const DataType& v)
     {
-        static_assert(is_static_v<DistributedRangeIndex>, "wrong!");
+        static_assert(is_static_v<TileDistributedIndex_>, "wrong!");
 
         constexpr auto y_idx =
-            GetTileDistribution().GetYsIndexFromDistributedRangeIndex(DistributedRangeIndex{});
+            GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndex_{});
 
         return SetElementFromYsIndex(y_idx, v);
     }

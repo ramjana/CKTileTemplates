@@ -68,27 +68,27 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
 #endif
 
 #if 1
-    constexpr auto ranges = InDistributedTensor_::GetDistributedRanges();
+    constexpr auto spans = InDistributedTensor_::GetDistributedSpans();
 
-    using Range0 = remove_cvref_t<decltype(ranges[I0])>;
-    using Range1 = remove_cvref_t<decltype(ranges[I1])>;
+    using Span0 = remove_cvref_t<decltype(spans[I0])>;
+    using Span1 = remove_cvref_t<decltype(spans[I1])>;
 
     // FIXME
-    static_ford<Range0>{}([&](auto range_i0) {
-        constexpr auto acc_range_idx = make_tuple(range_i0);
+    static_ford<Span0>{}([&](auto span_i0) {
+        constexpr auto acc_span_idx = make_tuple(span_i0);
 
-        auto acc = acc_tensor.GetElementFromDistributedRangeIndex(acc_range_idx);
+        auto acc = acc_tensor.GetElementFromTileDistributedIndex(acc_span_idx);
 
         //  FIXME
-        static_ford<Range1>{}([&](auto range_i1) {
-            constexpr auto in_range_idx = make_tuple(range_i0, range_i1);
+        static_ford<Span1>{}([&](auto span_i1) {
+            constexpr auto in_span_idx = make_tuple(span_i0, span_i1);
 
-            const auto in = in_tensor.GetElementFromDistributedRangeIndex(in_range_idx);
+            const auto in = in_tensor.GetElementFromTileDistributedIndex(in_span_idx);
 
             reduce_func_acc_in(acc, in);
         });
 
-        acc_tensor.SetElementFromDistributedRangeIndex(acc_range_idx, acc);
+        acc_tensor.SetElementFromTileDistributedIndex(acc_span_idx, acc);
     });
 #endif
 

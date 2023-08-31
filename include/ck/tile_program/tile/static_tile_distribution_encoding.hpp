@@ -42,8 +42,8 @@ struct StaticTileDistributionEncoding
     // redundant but useful info
     struct Detail
     {
-        static constexpr index_t ndim_rh_major_    = NDimX + 1;
-        static constexpr index_t ndim_range_major_ = NDimX;
+        static constexpr index_t ndim_rh_major_   = NDimX + 1;
+        static constexpr index_t ndim_span_major_ = NDimX;
 
         // Array
         static constexpr auto ndims_rhs_minor_ = generate_array(
@@ -78,63 +78,63 @@ struct StaticTileDistributionEncoding
         }();
 
         // Array
-        static constexpr auto ndims_range_minor_ = [] {
-            Array<index_t, NDimX> ndims_range_minor{0};
+        static constexpr auto ndims_span_minor_ = [] {
+            Array<index_t, NDimX> ndims_span_minor{0};
 
             for(index_t i = 0; i < NDimY; i++)
             {
-                const index_t range_major = ys_to_rhs_major_[i] - 1;
+                const index_t span_major = ys_to_rhs_major_[i] - 1;
 
-                ndims_range_minor(range_major)++;
+                ndims_span_minor(span_major)++;
             }
 
-            return ndims_range_minor;
+            return ndims_span_minor;
         }();
 
         //
-        static constexpr index_t max_ndim_range_minor_ =
-            container_reduce(ndims_range_minor_, math::maximize<index_t>{}, 0);
+        static constexpr index_t max_ndim_span_minor_ =
+            container_reduce(ndims_span_minor_, math::maximize<index_t>{}, 0);
 
         // Array
-        static constexpr auto rhs_major_minor_to_range_minor_ = [] {
-            Array<Array<index_t, max_ndim_rh_minor_>, ndim_rh_major_>
-                rhs_major_minor_to_range_minor{{-1}};
+        static constexpr auto rhs_major_minor_to_span_minor_ = [] {
+            Array<Array<index_t, max_ndim_rh_minor_>, ndim_rh_major_> rhs_major_minor_to_span_minor{
+                {-1}};
 
             static_for<0, ndim_rh_major_, 1>{}([&](auto rh_major) {
                 constexpr index_t ndim_rh_minor = ndims_rhs_minor_[rh_major];
 
-                index_t cnt_ndim_range_minor = 0;
+                index_t cnt_ndim_span_minor = 0;
 
                 static_for<0, ndim_rh_minor, 1>{}([&](auto rh_minor) {
                     constexpr index_t idim_y = rhs_major_minor_to_ys_[rh_major][rh_minor];
 
                     if(idim_y >= 0)
                     {
-                        rhs_major_minor_to_range_minor(rh_major)(rh_minor) = cnt_ndim_range_minor;
+                        rhs_major_minor_to_span_minor(rh_major)(rh_minor) = cnt_ndim_span_minor;
 
-                        cnt_ndim_range_minor++;
+                        cnt_ndim_span_minor++;
                     }
                 });
             });
 
-            return rhs_major_minor_to_range_minor;
+            return rhs_major_minor_to_span_minor;
         }();
 
         // Array
-        static constexpr auto ys_to_range_major_ =
+        static constexpr auto ys_to_span_major_ =
             generate_array([](auto i) { return ys_to_rhs_major_[i] - 1; }, Number<NDimY>{});
 
         //
-        static constexpr auto ys_to_range_minor_ = generate_array(
+        static constexpr auto ys_to_span_minor_ = generate_array(
             [](auto i) {
-                return rhs_major_minor_to_range_minor_[ys_to_rhs_major_[i]][ys_to_rhs_minor_[i]];
+                return rhs_major_minor_to_span_minor_[ys_to_rhs_major_[i]][ys_to_rhs_minor_[i]];
             },
             Number<NDimY>{});
 
         //
-        static constexpr auto distributed_ranges_lengthss_ = [] {
-            Array<Array<index_t, max_ndim_range_minor_>, ndim_range_major_>
-                distributed_ranges_lengthss{{-1}};
+        static constexpr auto distributed_spans_lengthss_ = [] {
+            Array<Array<index_t, max_ndim_span_minor_>, ndim_span_major_>
+                distributed_spans_lengthss{{-1}};
 
             static_for<0, NDimY, 1>{}([&](auto i) {
                 const index_t rh_major = ys_to_rhs_major_[i];
@@ -142,25 +142,25 @@ struct StaticTileDistributionEncoding
 
                 const index_t h_length = hs_lengthss_[Number<rh_major - 1>{}][rh_minor];
 
-                const index_t range_major = rh_major - 1;
-                const index_t range_minor = rhs_major_minor_to_range_minor_[rh_major][rh_minor];
+                const index_t span_major = rh_major - 1;
+                const index_t span_minor = rhs_major_minor_to_span_minor_[rh_major][rh_minor];
 
-                distributed_ranges_lengthss(range_major)(range_minor) = h_length;
+                distributed_spans_lengthss(span_major)(span_minor) = h_length;
             });
 
-            return distributed_ranges_lengthss;
+            return distributed_spans_lengthss;
         }();
 
-        static constexpr auto ndims_distributed_ranges_minor_ = [] {
-            Array<index_t, ndim_range_major_> ndims_distributed_ranges_minor{0};
+        static constexpr auto ndims_distributed_spans_minor_ = [] {
+            Array<index_t, ndim_span_major_> ndims_distributed_spans_minor{0};
 
             static_for<0, NDimY, 1>{}([&](auto i) {
-                const index_t range_major = ys_to_rhs_major_[i] - 1;
+                const index_t span_major = ys_to_rhs_major_[i] - 1;
 
-                ndims_distributed_ranges_minor(range_major)++;
+                ndims_distributed_spans_minor(span_major)++;
             });
 
-            return ndims_distributed_ranges_minor;
+            return ndims_distributed_spans_minor;
         }();
 
         __host__ __device__ void Print() const
@@ -171,8 +171,8 @@ struct StaticTileDistributionEncoding
             print(ndim_rh_major_);
             printf(", ");
             //
-            printf("ndim_range_major_: ");
-            print(ndim_range_major_);
+            printf("ndim_span_major_: ");
+            print(ndim_span_major_);
             printf(", ");
             //
             printf("ndims_rhs_minor_: ");
@@ -191,28 +191,28 @@ struct StaticTileDistributionEncoding
             print(rhs_major_minor_to_ys_);
             printf(", ");
             //
-            printf("ndims_range_minor_: ");
-            print(ndims_range_minor_);
+            printf("ndims_span_minor_: ");
+            print(ndims_span_minor_);
             printf(", ");
             //
-            printf("max_ndim_range_minor_: ");
-            print(max_ndim_range_minor_);
+            printf("max_ndim_span_minor_: ");
+            print(max_ndim_span_minor_);
             printf(", ");
             //
-            printf("ys_to_range_major_: ");
-            print(ys_to_range_major_);
+            printf("ys_to_span_major_: ");
+            print(ys_to_span_major_);
             printf(", ");
             //
-            printf("ys_to_range_minor_: ");
-            print(ys_to_range_minor_);
+            printf("ys_to_span_minor_: ");
+            print(ys_to_span_minor_);
             printf(", ");
             //
-            printf("distributed_ranges_lengthss_: ");
-            print(distributed_ranges_lengthss_);
+            printf("distributed_spans_lengthss_: ");
+            print(distributed_spans_lengthss_);
             printf(", ");
             //
-            printf("ndims_distributed_ranges_minor_: ");
-            print(ndims_distributed_ranges_minor_);
+            printf("ndims_distributed_spans_minor_: ");
+            print(ndims_distributed_spans_minor_);
             //
             printf("}");
         }
