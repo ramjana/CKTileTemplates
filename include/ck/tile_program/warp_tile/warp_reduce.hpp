@@ -7,6 +7,7 @@
 
 #include "ck/tile_program/tile/static_distributed_tensor.hpp"
 #include "ck/tile_program/tile/static_tile_distribution_encoding_helper.hpp"
+#include "ck/tile_program/tile/distributed_tile_sweep.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -67,22 +68,16 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
     constexpr auto in_free_dims = TO_SEQUENCE(is_free_dims_arr, ndim_in_free);
 #endif
 
-#if 1
     constexpr auto spans = InDistributedTensor_::GetDistributedSpans();
 
-    using Span0 = remove_cvref_t<decltype(spans[I0])>;
-    using Span1 = remove_cvref_t<decltype(spans[I1])>;
-
     // FIXME
-    static_ford<typename Span0::Impl>{}([&](auto dstr_idx_impl_i0) {
-        constexpr auto dstr_idx_i0  = detail::make_tile_distributed_index(dstr_idx_impl_i0);
+    sweep_tile_span(spans[I0], [&](auto dstr_idx_i0) {
         constexpr auto acc_dstr_idx = make_tuple(dstr_idx_i0);
 
         auto acc = acc_tensor.GetElementFromTileDistributedIndices(acc_dstr_idx);
 
-        //  FIXME
-        static_ford<typename Span1::Impl>{}([&](auto dstr_idx_impl_i1) {
-            constexpr auto dstr_idx_i1 = detail::make_tile_distributed_index(dstr_idx_impl_i1);
+        // FIXME
+        sweep_tile_span(spans[I1], [&](auto dstr_idx_i1) {
             constexpr auto in_dstr_idx = make_tuple(dstr_idx_i0, dstr_idx_i1);
 
             const auto in = in_tensor.GetElementFromTileDistributedIndices(in_dstr_idx);
@@ -92,7 +87,6 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
 
         acc_tensor.SetElementFromTileDistributedIndices(acc_dstr_idx, acc);
     });
-#endif
 
     // cross-thread but in-warp reduction
 #if 0
