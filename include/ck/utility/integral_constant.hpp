@@ -13,7 +13,7 @@ struct integral_constant
     typedef integral_constant type;
     __host__ __device__ constexpr operator value_type() const noexcept { return value; }
     __host__ __device__ constexpr value_type operator()() const noexcept { return value; }
-
+    __host__ __device__ static constexpr bool IsStatic() { return true; };
     __host__ __device__ void Print() const { print(v); }
 };
 

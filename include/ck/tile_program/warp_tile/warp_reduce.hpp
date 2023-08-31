@@ -74,21 +74,23 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
     using Span1 = remove_cvref_t<decltype(spans[I1])>;
 
     // FIXME
-    static_ford<Span0>{}([&](auto span_i0) {
-        constexpr auto acc_span_idx = make_tuple(span_i0);
+    static_ford<typename Span0::Impl>{}([&](auto dstr_idx_impl_i0) {
+        constexpr auto dstr_idx_i0  = detail::make_tile_distributed_index(dstr_idx_impl_i0);
+        constexpr auto acc_dstr_idx = make_tuple(dstr_idx_i0);
 
-        auto acc = acc_tensor.GetElementFromTileDistributedIndex(acc_span_idx);
+        auto acc = acc_tensor.GetElementFromTileDistributedIndex(acc_dstr_idx);
 
         //  FIXME
-        static_ford<Span1>{}([&](auto span_i1) {
-            constexpr auto in_span_idx = make_tuple(span_i0, span_i1);
+        static_ford<typename Span1::Impl>{}([&](auto dstr_idx_impl_i1) {
+            constexpr auto dstr_idx_i1 = detail::make_tile_distributed_index(dstr_idx_impl_i1);
+            constexpr auto in_dstr_idx = make_tuple(dstr_idx_i0, dstr_idx_i1);
 
-            const auto in = in_tensor.GetElementFromTileDistributedIndex(in_span_idx);
+            const auto in = in_tensor.GetElementFromTileDistributedIndex(in_dstr_idx);
 
             reduce_func_acc_in(acc, in);
         });
 
-        acc_tensor.SetElementFromTileDistributedIndex(acc_span_idx, acc);
+        acc_tensor.SetElementFromTileDistributedIndex(acc_dstr_idx, acc);
     });
 #endif
 

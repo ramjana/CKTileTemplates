@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "ck/utility/is_static.hpp"
+#include "ck/utility/print.hpp"
 #include "ck/utility/integral_constant.hpp"
 #include "ck/utility/sequence.hpp"
 #include "ck/utility/type.hpp"
@@ -206,6 +208,17 @@ struct Tuple : detail::TupleImpl<typename arithmetic_sequence_gen<0, sizeof...(X
         return *this;
     }
 
+    __host__ __device__ static constexpr bool IsStatic()
+    {
+        bool flag = true;
+
+        static_for<0, sizeof...(Xs), 1>{}([&flag](auto i) {
+            flag &= is_static_v<remove_cvref_t<type_pack_element<i.value, Xs...>>>;
+        });
+
+        return flag;
+    }
+
     // FIXME: remove
     __host__ __device__ static constexpr bool IsStaticBuffer() { return true; }
 
@@ -239,6 +252,9 @@ struct Tuple<>
         return *this;
     }
 
+    __host__ __device__ static constexpr bool IsStatic() { return true; }
+
+    // FIXME: remove
     __host__ __device__ static constexpr bool IsStaticBuffer() { return true; }
 };
 

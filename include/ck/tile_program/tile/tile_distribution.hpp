@@ -21,6 +21,8 @@ struct TileDistributedSpan
     using Impl = Sequence<PartialHsLengths...>;
 
     static constexpr auto impl_ = Impl{};
+
+    __host__ __device__ static constexpr bool IsStatic() { return true; }
 };
 
 // distributed index
@@ -30,6 +32,8 @@ struct TileDistributedIndex
     using Impl = Sequence<PartialHsIndices...>;
 
     static constexpr auto impl_ = Impl{};
+
+    __host__ __device__ static constexpr bool IsStatic() { return true; }
 };
 
 namespace detail {
@@ -109,11 +113,7 @@ struct TileDistribution
 
                 constexpr auto span = TO_SEQUENCE(span_impl, ndim_span_minor);
 
-#if 0
-                return detail::make_tile_distributed_span(span))>>{};
-#else
-                return span;
-#endif
+                return detail::make_tile_distributed_span(span);
             },
             Number<NDimX>{});
     }
@@ -129,7 +129,9 @@ struct TileDistribution
                 constexpr index_t span_major = DstrEncode::Detail::ys_to_span_major_[i];
                 constexpr index_t span_minor = DstrEncode::Detail::ys_to_span_minor_[i];
 
-                ys_idx(i) = DistributedIndices{}[Number<span_major>{}][Number<span_minor>{}];
+                constexpr auto dstr_index = DistributedIndices{}[Number<span_major>{}];
+
+                ys_idx(i) = dstr_index.impl_[span_minor];
             });
 
             return ys_idx;

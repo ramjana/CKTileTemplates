@@ -180,6 +180,8 @@ struct Sequence
         return Sequence<f(Is)...>{};
     }
 
+    __host__ __device__ static constexpr bool IsStatic() { return true; };
+
     __host__ __device__ static void Print()
     {
         printf("Sequence{size: %d, data: [", Size());

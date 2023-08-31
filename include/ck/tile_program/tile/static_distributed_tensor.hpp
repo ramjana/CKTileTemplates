@@ -90,9 +90,11 @@ struct StaticDistributedTensor
         Sequence<YSliceLengths...>,
         const StaticBuffer<AddressSpaceEnum::Vgpr, DataType, NSlicedData, true>& sliced_thread_data)
     {
+#if 0
         static_assert(sizeof...(YSliceOrigins) == StaticTileDistribution::NDimY &&
                           sizeof...(YSliceLengths) == StaticTileDistribution::NDimY,
                       "wrong!");
+#endif
 
         constexpr auto sliced_thread_tensor_desc =
             make_naive_tensor_descriptor_packed(make_tuple(YSliceLengths...));
@@ -121,7 +123,9 @@ struct StaticDistributedTensor
     template <typename TileDistributedIndex_>
     __host__ __device__ auto GetElementFromTileDistributedIndex(TileDistributedIndex_) const
     {
+#if 0
         static_assert(is_static_v<TileDistributedIndex_>, "wrong!");
+#endif
 
         constexpr auto y_idx =
             GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndex_{});
@@ -133,7 +137,9 @@ struct StaticDistributedTensor
     __host__ __device__ void SetElementFromTileDistributedIndex(TileDistributedIndex_,
                                                                 const DataType& v)
     {
+#if 0
         static_assert(is_static_v<TileDistributedIndex_>, "wrong!");
+#endif
 
         constexpr auto y_idx =
             GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndex_{});

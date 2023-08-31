@@ -77,6 +77,8 @@ struct Array
         return *this;
     }
 
+    __host__ __device__ static constexpr bool IsStatic() { return is_static_v<TData>; };
+
     __host__ __device__ void Print() const
     {
         printf("Array{size: %d, data: [", NSize);
@@ -105,6 +107,8 @@ struct Array<TData, 0>
     __host__ __device__ constexpr Array() {}
 
     __host__ __device__ static constexpr index_t Size() { return 0; }
+
+    __host__ __device__ static constexpr bool IsStatic() { return is_static_v<TData>; };
 
     __host__ __device__ void Print() const { printf("Array{size: 0, data: []}"); }
 };

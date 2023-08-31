@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2018-2023, Advanced Micro Devices, Inc. All rights reserved.
 
-#ifndef CK_STATICALLY_INDEXED_ARRAY_HPP
-#define CK_STATICALLY_INDEXED_ARRAY_HPP
+#pragma once
 
 #include "functional2.hpp"
 #include "sequence.hpp"
@@ -58,4 +57,3 @@ __host__ __device__ constexpr auto make_statically_indexed_array()
 }
 
 } // namespace ck
-#endif

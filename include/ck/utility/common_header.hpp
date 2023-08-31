@@ -5,6 +5,8 @@
 
 #include "ck/ck.hpp"
 #include "ck/utility/static_assert.hpp"
+#include "ck/utility/remove_cvref.hpp"
+#include "ck/utility/is_static.hpp"
 #include "ck/utility/print.hpp"
 #include "ck/utility/array.hpp"
 #include "ck/utility/container_helper.hpp"
@@ -32,7 +34,6 @@
 #include "ck/utility/type_convert.hpp"
 #include "ck/utility/magic_division.hpp"
 #include "ck/utility/c_style_pointer_cast.hpp"
-#include "ck/utility/is_static.hpp"
 #include "ck/utility/transpose_vectors.hpp"
 #include "ck/utility/inner_product.hpp"
 #include "ck/utility/thread_group.hpp"
