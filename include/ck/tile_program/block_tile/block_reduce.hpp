@@ -11,12 +11,12 @@
 
 namespace ck {
 namespace tile_program {
-namespace warp {
+namespace block {
 
 // synchronize reduce result (cross lane reduction and broadcast on replicated dimension)
-template <typename AccDistributedTensor_, typename ReduceFuncIn>
-__device__ void warp_tile_reduce_sync(AccDistributedTensor_& acc_tensor,
-                                      const ReduceFuncIn& reduce_func_in)
+template <typename AccDistributedTensor_, typename ReduceFunc>
+__device__ void block_tile_reduce_sync(AccDistributedTensor_& acc_tensor,
+                                       const ReduceFunc& reduce_func)
 {
     using Dstr             = typename AccDistributedTensor_::StaticTileDistribution;
     using DstrEncode       = typename Dstr::DstrEncode;
@@ -27,8 +27,7 @@ __device__ void warp_tile_reduce_sync(AccDistributedTensor_& acc_tensor,
 
     constexpr index_t idim_p_lane = NDimP - 1;
 
-    // FIXME: this is for block reduce
-    const auto ps_idx = make_array<index_t>(0, get_lane_id());
+    const auto ps_idx = make_array<index_t>(get_block_id(), get_lane_id());
     const auto rs_idx = acc_tensor.GetTileDistribution().CalculateRsIndexFromPsIndex(ps_idx);
 
     constexpr index_t thread_buf_size = AccDistributedTensor_::GetThreadBufferSize();
@@ -63,7 +62,7 @@ __device__ void warp_tile_reduce_sync(AccDistributedTensor_& acc_tensor,
                     const auto v_remote = warp_shuffle_down(v_local, lid_delta);
 
                     // reduce
-                    v_local = reduce_func_in(v_local, v_remote);
+                    v_local = reduce_func(v_local, v_remote);
                 });
             }
         });
@@ -111,18 +110,12 @@ __device__ void warp_tile_reduce_sync(AccDistributedTensor_& acc_tensor,
 template <typename AccDistributedTensor_,
           typename InDistributedTensor_,
           index_t... InReduceDims,
-          typename ReduceFuncIn>
-__device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tensor,
-                                        const InDistributedTensor_& in_tensor,
-                                        Sequence<InReduceDims...>,
-                                        const ReduceFuncIn& reduce_func_in)
+          typename ReduceFunc>
+__device__ void block_tile_reduce(AccDistributedTensor_& acc_tensor,
+                                  const InDistributedTensor_& in_tensor,
+                                  Sequence<InReduceDims...>,
+                                  const ReduceFunc& reduce_func)
 {
-#if 1
-    (void)acc_tensor;
-    (void)reduce_func_in;
-    (void)in_tensor;
-#endif
-
     constexpr auto I0 = Number<0>{};
     constexpr auto I1 = Number<1>{};
 
@@ -159,7 +152,7 @@ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tensor,
     }();
 
     constexpr auto in_free_dims = TO_SEQUENCE(is_free_dims_arr, ndim_in_free);
-#endif
+#else
 
     constexpr auto spans = InDistributedTensor_::GetDistributedSpans();
 
@@ -176,27 +169,23 @@ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tensor,
 
             const auto in = in_tensor.GetElementFromTileDistributedIndices(in_dstr_idx);
 
-            acc = reduce_func_in(acc, in);
+            acc = reduce_func(acc, in);
         });
 
         acc_tensor.SetElementFromTileDistributedIndices(acc_dstr_idx, acc);
     });
-
-#if 0
-    // cross-thread but in-warp reduction
-    warp_tile_reduce_sync(acc_tensor, reduce_func_in);
 #endif
 }
 
 template <typename AccDataType_,
           typename InDistributedTensor_,
           index_t... InReduceDims,
-          typename ReduceFuncIn,
+          typename ReduceFunc,
           typename InDataType_>
-__host__ __device__ auto warp_tile_reduce_in(const InDistributedTensor_& in_tensor,
-                                             Sequence<InReduceDims...> in_reduce_dims,
-                                             const ReduceFuncIn& reduce_func_in,
-                                             const InDataType_& reduce_init)
+__host__ __device__ auto block_tile_reduce(const InDistributedTensor_& in_tensor,
+                                           Sequence<InReduceDims...> in_reduce_dims,
+                                           const ReduceFunc& reduce_func,
+                                           const InDataType_& reduce_init)
 {
     using InDataType  = typename InDistributedTensor_::DataType;
     using AccDataType = remove_cvref_t<AccDataType_>;
@@ -216,7 +205,7 @@ __host__ __device__ auto warp_tile_reduce_in(const InDistributedTensor_& in_tens
                            acc_tensor);
 
     // warp reduce
-    warp_tile_reduce_acc_in(acc_tensor, in_tensor, in_reduce_dims, reduce_func_in);
+    block_tile_reduce(acc_tensor, in_tensor, in_reduce_dims, reduce_func);
 
     return acc_tensor;
 }
@@ -225,21 +214,21 @@ __host__ __device__ auto warp_tile_reduce_in(const InDistributedTensor_& in_tens
 template <typename AccDistributedTensor_,
           typename InDistributedTensor_,
           index_t... InReduceDims,
-          typename ReduceFuncIn>
-__host__ void warp_tile_reduce_acc_in(AccDistributedTensor_&,
-                                      const InDistributedTensor_&,
-                                      Sequence<InReduceDims...>,
-                                      const ReduceFuncIn&)
+          typename ReduceFunc>
+__host__ void block_tile_reduce(AccDistributedTensor_&,
+                                const InDistributedTensor_&,
+                                Sequence<InReduceDims...>,
+                                const ReduceFunc&)
 {
 }
 
 // FIXME: dummy host function for tile program
-template <typename AccDistributedTensor_, typename ReduceFuncIn>
-__host__ void warp_tile_reduce_sync(AccDistributedTensor_&, const ReduceFuncIn&)
+template <typename AccDistributedTensor_, typename ReduceFunc>
+__host__ void block_tile_reduce_sync(AccDistributedTensor_&, const ReduceFunc&)
 
 {
 }
 
-} // namespace warp
+} // namespace block
 } // namespace tile_program
 } // namespace ck

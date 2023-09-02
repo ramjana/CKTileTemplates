@@ -14,7 +14,7 @@
 #include "ck/tile_program/tile/load_tile.hpp"
 #include "ck/tile_program/tile/store_tile.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
-#include "ck/tile_program/warp_tile/warp_reduce.hpp"
+#include "ck/tile_program/block_tile/block_reduce.hpp"
 
 template <typename ADataType,
           typename AccDataType,
@@ -76,7 +76,7 @@ struct Reduce
     {
         using namespace ck;
         using namespace ck::tile_program;
-        using namespace ck::tile_program::warp;
+        using namespace ck::tile_program::block;
 
         const auto a_m_n = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_a, make_tuple(M, N), make_tuple(N, 1), Number<32>{}, Number<1>{});
@@ -90,19 +90,21 @@ struct Reduce
                              {iM, 0},
                              MakeABlockTileDistribution());
 
-        const auto f_reduce               = [](const auto& v0, const auto& v1) { return v0 + v1; };
+        const auto f_reduce = [](const auto& v0, const auto& v1) { return v0 + v1; };
+
         const ADataType reduce_init_value = 0;
 
         constexpr auto reduce_dims = Sequence<1>{};
 
         // Acc tile
-        // FIXME: block_tile_reduce_in
-        auto acc_block_tile = decltype(warp_tile_reduce_in<AccDataType>(
+        // FIXME: support cross warp reduction
+        auto acc_block_tensor = decltype(block_tile_reduce<AccDataType>(
             load_tile(a_block_window), reduce_dims, f_reduce, reduce_init_value)){};
 
         // init Acc tile
         tile_elementwise_inout(
-            [&](auto& acc) { acc = type_convert<AccDataType>(reduce_init_value); }, acc_block_tile);
+            [&](auto& acc) { acc = type_convert<AccDataType>(reduce_init_value); },
+            acc_block_tensor);
 
         // loop
         index_t iN = 0;
@@ -111,8 +113,8 @@ struct Reduce
         {
             const auto a_block_tensor = load_tile(a_block_window);
 
-            // FIXME: block_tile_reduce_in
-            warp_tile_reduce_acc_in(acc_block_tile, a_block_tensor, reduce_dims, f_reduce);
+            // FIXME: support cross warp reduction
+            block_tile_reduce(acc_block_tensor, a_block_tensor, reduce_dims, f_reduce);
 
             move_tile_window(a_block_window, {0, kNPerBlock});
 
@@ -120,12 +122,12 @@ struct Reduce
 
         } while(iN < N);
 
-        // warp tile reduce sync
-        warp_tile_reduce_sync(acc_block_tile, f_reduce);
+        // FIXME: support cross warp reduction
+        block_tile_reduce_sync(acc_block_tensor, f_reduce);
 
-        // convert acc_block_tile to b_block_tensor
+        // convert acc_block_tensor to b_block_tensor
         const auto b_block_tensor = tile_elementwise_in(
-            [](const auto& acc) { return type_convert<BDataType>(acc); }, acc_block_tile);
+            [](const auto& acc) { return type_convert<BDataType>(acc); }, acc_block_tensor);
 
         // B
         const auto b_m = make_naive_tensor_view_packed<AddressSpaceEnum::Global>(
@@ -136,19 +138,5 @@ struct Reduce
 
         // store B tile
         store_tile(b_block_window, b_block_tensor);
-
-#if 0
-        if(ProgramServer::get_block_id() == 0 && ProgramServer::get_thread_id() == 0)
-        {
-#if 0
-            print(load_tile(a_block_window)
-                      .GetTileDistribution()
-                      .GetStaticTileDistributionEncoding());
-            printf("\n");
-#endif
-            print(b_block_tensor.GetTileDistribution().GetStaticTileDistributionEncoding());
-            printf("\n");
-        }
-#endif
     }
 };
