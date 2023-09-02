@@ -54,12 +54,15 @@ __host__ __device__ constexpr auto make_tile_distributed_index(Sequence<Is...>)
 
 template <typename PsYs2XsAdaptor_,
           typename Ys2DDescriptor_,
-          typename StaticTileDistributionEncoding_>
+          typename StaticTileDistributionEncoding_,
+          typename TileDistributionDetail_> // FIXME: this is for hold ad-hoc but useful info,
+                                            // should be more elegnat
 struct TileDistribution
 {
     using PsYs2XsAdaptor = remove_cvref_t<PsYs2XsAdaptor_>;
     using Ys2DDescriptor = remove_cvref_t<Ys2DDescriptor_>;
     using DstrEncode     = remove_cvref_t<StaticTileDistributionEncoding_>;
+    using DstrDetail     = remove_cvref_t<TileDistributionDetail_>;
 
     static_assert(PsYs2XsAdaptor::IsStatic() && Ys2DDescriptor::IsStatic(),
                   "wrong! should be static");
@@ -67,6 +70,7 @@ struct TileDistribution
     static constexpr index_t NDimX = PsYs2XsAdaptor::GetNumOfBottomDimension();
     static constexpr index_t NDimY = Ys2DDescriptor::GetNumOfTopDimension();
     static constexpr index_t NDimP = PsYs2XsAdaptor::GetNumOfTopDimension() - NDimY;
+    static constexpr index_t NDimR = StaticTileDistributionEncoding_::NDimR;
 
     PsYs2XsAdaptor ps_ys_to_xs_;
     Ys2DDescriptor ys_to_d_;
@@ -74,6 +78,7 @@ struct TileDistribution
     __host__ __device__ static constexpr index_t GetNumOfDimensionX() { return NDimX; }
     __host__ __device__ static constexpr index_t GetNumOfDimensionY() { return NDimY; }
     __host__ __device__ static constexpr index_t GetNumOfDimensionP() { return NDimP; }
+    __host__ __device__ static constexpr index_t GetNumOfDimensionR() { return NDimR; }
 
     __host__ __device__ static constexpr auto GetLengths()
     {
@@ -100,6 +105,43 @@ struct TileDistribution
     {
         return DstrEncode{};
     }
+
+#if 1
+    // Calculate Replication index [R0, R1, ...] based on Partion index
+    // FIXME: very nasty implementation
+    template <typename PartitionIndex>
+    __host__ __device__ auto CalculateRsIndexFromPsIndex(const PartitionIndex& ps_idx) const
+    {
+        static_assert(PartitionIndex::Size() == NDimP, "wrong!");
+
+        const auto ps_ys_idx = container_concat(ps_idx, Array<index_t, NDimY>{0});
+
+        const auto dummy_adaptor_coord = make_tensor_adaptor_coordinate(ps_ys_to_xs_, ps_ys_idx);
+
+        Array<index_t, NDimR> rs_idx;
+
+        static_for<0, NDimP, 1>{}([&](auto idim_p) {
+            constexpr index_t ndim_low = DstrEncode::ps_to_rhss_major_[idim_p].Size();
+
+            static_for<0, ndim_low, 1>{}([&](auto i) {
+                constexpr index_t rh_major = DstrEncode::ps_to_rhss_major_[idim_p][i];
+                constexpr index_t rh_minor = DstrEncode::ps_to_rhss_minor_[idim_p][i];
+
+                // 0-th rh_major is the replicate dimension
+                if constexpr(rh_major == 0)
+                {
+                    constexpr index_t adaptor_hidden_id =
+                        DstrDetail::rh_major_minor_to_adaptor_hidden_idss_[rh_major][rh_minor];
+
+                    // fill in
+                    rs_idx(rh_minor) = dummy_adaptor_coord.GetHiddenIndex()[adaptor_hidden_id];
+                }
+            });
+        });
+
+        return rs_idx;
+    }
+#endif
 
     __host__ __device__ static constexpr auto GetDistributedSpans()
     {
@@ -193,6 +235,7 @@ __host__ __device__ constexpr auto
     using Ys2RHsMajor  = typename StaticTileDistributionEncoding_::Ys2RHsMajor;
     using Ys2RHsMinor  = typename StaticTileDistributionEncoding_::Ys2RHsMinor;
 
+    // FIXME: increase max value if fail
     constexpr index_t kMaxNumTransforms = 20;
     constexpr index_t kMaxMetaDataSize  = 128;
     constexpr index_t kMaxNumDim        = 10;
@@ -203,14 +246,14 @@ __host__ __device__ constexpr auto
     using Dims     = Array<index_t, kMaxNumDim>;
     using Lengths  = Array<index_t, kMaxNumDim>;
 
-    // window Adaptor
+    // Tile Adaptor
     //   bottom dims [x0, x1, x2, ...]
     //   top dims [p0, p1, ..., y0, y1, ...]
     constexpr index_t ndim_x = HsLengthss::Size();
 
     // Dim Ids: [idim_x_major, idim_x_minor] to [idim_hidden]
-    Array<Array<index_t, kMaxNumDim>, ndim_x + 1> rh_major_rh_minor_to_hidden_ids;
-    Array<Array<index_t, kMaxNumDim>, ndim_x + 1> rh_major_rh_minor_to_hidden_lengths;
+    Array<Array<index_t, kMaxNumDim>, ndim_x + 1> rh_major_minor_to_hidden_ids;
+    Array<Array<index_t, kMaxNumDim>, ndim_x + 1> rh_major_minor_to_hidden_lengths;
 
     auto trans = Array<Tuple<Name, MetaData, NumDim, Dims, NumDim, Dims>, kMaxNumTransforms>{};
 
@@ -233,8 +276,8 @@ __host__ __device__ constexpr auto
 
         for(index_t i = 0; i < ndim_r_minor; ++i)
         {
-            rh_major_rh_minor_to_hidden_ids(0)(i)     = hidden_dim_cnt;
-            rh_major_rh_minor_to_hidden_lengths(0)(i) = r_minor_lengths[i];
+            rh_major_minor_to_hidden_ids(0)(i)     = hidden_dim_cnt;
+            rh_major_minor_to_hidden_lengths(0)(i) = r_minor_lengths[i];
 
             hidden_dim_cnt++;
         }
@@ -244,8 +287,8 @@ __host__ __device__ constexpr auto
     static_for<0, ndim_x, 1>{}([&trans,
                                 &num_tran,
                                 &hidden_dim_cnt,
-                                &rh_major_rh_minor_to_hidden_ids,
-                                &rh_major_rh_minor_to_hidden_lengths](auto idim_x) {
+                                &rh_major_minor_to_hidden_ids,
+                                &rh_major_minor_to_hidden_lengths](auto idim_x) {
         constexpr auto h_minor_lengths = tuple_element_t<idim_x, HsLengthss>{};
 
         constexpr index_t ndim_h_minor = h_minor_lengths.Size();
@@ -260,8 +303,8 @@ __host__ __device__ constexpr auto
 
         for(index_t i = 0; i < ndim_h_minor; ++i)
         {
-            rh_major_rh_minor_to_hidden_ids(idim_x + 1)(i)     = hidden_dim_cnt;
-            rh_major_rh_minor_to_hidden_lengths(idim_x + 1)(i) = h_minor_lengths[i];
+            rh_major_minor_to_hidden_ids(idim_x + 1)(i)     = hidden_dim_cnt;
+            rh_major_minor_to_hidden_lengths(idim_x + 1)(i) = h_minor_lengths[i];
 
             hidden_dim_cnt++;
         }
@@ -292,8 +335,8 @@ __host__ __device__ constexpr auto
         {
             index_t rh_major = p2RHsMajor[i];
             index_t rh_minor = p2RHsMinor[i];
-            low_dims(i)      = rh_major_rh_minor_to_hidden_ids[rh_major][rh_minor];
-            low_lengths(i)   = rh_major_rh_minor_to_hidden_lengths[rh_major][rh_minor];
+            low_dims(i)      = rh_major_minor_to_hidden_ids[rh_major][rh_minor];
+            low_lengths(i)   = rh_major_minor_to_hidden_lengths[rh_major][rh_minor];
         }
 
         trans(num_tran++) = {IndexTransformEnum::Merge,
@@ -321,7 +364,7 @@ __host__ __device__ constexpr auto
         {
             index_t rh_major        = ys_to_rhs_major[i];
             index_t rh_minor        = ys_to_rhs_minor[i];
-            top_dim_ids(ndim_p + i) = rh_major_rh_minor_to_hidden_ids[rh_major][rh_minor];
+            top_dim_ids(ndim_p + i) = rh_major_minor_to_hidden_ids[rh_major][rh_minor];
         }
     }
 
@@ -337,7 +380,7 @@ __host__ __device__ constexpr auto
     {
         index_t rh_major = ys_to_rhs_major[i];
         index_t rh_minor = ys_to_rhs_minor[i];
-        index_t y_length = rh_major_rh_minor_to_hidden_lengths[rh_major][rh_minor];
+        index_t y_length = rh_major_minor_to_hidden_lengths[rh_major][rh_minor];
         y_lengths(i)     = y_length;
         d_length *= y_length;
     }
@@ -352,8 +395,19 @@ __host__ __device__ constexpr auto
     const auto ys_to_d_adaptor_encoding = make_tuple(
         make_tuple(tran), 1, Dims{0}, 1, make_sequential_index<kMaxNumDim>(1, ndim_y + 1), ndim_y);
 
-    return make_tuple(ps_ys_to_xs_adaptor_encoding, ys_to_d_adaptor_encoding, d_length);
+    return make_tuple(ps_ys_to_xs_adaptor_encoding,
+                      ys_to_d_adaptor_encoding,
+                      d_length,
+                      rh_major_minor_to_hidden_ids);
 }
+
+// FIXME: this is nasty. Need to find another way to hold this info
+template <typename RhMajorMinor2AdaptorHiddenIdss> // Tuple<Sequence<...>, ...>
+struct TileDistributionDetail
+{
+    static constexpr auto rh_major_minor_to_adaptor_hidden_idss_ =
+        to_array_of_array(RhMajorMinor2AdaptorHiddenIdss{});
+};
 
 } // namespace detail
 
@@ -361,52 +415,75 @@ __host__ __device__ constexpr auto
 template <typename StaticTileDistributionEncoding_>
 __host__ __device__ constexpr auto make_tile_distribution(StaticTileDistributionEncoding_)
 {
-    constexpr auto encode =
+    using DstrEncode = remove_cvref_t<StaticTileDistributionEncoding_>;
+
+    constexpr auto adaptor_impl =
         detail::make_adaptor_encoding_for_tile_distribution(StaticTileDistributionEncoding_{});
 
-    constexpr auto encoded_ps_ys_to_xs_adaptor = encode.template At<0>();
-    constexpr auto encoded_ys_to_d_adaptor     = encode.template At<1>();
-    constexpr index_t d_length                 = encode.template At<2>();
+    constexpr auto ps_ys_to_xs_adaptor_impl          = adaptor_impl.template At<0>();
+    constexpr auto ys_to_d_adaptor_impl              = adaptor_impl.template At<1>();
+    constexpr index_t d_length                       = adaptor_impl.template At<2>();
+    constexpr auto rh_major_minor_to_hidden_ids_impl = adaptor_impl.template At<3>();
 
     constexpr auto ps_ys_to_xs_adaptor =
-        CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ps_ys_to_xs_adaptor);
+        CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(ps_ys_to_xs_adaptor_impl);
 
-    constexpr auto ys_to_d_adaptor =
-        CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ys_to_d_adaptor);
+    constexpr auto ys_to_d_adaptor = CONSTRUCT_TENSOR_ADAPTOR_FROM_ENCODING(ys_to_d_adaptor_impl);
 
     constexpr auto ys_to_d_descriptor =
         make_tensor_descriptor_from_adaptor(ys_to_d_adaptor, d_length);
 
-    return TileDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
-                            remove_cvref_t<decltype(ys_to_d_descriptor)>,
-                            remove_cvref_t<StaticTileDistributionEncoding_>>{ps_ys_to_xs_adaptor,
-                                                                             ys_to_d_descriptor};
+    //
+    constexpr index_t ndim_rh_major = DstrEncode::Detail::ndim_rh_major_;
+    constexpr auto ndims_rhs_minor  = DstrEncode::Detail::ndims_rhs_minor_;
+
+    constexpr auto rh_major_minor_to_hidden_ids =
+        TO_TUPLE_OF_SEQUENCE(rh_major_minor_to_hidden_ids_impl, ndim_rh_major, ndims_rhs_minor);
+
+    return TileDistribution<
+        remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
+        remove_cvref_t<decltype(ys_to_d_descriptor)>,
+        remove_cvref_t<DstrEncode>,
+        detail::TileDistributionDetail<remove_cvref_t<decltype(rh_major_minor_to_hidden_ids)>>>{
+        ps_ys_to_xs_adaptor, ys_to_d_descriptor};
 }
 
 // this returns a static TileDistribution
 template <typename StaticTileDistributionEncoding_>
 __host__ __device__ constexpr auto make_static_tile_distribution(StaticTileDistributionEncoding_)
 {
-    constexpr auto encode =
+    using DstrEncode = remove_cvref_t<StaticTileDistributionEncoding_>;
+
+    constexpr auto adaptor_impl =
         detail::make_adaptor_encoding_for_tile_distribution(StaticTileDistributionEncoding_{});
 
-    constexpr auto encoded_ps_ys_to_xs_adaptor = encode.template At<0>();
-    constexpr auto encoded_ys_to_d_adaptor     = encode.template At<1>();
-    constexpr index_t d_length                 = encode.template At<2>();
+    constexpr auto ps_ys_to_xs_adaptor_impl          = adaptor_impl.template At<0>();
+    constexpr auto ys_to_d_adaptor_impl              = adaptor_impl.template At<1>();
+    constexpr index_t d_length                       = adaptor_impl.template At<2>();
+    constexpr auto rh_major_minor_to_hidden_ids_impl = adaptor_impl.template At<3>();
 
     constexpr auto ps_ys_to_xs_adaptor =
-        CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ps_ys_to_xs_adaptor);
+        CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(ps_ys_to_xs_adaptor_impl);
 
     constexpr auto ys_to_d_adaptor =
-        CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(encoded_ys_to_d_adaptor);
+        CONSTRUCT_STATIC_TENSOR_ADAPTOR_FROM_ENCODING(ys_to_d_adaptor_impl);
 
     constexpr auto ys_to_d_descriptor =
         make_tensor_descriptor_from_adaptor(ys_to_d_adaptor, Number<d_length>{});
 
-    return TileDistribution<remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
-                            remove_cvref_t<decltype(ys_to_d_descriptor)>,
-                            remove_cvref_t<StaticTileDistributionEncoding_>>{ps_ys_to_xs_adaptor,
-                                                                             ys_to_d_descriptor};
+    //
+    constexpr index_t ndim_rh_major = DstrEncode::Detail::ndim_rh_major_;
+    constexpr auto ndims_rhs_minor  = DstrEncode::Detail::ndims_rhs_minor_;
+
+    constexpr auto rh_major_minor_to_hidden_ids =
+        TO_TUPLE_OF_SEQUENCE(rh_major_minor_to_hidden_ids_impl, ndim_rh_major, ndims_rhs_minor);
+
+    return TileDistribution<
+        remove_cvref_t<decltype(ps_ys_to_xs_adaptor)>,
+        remove_cvref_t<decltype(ys_to_d_descriptor)>,
+        remove_cvref_t<DstrEncode>,
+        detail::TileDistributionDetail<remove_cvref_t<decltype(rh_major_minor_to_hidden_ids)>>>{
+        ps_ys_to_xs_adaptor, ys_to_d_descriptor};
 }
 
 } // namespace tile_program

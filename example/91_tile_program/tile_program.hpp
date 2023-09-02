@@ -91,6 +91,7 @@ struct ProgramServer
         return ck::forwarder{}(meta_data_.pull<T>());
     }
 
+    //
     __host__ static ck::index_t get_block_id() { return -1; }
 
     __host__ static ck::index_t get_thread_id() { return -1; }
@@ -98,14 +99,6 @@ struct ProgramServer
     __host__ static ck::index_t get_grid_size() { return -1; }
 
     __host__ static void block_sync_lds() {}
-
-    __device__ static ck::index_t get_block_id() { return ck::get_block_id(); }
-
-    __device__ static ck::index_t get_thread_id() { return ck::get_thread_id(); }
-
-    __device__ static ck::index_t get_grid_size() { return ck::get_grid_size(); }
-
-    __device__ static void block_sync_lds() { ck::block_sync_lds(); }
 
     // TODO: correct forwarding?
     template <typename T>
@@ -115,9 +108,42 @@ struct ProgramServer
     }
 
     template <typename T>
+    __host__ T warp_shuffle_up(T, uint32_t)
+    {
+        return 0;
+    }
+
+    template <typename T>
+    __host__ T warp_shuffle_down(T, uint32_t)
+    {
+        return 0;
+    }
+
+    //
+    __device__ static ck::index_t get_block_id() { return ck::get_block_id(); }
+
+    __device__ static ck::index_t get_thread_id() { return ck::get_thread_id(); }
+
+    __device__ static ck::index_t get_grid_size() { return ck::get_grid_size(); }
+
+    __device__ static void block_sync_lds() { ck::block_sync_lds(); }
+
+    template <typename T>
     __device__ static constexpr auto read_first_lane(T&& a)
     {
         return __builtin_amdgcn_readfirstlane(a);
+    }
+
+    template <typename T>
+    __device__ T warp_shuffle_up(T var, uint32_t delta)
+    {
+        return warp_shuffle_up(var, delta);
+    }
+
+    template <typename T>
+    __device__ T warp_shuffle_down(T var, uint32_t delta)
+    {
+        return warp_shuffle_down(var, delta);
     }
 };
 

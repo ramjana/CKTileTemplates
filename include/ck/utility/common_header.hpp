@@ -28,6 +28,7 @@
 #include "ck/utility/sequence_helper.hpp"
 #include "ck/utility/tuple.hpp"
 #include "ck/utility/tuple_helper.hpp"
+#include "ck/utility/tuple_of_sequence_to_array_of_array.hpp"
 #include "ck/utility/macro_func_array_to_sequence.hpp"
 #include "ck/utility/macro_func_array_of_array_to_tuple_of_sequence.hpp"
 #include "ck/utility/type.hpp"
@@ -42,6 +43,7 @@
 
 #include "ck/utility/amd_buffer_addressing.hpp"
 #include "ck/utility/amd_wave_read_first_lane.hpp"
+#include "ck/utility/amd_warp_shuffle.hpp"
 #include "ck/utility/generic_memory_space_atomic.hpp"
 #include "ck/utility/get_id.hpp"
 #include "ck/utility/thread_group.hpp"

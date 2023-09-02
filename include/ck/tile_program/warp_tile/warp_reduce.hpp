@@ -13,15 +13,94 @@ namespace ck {
 namespace tile_program {
 namespace warp {
 
+namespace detail {
+
+template <typename AccDistributedTensor_, typename ReduceFuncAccIn>
+__host__ __device__ void
+reduce_and_broadcast_replication_of_distributed_tensor(AccDistributedTensor_& acc_tensor,
+                                                       const ReduceFuncAccIn& reduce_func_acc_in)
+{
+    using Dstr             = typename AccDistributedTensor_::StaticTileDistribution;
+    using DstrEncode       = typename Dstr::DstrEncode;
+    using DstrEncodeDetail = typename DstrEncode::Detail;
+
+    constexpr index_t NDimP = Dstr::GetNumOfDimensionP();
+    constexpr index_t NDimR = Dstr::GetNumOfDimensionR();
+
+    // FIXME: this is for block reduce
+    const auto ps_idx = make_array<index_t>(get_warp_id(), get_lane_id());
+    const auto rs_idx = acc_tensor.GetTileDistribution().CalculateRsIndexFromPsIndex(ps_idx);
+
+    constexpr index_t thread_buf_size = AccDistributedTensor_::GetThreadBufferSize();
+
+    // loop over thread data
+    static_for<0, thread_buf_size, 1>{}([&](auto i) {
+        auto v = acc_tensor.GetThreadBuffer()[i];
+
+        // reduce replication
+        static_for<0, NDimR, 1>{}([&](auto idim_r) {
+            constexpr index_t r_length = DstrEncode::rs_lengths_[idim_r];
+
+            constexpr index_t lid_over_rid_derivative =
+                DstrEncodeDetail::ps_over_rs_derivative_[NDimP - 1][idim_r];
+
+            static_assert(math::is_power_of_two_integer(r_length),
+                          "wrong! only support power of 2 reduction");
+
+            constexpr index_t nstage = math::integer_log2_floor(r_length);
+
+            // sweep forward to get data from other lane for reduction
+            static_for<0, nstage, 1>{}([&](auto istage) {
+                constexpr index_t lid_delta =
+                    lid_over_rid_derivative * (1 << (nstage - istage - 1));
+
+                const auto v_remote = warp_shuffle_down(v, lid_delta);
+
+                // reduce
+                reduce_func_acc_in(v, v_remote);
+            });
+        });
+
+        // broadcast replication
+        static_for<0, NDimR, 1>{}([&](auto idim_r) {
+            const index_t r_id = rs_idx[idim_r];
+
+            constexpr index_t r_length = DstrEncode::rs_lengths_[idim_r];
+
+            constexpr index_t lid_over_rid_derivative =
+                DstrEncodeDetail::ps_over_rs_derivative_[NDimP - 1][idim_r];
+
+            static_assert(math::is_power_of_two_integer(r_length),
+                          "wrong! only support power of 2 reduction");
+
+            constexpr index_t nstage = math::integer_log2_floor(r_length);
+
+            // sweep backward to get data from other lane for broadcast
+            static_for<0, nstage, 1>{}([&](auto istage) {
+                constexpr index_t lid_delta_tmp = lid_over_rid_derivative * (1 << istage);
+
+                // read from other or from self
+                const index_t lid_delta = r_id < (1 << istage) ? 0 : lid_delta_tmp;
+
+                v = warp_shuffle_up(v, lid_delta);
+            });
+
+            acc_tensor.GetThreadBuffer()(i) = v;
+        });
+    });
+}
+
+} // namespace detail
+
 // FIXME: this is for 2D to 1D reduce only, need to support n-D
 template <typename AccDistributedTensor_,
           typename InDistributedTensor_,
           index_t... InReduceDims,
           typename ReduceFuncAccIn>
-__host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tensor,
-                                                 const InDistributedTensor_& in_tensor,
-                                                 Sequence<InReduceDims...>,
-                                                 const ReduceFuncAccIn& reduce_func_acc_in)
+__device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tensor,
+                                        const InDistributedTensor_& in_tensor,
+                                        Sequence<InReduceDims...>,
+                                        const ReduceFuncAccIn& reduce_func_acc_in)
 {
 #if 1
     (void)acc_tensor;
@@ -32,7 +111,6 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
     constexpr auto I0 = Number<0>{};
     constexpr auto I1 = Number<1>{};
 
-    // in-thread reduction
 #if 0
     constexpr auto in_reduce_dims = Sequence<InReduceDims...>{};
 
@@ -70,7 +148,8 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
 
     constexpr auto spans = InDistributedTensor_::GetDistributedSpans();
 
-    // FIXME
+    // in-thread reduction
+    // FIXME: hard coded to be 2D to 1D reduction
     sweep_tile_span(spans[I0], [&](auto dstr_idx_i0) {
         constexpr auto acc_dstr_idx = make_tuple(dstr_idx_i0);
 
@@ -89,9 +168,21 @@ __host__ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tens
     });
 
     // cross-thread but in-warp reduction
-#if 0
-    sync_reduce_warp_distributed_tensor(reduce_func, out_tensor);
+#if 1
+    detail::reduce_and_broadcast_replication_of_distributed_tensor(acc_tensor, reduce_func_acc_in);
 #endif
+}
+
+// FIXME: dummy function for tile program
+template <typename AccDistributedTensor_,
+          typename InDistributedTensor_,
+          index_t... InReduceDims,
+          typename ReduceFuncAccIn>
+__host__ void warp_tile_reduce_acc_in(AccDistributedTensor_&,
+                                      const InDistributedTensor_&,
+                                      Sequence<InReduceDims...>,
+                                      const ReduceFuncAccIn&)
+{
 }
 
 template <typename AccDataType_,

@@ -82,9 +82,14 @@ struct Reduce
                              MakeABlockTileDistribution());
 
 #if 0
-        const auto f_max = [](AccDataType& acc, const ADataType& a) { acc = acc > a ? acc : a; };
-#else
-        const auto f_max = [](AccDataType& acc, const ADataType& a) { acc = max(acc, a); };
+        const auto f_reduce = [](AccDataType& acc, const ADataType& a) { acc = acc > a ? acc : a; };
+        const ADataType reduce_init_value =NumericLimits<ADataType>::Lowest() ;
+#elif 0
+        const auto f_reduce = [](AccDataType& acc, const ADataType& a) { acc = max(acc, a); };
+        const ADataType reduce_init_value = NumericLimits<ADataType>::Lowest();
+#elif 1
+        const auto f_reduce               = [](AccDataType& acc, const ADataType& a) { acc += a; };
+        const ADataType reduce_init_value = 0;
 #endif
 
         constexpr auto reduce_dims = Sequence<1>{};
@@ -92,22 +97,21 @@ struct Reduce
         // Acc tile
         // FIXME: block_tile_reduce_in
         auto acc_block_tile = decltype(warp_tile_reduce_in<AccDataType>(
-            load_tile(a_block_window), reduce_dims, f_max, NumericLimits<ADataType>::Lowest())){};
+            load_tile(a_block_window), reduce_dims, f_reduce, reduce_init_value)){};
 
         // init Acc tile
         tile_elementwise_inout(
-            [](auto& acc) { acc = type_convert<ADataType>(NumericLimits<ADataType>::Lowest()); },
-            acc_block_tile);
+            [&](auto& acc) { acc = type_convert<AccDataType>(reduce_init_value); }, acc_block_tile);
 
         // loop
         index_t iN = 0;
 
         do
         {
-            const auto a_block_tile = load_tile(a_block_window);
+            const auto a_block_tensor = load_tile(a_block_window);
 
             // FIXME: block_tile_reduce_in
-            warp_tile_reduce_acc_in(acc_block_tile, a_block_tile, reduce_dims, f_max);
+            warp_tile_reduce_acc_in(acc_block_tile, a_block_tensor, reduce_dims, f_reduce);
 
             move_tile_window(a_block_window, {0, kNPerBlock});
 
@@ -115,8 +119,8 @@ struct Reduce
 
         } while(iN < N);
 
-        // convert acc_block_tile to b_block_tile
-        const auto b_block_tile = tile_elementwise_in(
+        // convert acc_block_tile to b_block_tensor
+        const auto b_block_tensor = tile_elementwise_in(
             [](const auto& acc) { return type_convert<BDataType>(acc); }, acc_block_tile);
 
         // B
@@ -127,18 +131,18 @@ struct Reduce
         auto b_block_window = make_tile_window(b_m, make_tuple(Number<kMPerBlock>{}), {iM});
 
         // store B tile
-        store_tile(b_block_window, b_block_tile);
+        store_tile(b_block_window, b_block_tensor);
 
 #if 0
         if(ProgramServer::get_block_id() == 0 && ProgramServer::get_thread_id() == 0)
         {
+#if 0
             print(load_tile(a_block_window)
                       .GetTileDistribution()
                       .GetStaticTileDistributionEncoding());
             printf("\n");
-
-            print(load_tile(a_block_window).GetDistributedRanges());
-
+#endif
+            print(b_block_tensor.GetTileDistribution().GetStaticTileDistributionEncoding());
             printf("\n");
         }
 #endif
