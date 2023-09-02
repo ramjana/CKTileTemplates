@@ -13,12 +13,10 @@ namespace ck {
 namespace tile_program {
 namespace warp {
 
-namespace detail {
-
-template <typename AccDistributedTensor_, typename ReduceFuncAccIn>
-__host__ __device__ void
-reduce_and_broadcast_replication_of_distributed_tensor(AccDistributedTensor_& acc_tensor,
-                                                       const ReduceFuncAccIn& reduce_func_acc_in)
+// synchronize reduce result (cross lane reduction and broadcast on replicated dimension)
+template <typename AccDistributedTensor_, typename ReduceFuncIn>
+__device__ void warp_tile_reduce_sync(AccDistributedTensor_& acc_tensor,
+                                      const ReduceFuncIn& reduce_func_in)
 {
     using Dstr             = typename AccDistributedTensor_::StaticTileDistribution;
     using DstrEncode       = typename Dstr::DstrEncode;
@@ -27,84 +25,101 @@ reduce_and_broadcast_replication_of_distributed_tensor(AccDistributedTensor_& ac
     constexpr index_t NDimP = Dstr::GetNumOfDimensionP();
     constexpr index_t NDimR = Dstr::GetNumOfDimensionR();
 
+    constexpr index_t idim_p_lane = NDimP - 1;
+
     // FIXME: this is for block reduce
-    const auto ps_idx = make_array<index_t>(get_warp_id(), get_lane_id());
+    const auto ps_idx = make_array<index_t>(0, get_lane_id());
     const auto rs_idx = acc_tensor.GetTileDistribution().CalculateRsIndexFromPsIndex(ps_idx);
 
     constexpr index_t thread_buf_size = AccDistributedTensor_::GetThreadBufferSize();
 
     // loop over thread data
     static_for<0, thread_buf_size, 1>{}([&](auto i) {
-        auto v = acc_tensor.GetThreadBuffer()[i];
+        auto v_local = acc_tensor.GetThreadBuffer()[i];
 
-        // reduce replication
+        // cross-lane reduce for replication
+        // only reduce on R dimension correspond to lane
+        // (lane id maps to this R dimension)
         static_for<0, NDimR, 1>{}([&](auto idim_r) {
-            constexpr index_t r_length = DstrEncode::rs_lengths_[idim_r];
+            // FIXME: nasty to use does_p_own_r_
+            if constexpr(DstrEncodeDetail::does_p_own_r_[idim_p_lane][idim_r])
+            {
+                constexpr index_t r_length = DstrEncode::rs_lengths_[idim_r];
 
-            constexpr index_t lid_over_rid_derivative =
-                DstrEncodeDetail::ps_over_rs_derivative_[NDimP - 1][idim_r];
+                constexpr index_t lid_over_rid_derivative =
+                    DstrEncodeDetail::ps_over_rs_derivative_[idim_p_lane][idim_r];
 
-            static_assert(math::is_power_of_two_integer(r_length),
-                          "wrong! only support power of 2 reduction");
+                static_assert(math::is_power_of_two_integer(r_length),
+                              "wrong! only support power of 2 reduction");
 
-            constexpr index_t nstage = math::integer_log2_floor(r_length);
+                constexpr index_t nstage = math::integer_log2_floor(r_length);
 
-            // sweep forward to get data from other lane for reduction
-            static_for<0, nstage, 1>{}([&](auto istage) {
-                constexpr index_t lid_delta =
-                    lid_over_rid_derivative * (1 << (nstage - istage - 1));
+                // reduction sweep forward
+                static_for<0, nstage, 1>{}([&](auto istage) {
+                    constexpr index_t lid_delta =
+                        lid_over_rid_derivative * (1 << (nstage - istage - 1));
 
-                const auto v_remote = warp_shuffle_down(v, lid_delta);
+                    // pull data from remote lane
+                    const auto v_remote = warp_shuffle_down(v_local, lid_delta);
 
-                // reduce
-                reduce_func_acc_in(v, v_remote);
-            });
+                    // reduce
+                    v_local = reduce_func_in(v_local, v_remote);
+                });
+            }
         });
 
-        // broadcast replication
+        // cross-lane broadcast for replication
+        // only broadcast on R dimension correspond to lane
+        // (lane id maps to this R dimension)
         static_for<0, NDimR, 1>{}([&](auto idim_r) {
-            const index_t r_id = rs_idx[idim_r];
+            // FIXME: nasty to use does_p_own_r_
+            if constexpr(DstrEncodeDetail::does_p_own_r_[idim_p_lane][idim_r])
+            {
+                const index_t r_id = rs_idx[idim_r];
 
-            constexpr index_t r_length = DstrEncode::rs_lengths_[idim_r];
+                constexpr index_t r_length = DstrEncode::rs_lengths_[idim_r];
 
-            constexpr index_t lid_over_rid_derivative =
-                DstrEncodeDetail::ps_over_rs_derivative_[NDimP - 1][idim_r];
+                constexpr index_t lid_over_rid_derivative =
+                    DstrEncodeDetail::ps_over_rs_derivative_[NDimP - 1][idim_r];
 
-            static_assert(math::is_power_of_two_integer(r_length),
-                          "wrong! only support power of 2 reduction");
+                static_assert(math::is_power_of_two_integer(r_length),
+                              "wrong! only support power of 2 reduction");
 
-            constexpr index_t nstage = math::integer_log2_floor(r_length);
+                constexpr index_t nstage = math::integer_log2_floor(r_length);
 
-            // sweep backward to get data from other lane for broadcast
-            static_for<0, nstage, 1>{}([&](auto istage) {
-                constexpr index_t lid_delta_tmp = lid_over_rid_derivative * (1 << istage);
+                // broadcast sweep backward
+                static_for<0, nstage, 1>{}([&](auto istage) {
+                    // do I hold reduced data?
+                    const bool do_i_hold_reduced_data = r_id < (1 << istage);
 
-                // read from other or from self
-                const index_t lid_delta = r_id < (1 << istage) ? 0 : lid_delta_tmp;
+                    constexpr index_t lid_delta = lid_over_rid_derivative * (1 << istage);
 
-                v = warp_shuffle_up(v, lid_delta);
-            });
+                    // pull data from remote lane
+                    const auto v_remote = warp_shuffle_up(v_local, lid_delta);
 
-            acc_tensor.GetThreadBuffer()(i) = v;
+                    // decide whether to update local data with remote data
+                    v_local = do_i_hold_reduced_data ? v_local : v_remote;
+                });
+            }
         });
+
+        acc_tensor.GetThreadBuffer()(i) = v_local;
     });
 }
-
-} // namespace detail
 
 // FIXME: this is for 2D to 1D reduce only, need to support n-D
 template <typename AccDistributedTensor_,
           typename InDistributedTensor_,
           index_t... InReduceDims,
-          typename ReduceFuncAccIn>
+          typename ReduceFuncIn>
 __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tensor,
                                         const InDistributedTensor_& in_tensor,
                                         Sequence<InReduceDims...>,
-                                        const ReduceFuncAccIn& reduce_func_acc_in)
+                                        const ReduceFuncIn& reduce_func_in)
 {
 #if 1
     (void)acc_tensor;
-    (void)reduce_func_acc_in;
+    (void)reduce_func_in;
     (void)in_tensor;
 #endif
 
@@ -161,38 +176,26 @@ __device__ void warp_tile_reduce_acc_in(AccDistributedTensor_& acc_tensor,
 
             const auto in = in_tensor.GetElementFromTileDistributedIndices(in_dstr_idx);
 
-            reduce_func_acc_in(acc, in);
+            acc = reduce_func_in(acc, in);
         });
 
         acc_tensor.SetElementFromTileDistributedIndices(acc_dstr_idx, acc);
     });
 
+#if 0
     // cross-thread but in-warp reduction
-#if 1
-    detail::reduce_and_broadcast_replication_of_distributed_tensor(acc_tensor, reduce_func_acc_in);
+    warp_tile_reduce_sync(acc_tensor, reduce_func_in);
 #endif
-}
-
-// FIXME: dummy function for tile program
-template <typename AccDistributedTensor_,
-          typename InDistributedTensor_,
-          index_t... InReduceDims,
-          typename ReduceFuncAccIn>
-__host__ void warp_tile_reduce_acc_in(AccDistributedTensor_&,
-                                      const InDistributedTensor_&,
-                                      Sequence<InReduceDims...>,
-                                      const ReduceFuncAccIn&)
-{
 }
 
 template <typename AccDataType_,
           typename InDistributedTensor_,
           index_t... InReduceDims,
-          typename ReduceFuncAccIn,
+          typename ReduceFuncIn,
           typename InDataType_>
 __host__ __device__ auto warp_tile_reduce_in(const InDistributedTensor_& in_tensor,
                                              Sequence<InReduceDims...> in_reduce_dims,
-                                             const ReduceFuncAccIn& reduce_func_acc_in,
+                                             const ReduceFuncIn& reduce_func_in,
                                              const InDataType_& reduce_init)
 {
     using InDataType  = typename InDistributedTensor_::DataType;
@@ -213,9 +216,28 @@ __host__ __device__ auto warp_tile_reduce_in(const InDistributedTensor_& in_tens
                            acc_tensor);
 
     // warp reduce
-    warp_tile_reduce_acc_in(acc_tensor, in_tensor, in_reduce_dims, reduce_func_acc_in);
+    warp_tile_reduce_acc_in(acc_tensor, in_tensor, in_reduce_dims, reduce_func_in);
 
     return acc_tensor;
+}
+
+// FIXME: dummy host function for tile program
+template <typename AccDistributedTensor_,
+          typename InDistributedTensor_,
+          index_t... InReduceDims,
+          typename ReduceFuncIn>
+__host__ void warp_tile_reduce_acc_in(AccDistributedTensor_&,
+                                      const InDistributedTensor_&,
+                                      Sequence<InReduceDims...>,
+                                      const ReduceFuncIn&)
+{
+}
+
+// FIXME: dummy host function for tile program
+template <typename AccDistributedTensor_, typename ReduceFuncIn>
+__host__ void warp_tile_reduce_sync(AccDistributedTensor_&, const ReduceFuncIn&)
+
+{
 }
 
 } // namespace warp

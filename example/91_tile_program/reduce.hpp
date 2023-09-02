@@ -24,12 +24,13 @@ template <typename ADataType,
           ck::index_t kNPerBlock>
 struct Reduce
 {
-#if 1
+#if 0
     __host__ __device__ static constexpr auto MakeABlockTileDistribution()
     {
         using namespace ck;
         using namespace ck::tile_program;
 
+        // 2x2 wave
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<>,
                                            Tuple<Sequence<2, 2, 4, 2, 4>, Sequence<2, 2, 32>>,
@@ -38,18 +39,34 @@ struct Reduce
                                            Sequence<1, 2, 1, 1>,
                                            Sequence<0, 0, 2, 4>>{});
     }
-#else
+#elif 0
     __host__ __device__ static constexpr auto MakeABlockTileDistribution()
     {
         using namespace ck;
         using namespace ck::tile_program;
 
+        // 2x2 wave
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<>,
                                            Tuple<Sequence<2, 2, 32>, Sequence<2, 2, 4, 2, 4>>,
                                            Tuple<Sequence<2, 1>, Sequence<2, 1>>,
                                            Tuple<Sequence<1, 1>, Sequence<3, 2>>,
                                            Sequence<2, 1, 2, 2>,
+                                           Sequence<0, 0, 2, 4>>{});
+    }
+#elif 1
+    __host__ __device__ static constexpr auto MakeABlockTileDistribution()
+    {
+        using namespace ck;
+        using namespace ck::tile_program;
+
+        // 4x1 wave
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<>,
+                                           Tuple<Sequence<1, 4, 4, 2, 4>, Sequence<4, 1, 32>>,
+                                           Tuple<Sequence<1, 2>, Sequence<1, 2>>,
+                                           Tuple<Sequence<1, 1>, Sequence<3, 2>>,
+                                           Sequence<1, 2, 1, 1>,
                                            Sequence<0, 0, 2, 4>>{});
     }
 #endif
@@ -64,15 +81,7 @@ struct Reduce
         const auto a_m_n = make_naive_tensor_view<AddressSpaceEnum::Global>(
             p_a, make_tuple(M, N), make_tuple(N, 1), Number<32>{}, Number<1>{});
 
-        const auto id_block = ps.get_block_id();
-
-        const auto num_tile_m = ps.read_first_lane(M / kMPerBlock);
-
-        const auto block2tile = ps(make_cluster_descriptor(make_tuple(num_tile_m)));
-
-        const auto i_m = block2tile.CalculateBottomIndex(make_multi_index(id_block));
-
-        const auto iM = ps.read_first_lane(i_m[0]) * kMPerBlock;
+        const auto iM = ps.get_block_id() * kMPerBlock;
 
         // A window
         auto a_block_window =
@@ -81,16 +90,8 @@ struct Reduce
                              {iM, 0},
                              MakeABlockTileDistribution());
 
-#if 0
-        const auto f_reduce = [](AccDataType& acc, const ADataType& a) { acc = acc > a ? acc : a; };
-        const ADataType reduce_init_value =NumericLimits<ADataType>::Lowest() ;
-#elif 0
-        const auto f_reduce = [](AccDataType& acc, const ADataType& a) { acc = max(acc, a); };
-        const ADataType reduce_init_value = NumericLimits<ADataType>::Lowest();
-#elif 1
-        const auto f_reduce               = [](AccDataType& acc, const ADataType& a) { acc += a; };
+        const auto f_reduce               = [](const auto& v0, const auto& v1) { return v0 + v1; };
         const ADataType reduce_init_value = 0;
-#endif
 
         constexpr auto reduce_dims = Sequence<1>{};
 
@@ -118,6 +119,9 @@ struct Reduce
             iN += kNPerBlock;
 
         } while(iN < N);
+
+        // warp tile reduce sync
+        warp_tile_reduce_sync(acc_block_tile, f_reduce);
 
         // convert acc_block_tile to b_block_tensor
         const auto b_block_tensor = tile_elementwise_in(

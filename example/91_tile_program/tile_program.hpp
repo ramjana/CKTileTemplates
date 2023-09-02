@@ -135,15 +135,15 @@ struct ProgramServer
     }
 
     template <typename T>
-    __device__ T warp_shuffle_up(T var, uint32_t delta)
+    __device__ T warp_shuffle_up(const T& var, uint32_t delta)
     {
-        return warp_shuffle_up(var, delta);
+        return ck::warp_shuffle_up(var, delta);
     }
 
     template <typename T>
-    __device__ T warp_shuffle_down(T var, uint32_t delta)
+    __device__ T warp_shuffle_down(const T& var, uint32_t delta)
     {
-        return warp_shuffle_down(var, delta);
+        return ck::warp_shuffle_down(var, delta);
     }
 };
 

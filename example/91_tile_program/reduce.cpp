@@ -63,17 +63,13 @@ int main(int argc, char* argv[])
     Tensor<BDataType> b_host_ref(b_lengths, b_strides);
     Tensor<BDataType> b_host_dev(b_lengths, b_strides);
 
-#if 0
     ck::utils::FillUniformDistributionIntegerValue<ADataType>{-5.f, 5.f}(a_host);
-#else
-    ck::utils::FillConstant<ADataType>{1}(a_host);
-#endif
 
     // reference
     reference_reduce<ADataType, AccDataType, BDataType>(a_host, b_host_ref);
 
     DeviceMem a_buf(sizeof(ADataType) * a_host.GetElementSpaceSize());
-    DeviceMem b_buf(sizeof(BDataType) * b_host_dev.GetElementSpaceSize());
+    DeviceMem b_buf(sizeof(BDataType) * b_host_ref.GetElementSpaceSize());
 
     a_buf.ToDevice(a_host.mData.data());
 
@@ -81,7 +77,7 @@ int main(int argc, char* argv[])
     constexpr ck::index_t kNPerBlock = 128;
 
     constexpr ck::index_t kBlockSize = 256;
-    ck::index_t kGridSize            = (M / kMPerBlock) * (N / kNPerBlock);
+    ck::index_t kGridSize            = (M / kMPerBlock);
 
     std::cout << "grid size " << kGridSize << std::endl;
 

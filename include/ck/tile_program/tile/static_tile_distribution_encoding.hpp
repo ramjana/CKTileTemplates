@@ -170,6 +170,34 @@ struct StaticTileDistributionEncoding
             return ndims_distributed_spans_minor;
         }();
 
+        // does_p_own_r_[NDimP][NDimR]
+        static constexpr auto does_p_own_r_ = [] {
+            if constexpr(NDimR > 0)
+            {
+                Array<Array<bool, NDimR>, NDimP> does_p_own_r{{false}};
+
+                static_for<0, NDimP, 1>{}([&](auto idim_p) {
+                    constexpr index_t ndim_low = ps_to_rhss_major_[idim_p].Size();
+
+                    static_for<0, ndim_low, 1>{}([&](auto idim_low) {
+                        constexpr index_t rh_major = ps_to_rhss_major_[idim_p][idim_low];
+                        constexpr index_t rh_minor = ps_to_rhss_minor_[idim_p][idim_low];
+
+                        if constexpr(rh_major == 0)
+                        {
+                            does_p_own_r(idim_p)(rh_minor) = true;
+                        }
+                    });
+                });
+
+                return does_p_own_r;
+            }
+            else
+            {
+                return Array<Array<bool, NDimR>, NDimP>{};
+            }
+        }();
+
         // ps_over_rs_derivative_[NDimP][NDimR]
         static constexpr auto ps_over_rs_derivative_ = [] {
             if constexpr(NDimR > 0)

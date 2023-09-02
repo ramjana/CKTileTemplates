@@ -8,10 +8,10 @@
 namespace ck {
 
 template <typename T>
-__device__ T warp_shuffle_up(T var, uint32_t delta)
+__device__ T warp_shuffle_up(const T& var, uint32_t delta)
 {
 #if 0
-        return  __shfl_up(var, delta);
+    return  __shfl_up(var, delta);
 #elif 1
     const uint32_t wrap_around_delta = warpSize - delta;
 
@@ -20,10 +20,10 @@ __device__ T warp_shuffle_up(T var, uint32_t delta)
 }
 
 template <typename T>
-__device__ T warp_shuffle_down(T var, uint32_t delta)
+__device__ T warp_shuffle_down(const T& var, uint32_t delta)
 {
 #if 0
-        return  __shfl_down(var, delta);
+    return  __shfl_down(var, delta);
 #elif 1
     return __builtin_amdgcn_ds_bpermute((__lane_id() << 2) + (delta << 2), var);
 #endif

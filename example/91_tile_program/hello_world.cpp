@@ -14,13 +14,13 @@ struct HelloWorld
 {
     __host__ __device__ void operator()(ProgramServer& ps, int x, int y, int* res)
     {
-#if 0
+#if 1
         auto r0 = ps(x + y);
         auto r1 = ps(x - y);
 
         res[0] = r0;
         res[1] = r1;
-#elif 0
+#elif 1
         (void)x;
         (void)y;
 
@@ -32,20 +32,6 @@ struct HelloWorld
 
         res[0] = r0;
         res[1] = r2;
-#elif 1
-        (void)ps;
-        (void)x;
-        (void)y;
-
-        auto r0 = ck::math::integer_log2_floor(1);
-        auto r1 = ck::math::integer_log2_floor(2);
-        auto r2 = ck::math::integer_log2_floor(3);
-        auto r3 = ck::math::integer_log2_floor(4);
-
-        printf("r0 %d, r1 %d, r2 %d, r3 %d\n", r0, r1, r2, r3);
-
-        res[0] = r0;
-        res[1] = r1;
 #endif
     }
 };
@@ -60,7 +46,7 @@ int main()
     launch(ProgramServer{},
            HelloWorld{},
            1,
-           1,
+           64,
            x,
            y,
            static_cast<int*>(res_dev_buf.GetDeviceBuffer()));
