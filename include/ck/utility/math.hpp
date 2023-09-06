@@ -62,6 +62,28 @@ struct integer_divide_ceiler
     }
 };
 
+template <typename T>
+struct integer_divide_reverse
+{
+    __host__ __device__ constexpr T operator()(T a, T b) const
+    {
+        static_assert(is_same<T, index_t>{} || is_same<T, int>{}, "wrong type");
+
+        return b / a;
+    }
+};
+
+template <typename T>
+struct integer_divide_check_reverse
+{
+    // if true, can do divide. if false, can not divide.
+    __host__ __device__ constexpr T operator()(T a, T b) const
+    {
+        static_assert(is_same<T, index_t>{} || is_same<T, int>{}, "wrong type");
+        return b != 0 && (b % a) == 0;
+    }
+};
+
 template <typename X, typename Y>
 __host__ __device__ constexpr auto integer_divide_floor(X x, Y y)
 {

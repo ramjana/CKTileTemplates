@@ -78,6 +78,38 @@ __host__ __device__ constexpr auto transform_tuples(F f, const X& x, const Y& y,
         f, x, y, z, typename arithmetic_sequence_gen<0, X::Size(), 1>::type{});
 }
 
+namespace detail {
+template <index_t J, typename F, typename... InnerType>
+constexpr auto zip_tuples_impl_(F f, const InnerType&... tj)
+{
+    return f(tj.At(Number<J>{})...);
+}
+
+template <typename F, index_t... Is, index_t... Js, typename TupleType>
+constexpr auto zip_tuples_impl(F f, const TupleType& t, Sequence<Is...>, Sequence<Js...>)
+{
+    return make_tuple(zip_tuples_impl_<Js>(f, t.At(Number<Is>{})...)...);
+}
+} // namespace detail
+// zip function
+//    ((0, 1, 2), (3, 4, 5)...)
+// -> ((0, 3...), (1, 4...), (2, 5...))
+//  the input is tuple of InnerType, which need to implement At(Number<..>), Size()
+//  the output is tuple of InnerType, which is determined by F lambda/function
+//  ... hence input/output InnerType can be different
+//
+template <typename F, typename TupleType>
+constexpr auto zip_tuples(F f, const TupleType& t)
+{
+    // every XInnerType must have same size
+    using XInnerType = remove_cvref_t<decltype(t[Number<0>{}])>;
+    return detail::zip_tuples_impl(
+        f,
+        t,
+        typename arithmetic_sequence_gen<0, TupleType::Size(), 1>::type{},
+        typename arithmetic_sequence_gen<0, XInnerType::Size(), 1>::type{});
+}
+
 } // namespace ck
 
 // Macro function

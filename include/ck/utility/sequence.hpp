@@ -188,6 +188,79 @@ struct Sequence
     }
 };
 
+#if 1
+// Macro function
+// convert constexpr Array to Sequence
+#define TO_SEQUENCE(a, n)                                                                      \
+    [&a, &n] {                                                                                 \
+        static_assert(a.Size() >= n, "wrong! out of bound");                                   \
+                                                                                               \
+        static_assert(n <= 10, "not implemented");                                             \
+                                                                                               \
+        if constexpr(n == 0)                                                                   \
+        {                                                                                      \
+            return ck::Sequence<>{};                                                           \
+        }                                                                                      \
+        else if constexpr(n == 1)                                                              \
+        {                                                                                      \
+            return ck::Sequence<a[0]>{};                                                       \
+        }                                                                                      \
+        else if constexpr(n == 2)                                                              \
+        {                                                                                      \
+            return ck::Sequence<a[0], a[1]>{};                                                 \
+        }                                                                                      \
+        else if constexpr(n == 3)                                                              \
+        {                                                                                      \
+            return ck::Sequence<a[0], a[1], a[2]>{};                                           \
+        }                                                                                      \
+        else if constexpr(n == 4)                                                              \
+        {                                                                                      \
+            return ck::Sequence<a[0], a[1], a[2], a[3]>{};                                     \
+        }                                                                                      \
+        else if constexpr(n == 5)                                                              \
+        {                                                                                      \
+            return ck::Sequence<a[0], a[1], a[2], a[3], a[4]>{};                               \
+        }                                                                                      \
+        else if constexpr(n == 6)                                                              \
+        {                                                                                      \
+            return ck::Sequence<a[0], a[1], a[2], a[3], a[4], a[5]>{};                         \
+        }                                                                                      \
+        else if constexpr(n == 7)                                                              \
+        {                                                                                      \
+            return ck::Sequence<a[0], a[1], a[2], a[3], a[4], a[5], a[6]>{};                   \
+        }                                                                                      \
+        else if constexpr(n == 8)                                                              \
+        {                                                                                      \
+            return ck::Sequence<a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]>{};             \
+        }                                                                                      \
+        else if constexpr(n == 9)                                                              \
+        {                                                                                      \
+            return ck::Sequence<a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]>{};       \
+        }                                                                                      \
+        else if constexpr(n == 10)                                                             \
+        {                                                                                      \
+            return ck::Sequence<a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9]>{}; \
+        }                                                                                      \
+    }()
+
+#else
+// TODO: put under ck namespace
+namespace impl {
+template <auto a, ck::index_t... idx>
+constexpr auto array_to_sequence(ck::Sequence<idx...>)
+{
+    return ck::Sequence<a[idx]...>{};
+}
+} // namespace impl
+
+template <auto a, ck::index_t n>
+constexpr auto array_to_sequence()
+{
+    return impl::array_to_sequence<a>(typename ck::arithmetic_sequence_gen<0, n, 1>::type{});
+}
+
+#endif
+
 // merge sequence
 template <typename Seq, typename... Seqs>
 struct sequence_merge
@@ -356,6 +429,79 @@ struct sequence_reduce<Reduce, Seq>
     using type = Seq;
 };
 #endif
+
+namespace detail {
+template <bool reverse, bool select, typename x, typename y>
+struct mask_sequence_pick;
+
+template <bool select, typename x, typename y>
+struct mask_sequence_pick<false, select, x, y>
+{
+    using type = std::conditional_t<select, x, y>;
+};
+
+template <bool select, typename x, typename y>
+struct mask_sequence_pick<true, select, x, y>
+{
+    using type = std::conditional_t<select, y, x>;
+};
+
+template <bool reverse, bool select, typename x, typename y>
+using mask_sequence_pick_t = typename mask_sequence_pick<reverse, select, x, y>::type;
+
+template <typename, typename, bool>
+struct mask_sequence_gen_impl;
+
+template <index_t p, index_t... ps, index_t x, index_t... xs, bool reverse>
+struct mask_sequence_gen_impl<Sequence<p, ps...>, Sequence<x, xs...>, reverse>
+{
+    using old_scan =
+        mask_sequence_gen_impl<std::conditional_t<x == p, Sequence<ps...>, Sequence<p, ps...>>,
+                               Sequence<xs...>,
+                               reverse>;
+    using mask =
+        typename sequence_merge<mask_sequence_pick_t<reverse, x == p, Sequence<1>, Sequence<0>>,
+                                typename old_scan::mask>::type;
+};
+
+template <index_t x, index_t... xs, bool reverse>
+struct mask_sequence_gen_impl<Sequence<>, Sequence<x, xs...>, reverse>
+{
+    using old_scan = mask_sequence_gen_impl<Sequence<>, Sequence<xs...>, reverse>;
+    using mask =
+        typename sequence_merge<mask_sequence_pick_t<reverse, false, Sequence<1>, Sequence<0>>,
+                                typename old_scan::mask>::type;
+};
+
+template <index_t p, index_t x, bool reverse>
+struct mask_sequence_gen_impl<Sequence<p>, Sequence<x>, reverse>
+{
+    using mask = mask_sequence_pick_t<reverse, x == p, Sequence<1>, Sequence<0>>;
+};
+
+template <index_t p, index_t... ps, index_t x, bool reverse>
+struct mask_sequence_gen_impl<Sequence<p, ps...>, Sequence<x>, reverse>
+{
+    using mask = mask_sequence_pick_t<reverse, x == p, Sequence<1>, Sequence<0>>;
+};
+
+template <index_t x, bool reverse>
+struct mask_sequence_gen_impl<Sequence<>, Sequence<x>, reverse>
+{
+    using mask = mask_sequence_pick_t<reverse, false, Sequence<1>, Sequence<0>>;
+};
+} // namespace detail
+
+// generate a N length sequence where the PickIds would be 1, others be 0. If reversePick is true,
+// the result mask 0/1 is reversed
+template <typename PickIds, index_t N, bool ReversePick = false>
+constexpr auto mask_sequence_gen(
+    PickIds, Number<N>, integral_constant<bool, ReversePick> = integral_constant<bool, false>{})
+{
+    return typename detail::mask_sequence_gen_impl<PickIds,
+                                                   typename arithmetic_sequence_gen<0, N, 1>::type,
+                                                   ReversePick>::mask{};
+}
 
 template <typename Values, typename Ids, typename Compare>
 struct sequence_sort_impl
@@ -791,6 +937,143 @@ __host__ __device__ constexpr auto inclusive_scan_sequence(Seq, Reduce, Number<I
     return reverse_inclusive_scan_sequence(Seq{}.Reverse(), Reduce{}, Number<Init>{}).Reverse();
 }
 
+// conditional reverse inclusive scan (with init) sequence, may stop at last N element
+template <typename, typename, typename, index_t>
+struct sequence_conditional_reverse_inclusive_scan;
+
+template <index_t I, index_t... Is, typename Reduce, typename Condition, index_t Init>
+struct sequence_conditional_reverse_inclusive_scan<Sequence<I, Is...>, Reduce, Condition, Init>
+{
+    using old_scan =
+        sequence_conditional_reverse_inclusive_scan<Sequence<Is...>, Reduce, Condition, Init>;
+    using old_scan_type = typename old_scan::type;
+
+    static constexpr bool cond =
+        Condition{}(I, old_scan_type{}.front()) && old_scan::cond; // chain old condition
+
+    using type =
+        typename conditional<cond,
+                             typename sequence_merge<Sequence<Reduce{}(I, old_scan_type{}.front())>,
+                                                     old_scan_type>::type,
+                             old_scan_type>::type;
+};
+
+template <index_t I, typename Reduce, typename Condition, index_t Init>
+struct sequence_conditional_reverse_inclusive_scan<Sequence<I>, Reduce, Condition, Init>
+{
+    static constexpr bool cond = Condition{}(I, Init);
+    using type = typename conditional<cond, Sequence<Reduce{}(I, Init)>, Sequence<>>::type;
+};
+
+template <typename Reduce, typename Condition, index_t Init>
+struct sequence_conditional_reverse_inclusive_scan<Sequence<>, Reduce, Condition, Init>
+{
+    static constexpr bool cond = false;
+    using type                 = Sequence<>;
+};
+
+template <typename Seq, typename Reduce, typename Condition, index_t Init>
+constexpr auto conditional_reverse_inclusive_scan_sequence(Seq, Reduce, Condition, Number<Init>)
+{
+    return
+        typename sequence_conditional_reverse_inclusive_scan<Seq, Reduce, Condition, Init>::type{};
+}
+
+// e.g. Seq<2, 3, 4> --> Seq<0, 2, 5>, Init=0, Reduce=Add
+//      ResultSeq  TargetSeq  Reduce
+template <typename, typename, typename>
+struct sequence_exclusive_scan;
+
+template <index_t... Xs, index_t Y, index_t... Ys, typename Reduce>
+struct sequence_exclusive_scan<Sequence<Xs...>, Sequence<Y, Ys...>, Reduce>
+{
+    using old_scan = typename sequence_merge<Sequence<Xs...>,
+                                             Sequence<Reduce{}(Y, Sequence<Xs...>{}.Back())>>::type;
+    using type     = typename sequence_exclusive_scan<old_scan, Sequence<Ys...>, Reduce>::type;
+};
+
+template <index_t... Xs, index_t Y, typename Reduce>
+struct sequence_exclusive_scan<Sequence<Xs...>, Sequence<Y>, Reduce>
+{
+    using type = Sequence<Xs...>;
+};
+
+template <index_t... Xs, typename Reduce>
+struct sequence_exclusive_scan<Sequence<Xs...>, Sequence<>, Reduce>
+{
+    using type = Sequence<Xs...>;
+};
+
+template <typename Seq, typename Reduce, index_t Init>
+constexpr auto exclusive_scan_sequence(Seq, Reduce, Number<Init>)
+{
+    // TODO: c++20 and later can pass in Reduce with a lambda expression
+    return typename sequence_exclusive_scan<Sequence<Init>, Seq, Reduce>::type{};
+}
+
+template <typename Seq>
+constexpr auto prefix_sum_sequence(Seq)
+{
+    return typename sequence_exclusive_scan<Sequence<0>,
+                                            typename sequence_merge<Seq, Sequence<0>>::type,
+                                            math::plus<index_t>>::type{};
+}
+
+namespace detail {
+template <index_t h_idx, typename SeqSortedSamples, typename SeqRange>
+struct sorted_sequence_histogram;
+
+template <index_t h_idx, index_t x, index_t... xs, index_t r, index_t... rs>
+struct sorted_sequence_histogram<h_idx, Sequence<x, xs...>, Sequence<r, rs...>>
+{
+    template <typename Histogram>
+    constexpr auto operator()(Histogram& h)
+    {
+        if constexpr(x < r)
+        {
+            h.template At<h_idx>() += 1;
+            sorted_sequence_histogram<h_idx, Sequence<xs...>, Sequence<r, rs...>>{}(h);
+        }
+        else
+        {
+            h.template At<h_idx + 1>() = 1;
+            sorted_sequence_histogram<h_idx + 1, Sequence<xs...>, Sequence<rs...>>{}(h);
+        }
+    }
+};
+
+template <index_t h_idx, index_t x, index_t r, index_t... rs>
+struct sorted_sequence_histogram<h_idx, Sequence<x>, Sequence<r, rs...>>
+{
+    template <typename Histogram>
+    constexpr auto operator()(Histogram& h)
+    {
+        if constexpr(x < r)
+        {
+            h.template At<h_idx>() += 1;
+        }
+    }
+};
+} // namespace detail
+
+// forward declare for histogram usage
+template <typename, index_t>
+struct Array;
+
+// SeqSortedSamples: <0, 2, 3, 5, 7>, SeqRange: <0, 3, 6, 9> -> SeqHistogram : <2, 2, 1>
+template <typename SeqSortedSamples, index_t r, index_t... rs>
+constexpr auto histogram_sorted_sequence(SeqSortedSamples, Sequence<r, rs...>)
+{
+    constexpr auto bins      = sizeof...(rs); // or categories
+    constexpr auto histogram = [&]() {
+        Array<index_t, bins> h{0}; // make sure this can clear all element to zero
+        detail::sorted_sequence_histogram<0, SeqSortedSamples, Sequence<rs...>>{}(h);
+        return h;
+    }();
+
+    return TO_SEQUENCE(histogram, bins);
+}
+
 template <typename Seq, index_t... Is>
 __host__ __device__ constexpr auto pick_sequence_elements_by_ids(Seq, Sequence<Is...> /* ids */)
 {
@@ -903,5 +1186,158 @@ using sequence_merge_t = typename sequence_merge<Seqs...>::type;
 
 template <index_t NSize, index_t I>
 using uniform_sequence_gen_t = typename uniform_sequence_gen<NSize, I>::type;
+
+namespace detail {
+// [Begin, End]
+template <typename Seq, index_t Begin, index_t End, index_t Value>
+constexpr auto index_of_sorted_sequence_impl(Seq, Number<Begin>, Number<End>, Number<Value>)
+{
+    if constexpr(Begin > End)
+        return Number<-1>{};
+
+    constexpr auto Middle   = (Begin + End) / 2;
+    constexpr auto v_middle = Seq{}[Number<Middle>{}];
+    if constexpr(v_middle == Value)
+        return Number<Middle>{};
+    else if constexpr(v_middle < Value)
+        return index_of_sorted_sequence_impl(
+            Seq{}, Number<Middle + 1>{}, Number<End>{}, Number<Value>{});
+    else
+        return index_of_sorted_sequence_impl(
+            Seq{}, Number<Begin>{}, Number<Middle - 1>{}, Number<Value>{});
+}
+} // namespace detail
+
+// the sequence need to be sorted before pass in this function, from small to big
+// return -1 if not found, else return the index
+template <typename SortedSeq, index_t Value>
+constexpr auto index_of_sorted_sequence(SortedSeq, Number<Value>)
+{
+    return detail::index_of_sorted_sequence_impl(
+        SortedSeq{}, Number<0>{}, Number<SortedSeq::Size() - 1>{}, Number<Value>{});
+}
+
+// return the index of first occurance in the sequence, -1 if not found
+template <typename Seq, index_t Value>
+constexpr auto index_of_sequence(Seq, Number<Value>)
+{
+    constexpr index_t idx = [&]() {
+        for(auto i = 0; i < Seq::Size(); i++)
+        {
+            if(Seq{}[i] == Value)
+                return i;
+        }
+        return -1;
+    }();
+    return Number<idx>{};
+}
+
+namespace detail {
+template <typename, typename, typename, index_t>
+struct reverse_slice_sequence_impl;
+
+template <index_t x,
+          index_t... xs,
+          index_t m,
+          index_t... ms,
+          index_t id,
+          index_t... ids,
+          index_t SliceSize>
+struct reverse_slice_sequence_impl<Sequence<x, xs...>,
+                                   Sequence<m, ms...>,
+                                   Sequence<id, ids...>,
+                                   SliceSize>
+{
+    using old_scan =
+        reverse_slice_sequence_impl<Sequence<xs...>, Sequence<ms...>, Sequence<ids...>, SliceSize>;
+
+    static constexpr auto slice_size = old_scan::remaining_slice_sizes::Front().value;
+    static constexpr auto slice_length =
+        std::conditional_t<m, Number<math::gcd(x, slice_size)>, Number<x>>::value;
+
+    using dim_lengths =
+        typename sequence_merge<Sequence<slice_length>, typename old_scan::dim_lengths>::type;
+    using dim_slices =
+        typename sequence_merge<Sequence<x / slice_length>, typename old_scan::dim_slices>::type;
+    using remaining_slice_sizes = typename sequence_merge<
+        std::conditional_t<m, Sequence<slice_size / slice_length>, Sequence<slice_size>>,
+        typename old_scan::remaining_slice_sizes>::type;
+
+    // the first idx that sliced length not equal to original length
+    static constexpr index_t _flag =
+        slice_length != x && remaining_slice_sizes{}.Front().value == 1;
+    static constexpr index_t _split_flag = std::conditional_t<m, Number<_flag>, Number<0>>::value;
+    static constexpr index_t _split_idx =
+        std::conditional_t<_split_flag, Number<id>, Number<0>>::value;
+
+    static constexpr index_t split_flag = _split_flag || old_scan::split_flag;
+    static constexpr index_t split_idx  = std::
+        conditional_t<old_scan::split_flag, Number<old_scan::split_idx>, Number<_split_idx>>::value;
+};
+
+template <index_t x, index_t m, index_t id, index_t SliceSize>
+struct reverse_slice_sequence_impl<Sequence<x>, Sequence<m>, Sequence<id>, SliceSize>
+{
+    static constexpr auto slice_size = SliceSize;
+    static constexpr auto slice_length =
+        std::conditional_t<m, Number<math::gcd(x, slice_size)>, Number<x>>::value;
+
+    using dim_lengths = Sequence<slice_length>;
+    using dim_slices  = Sequence<x / slice_length>;
+    using remaining_slice_sizes =
+        std::conditional_t<m, Sequence<slice_size / slice_length>, Sequence<slice_size>>;
+
+    // the first idx that sliced length not equal to original length
+    static constexpr index_t _flag =
+        slice_length != x && remaining_slice_sizes{}.Front().value == 1;
+    static constexpr index_t split_flag = std::conditional_t<m, Number<_flag>, Number<0>>::value;
+    static constexpr index_t split_idx =
+        std::conditional_t<split_flag, Number<id>, Number<0>>::value;
+};
+} // namespace detail
+
+// clang-format off
+// input a sequence(with optional mask), and the SliceSize : size per slice
+// output the sequence each slice, and Number of slices
+//
+// e.g. <2, 1, 4, 2>, 8     -> lengths:<1, 1, 4, 2>    , nums: <2, 1, 1, 1>    : 2 slices  , slice_idx: 0
+//      <4, 2, 4, 1, 2>, 4  -> lengths:<1, 1, 2, 1, 2> , nums: <4, 2, 2, 1, 1> : 16 slices , slice_idx: 2
+//      <4, 2, 4, 1, 6>, 4  -> lengths:<1, 1, 2, 1, 2> , nums: <4, 2, 2, 1, 3> : 48 slices , slice_idx: 2
+//      <4, 2, 5, 1, 2>, 10 -> lengths:<1, 1, 5, 1, 2> , nums: <4, 2, 1, 1, 1> : 8 slices  , slice_idx: 1
+//
+//      <4, 2, 8>, 64       -> lengths:<4, 2, 8>       , nums: <1, 1, 1>       : 1  slices , slice_idx: 0
+//      <4, 2, 8>, 32       -> lengths:<2, 2, 8>       , nums: <2, 1, 1>       : 2  slices , slice_idx: 0
+//      <4, 2, 8>, 16       -> lengths:<1, 2, 8>       , nums: <4, 1, 1>       : 4  slices , slice_idx: 0
+//      <4, 2, 8>, 8        -> lengths:<1, 1, 8>       , nums: <4, 2, 1>       : 8  slices , slice_idx: 1
+//      <4, 2, 8>, 4        -> lengths:<1, 1, 4>       , nums: <4, 2, 2>       : 16 slices , slice_idx: 2
+//      <4, 2, 8>, 2        -> lengths:<1, 1, 2>       , nums: <4, 2, 4>       : 32 slices , slice_idx: 2
+//      <4, 2, 8>, 1        -> lengths:<1, 1, 1>       , nums: <4, 2, 8>       : 64 slices , slice_idx: 2
+//
+//      <4, 2, 1, 4, 2> / 4 ->
+// mask:<1, 1, 1, 0, 1>,    -> lengths:<1, 2, 1, 4, 2> , nums: <4, 1, 1, 1, 1> : 8 slices  , slice_idx: 0
+//
+// return Tuple<slice_lengths, slice_nums, slice_index>, slice_index is at which index will start
+// have split slices (right -> left)
+//  or the first index that sliced length is different from the original length
+// clang-format on
+template <typename Seq,
+          index_t SliceSize,
+          typename Mask = typename uniform_sequence_gen<Seq::Size(), 1>::type>
+constexpr auto reverse_slice_sequence(Seq,
+                                      Number<SliceSize>,
+                                      Mask = typename uniform_sequence_gen<Seq::Size(), 1>::type{})
+{
+    static_assert(Seq::Size() == Mask::Size());
+    using sliced_type = detail::reverse_slice_sequence_impl<
+        Seq,
+        Mask,
+        typename arithmetic_sequence_gen<0, Seq::Size(), 1>::type,
+        SliceSize>;
+    static_assert(sliced_type::remaining_slice_sizes::Front().value == 1,
+                  "can not evenly divide this sequence, please check");
+    return make_tuple(typename sliced_type::dim_lengths{},
+                      typename sliced_type::dim_slices{},
+                      Number<sliced_type::split_idx>{});
+}
 
 } // namespace ck

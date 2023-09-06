@@ -33,6 +33,100 @@ struct StaticTileDistributionEncoding
     static constexpr index_t NDimX = HsLengthss::Size();
     static constexpr index_t NDimP = Ps2RHssMajor::Size();
     static constexpr index_t NDimY = Ys2RHsMajor::Size();
+
+    // e.g. tuple<seq<1, 4, 32>, seq<4, 1, 4, 2, 4>> --> seq<3, 5>
+    __host__ __device__ static constexpr auto GetUniformedHDimLengths()
+    {
+        // <len_d0, len_d1, ...>
+        constexpr auto h_dim_lengths = to_sequence(
+            [&](auto inner) constexpr { return inner.Size(); }, HsLengthss{});
+        return h_dim_lengths;
+    }
+
+    // e.g. tuple<seq<1, 4, 32>, seq<4, 1, 4, 2, 4>> --> seq<3, 5> --> seq<0, 3, 8>
+    __host__ __device__ static constexpr auto GetHDimLengthsPrefixSum()
+    {
+        // <0, len_d0, len_d0+len_d1, ...>
+        constexpr auto h_dim_prefix_sum = prefix_sum_sequence(GetUniformedHDimLengths());
+
+        return h_dim_prefix_sum;
+    }
+
+    __host__ __device__ static constexpr auto GetUniformedYDimMask()
+    {
+        // h_dim  : tuple<seq<1, 4, 32>, seq<4, 1, 4, 2, 4>>
+        //                    Y  P  P        Y  P  Y  P  Y
+        // return : seq<1, 0, 0, 1, 0, 1, 0, 1>
+        constexpr auto all_ys_2_rhss = GetUniformedIdxY2H();
+        return mask_sequence_gen(all_ys_2_rhss, GetHDimLengthsPrefixSum().Back());
+    }
+
+    //                    0  1  2        3  4  5  6  7
+    // h_dim  : tuple<seq<1, 4, 32>, seq<4, 1, 4, 2, 4>>
+    // p_major: tuple<seq<1, 2>, seq<2, 1>>
+    // p_minor: tuple<seq<1, 1>, seq<3, 2>>
+    //      => seq<1, 4, 6, 2>
+    __host__ __device__ static constexpr auto GetUniformedIdxP2H()
+    {
+        // <0, 0, len_d0, len_d0+len_d1, ...>
+        constexpr auto x_dim_prefix_sum =
+            merge_sequences(Sequence<0>{} /*for R dims*/, GetHDimLengthsPrefixSum());
+
+        constexpr auto all_ps_2_rhss_major = unpack(
+            [](auto&&... xs) constexpr { return merge_sequences(xs...); }, Ps2RHssMajor{});
+
+        constexpr auto all_ps_2_rhss_minor = unpack(
+            [](auto&&... xs) constexpr { return merge_sequences(xs...); }, Ps2RHssMinor{});
+
+        constexpr auto all_ps_2_rhss = transform_sequences(
+            [&x_dim_prefix_sum](const auto& major, const auto& minor) {
+                return x_dim_prefix_sum.template At<major>() + minor;
+            },
+            all_ps_2_rhss_major,
+            all_ps_2_rhss_minor);
+
+        return all_ps_2_rhss;
+    }
+
+    __host__ __device__ static constexpr auto GetUniformedIdxY2H()
+    {
+        constexpr auto all_ys_2_rhss = transform_sequences(
+            [](auto major, auto minor) constexpr {
+                // <0, 0, len_d0, len_d0+len_d1, ...>
+                constexpr auto x_dim_prefix_sum =
+                    merge_sequences(Sequence<0>{} /*for R dims*/, GetHDimLengthsPrefixSum());
+                return x_dim_prefix_sum.At(major) + minor;
+            },
+            Ys2RHsMajor{},
+            Ys2RHsMinor{});
+
+        return all_ys_2_rhss;
+    }
+
+    // return tuple<sorted_dims, sorted_maps, sorted_prefix_sum>
+    template <typename IdxSeq, typename PrefixSumSeq>
+    __host__ __device__ static constexpr auto GetSortedInfo(IdxSeq, PrefixSumSeq)
+    {
+        using sorted_idx = sequence_unique_sort<IdxSeq, math::less<index_t>, math::equal<index_t>>;
+
+        constexpr auto sorted_dims = typename sorted_idx::type{};
+        constexpr auto sorted_maps = typename sorted_idx::sorted2unsorted_map{};
+
+        constexpr auto sorted_histogram  = histogram_sorted_sequence(sorted_dims, PrefixSumSeq{});
+        constexpr auto sorted_prefix_sum = prefix_sum_sequence(sorted_histogram);
+
+        return make_tuple(sorted_dims, sorted_maps, sorted_prefix_sum);
+    }
+
+    __host__ __device__ static constexpr auto GetSortedPInfo()
+    {
+        return GetSortedInfo(GetUniformedIdxP2H(), GetHDimLengthsPrefixSum());
+    }
+
+    __host__ __device__ static constexpr auto GetSortedYInfo()
+    {
+        return GetSortedInfo(GetUniformedIdxY2H(), GetHDimLengthsPrefixSum());
+    }
 };
 
 template <typename PsYs2XsAdaptor_,
