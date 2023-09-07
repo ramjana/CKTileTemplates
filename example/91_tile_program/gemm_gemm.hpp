@@ -215,7 +215,6 @@ struct GemmGemm
         // init Acc1
         tile_elementwise_inout([](auto& acc1) { acc1 = 0; }, acc1_block_tile);
 
-#if 1
         index_t iN0 = 0;
 
         do
@@ -255,47 +254,6 @@ struct GemmGemm
             iN0 += kN0PerBlock;
 
         } while(iN0 < N0);
-#else
-        index_t iN0 = 0;
-
-        do
-        {
-            // load b1
-            const auto b1_block_tile = load_tile(b1_dram_block_window);
-
-            // Block GEMM0 pipeline: acc0 = a0 * b0
-            const auto acc0_block_tile = block_gemm0_pipeline(
-                a0_dram_block_window, b0_dram_block_window, K0 / kK0PerBlock, p_smem_char);
-
-            // type cast acc0 into c0
-            const auto c0_block_tile =
-                tile_elementwise_in(type_convert<C0DataType, Acc0DataType>, acc0_block_tile);
-
-            // Block GEMM1: acc1 += c0 * b1
-            {
-                // wait for block gemm0 pipeline to finish
-                ps.block_sync_lds();
-
-                store_tile(b1_lds_block_window, b1_block_tile);
-
-                // wait for store_tile to finish
-                ps.block_sync_lds();
-
-                // acc1 += c0 * b1
-                block_gemm1(acc1_block_tile, c0_block_tile, b1_lds_block_window);
-
-                // wait for block gemm1 to finish
-                ps.block_sync_lds();
-            }
-
-            // move tile windows
-            move_tile_window(b0_dram_block_window, {kN0PerBlock, 0});
-            move_tile_window(b1_dram_block_window, {0, kN0PerBlock});
-
-            iN0 += kN0PerBlock;
-
-        } while(iN0 < N0);
-#endif
 
         // type cast acc1 into c1
         const auto c1_block_tile =
