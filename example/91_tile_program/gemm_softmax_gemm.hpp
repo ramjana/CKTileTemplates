@@ -247,7 +247,11 @@ struct GemmSoftmaxGemm
             const auto m_old = m;
 
             // m[i][j]
-            m = tile_elementwise_in(f_max, m_old, m_local);
+            tile_elementwise_inout(
+                [](auto& m_v, auto m_old_v, auto m_local_v) { m_v = max(m_old_v, m_local_v); },
+                m,
+                m_old,
+                m_local);
 
             // p[i][j]
             auto p =
@@ -271,6 +275,7 @@ struct GemmSoftmaxGemm
                 });
             });
 
+#if 1
             // l[i][j]
             sweep_tile_span(p_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
@@ -303,6 +308,7 @@ struct GemmSoftmaxGemm
 
                 l.SetElementFromTileDistributedIndices(i_idx, l_v);
             });
+#endif
 
             // type cast p into a1
             const auto c0_block_tile =
@@ -351,7 +357,9 @@ struct GemmSoftmaxGemm
 
                 const auto o_v = acc1_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
 
-                acc1_block_tile.SetElementFromTileDistributedIndices(i_j_idx, o_v);
+                const auto o_new_v = o_v * tmp;
+
+                acc1_block_tile.SetElementFromTileDistributedIndices(i_j_idx, o_new_v);
             });
         });
 
