@@ -48,7 +48,7 @@ struct BlockGemmARegBSmemCRegV1DefaultPolicy
             return make_tuple(WarpGemmMfmaF16F16F32M32N32K8{}, 4, 1);
         }
 #else
-        return make_tuple(WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution{}, 4, 1);
+        return make_tuple(WarpGemmMfmaF16F16F32M32N32K8TransposedCDistribution{}, 4, 1);
 #endif
     }
 };

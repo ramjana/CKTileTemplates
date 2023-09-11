@@ -64,14 +64,24 @@ int main(int argc, char* argv[])
     Tensor<A0DataType> a0_host(a0_lengths, a0_strides);
     Tensor<B0DataType> b0_host(b0_lengths, b0_strides);
     Tensor<C0DataType> c0_host_ref(c0_lengths, c0_strides);
-    Tensor<C0DataType> d0_host_ref(d0_lengths, d0_strides);
+    Tensor<D0DataType> d0_host_ref(d0_lengths, d0_strides);
     Tensor<B1DataType> b1_host(b1_lengths, b1_strides);
     Tensor<C1DataType> c1_host_ref(c1_lengths, c1_strides);
     Tensor<C1DataType> c1_host_dev(c1_lengths, c1_strides);
 
+#if 1
     ck::utils::FillUniformDistributionIntegerValue<A0DataType>{-3.f, 3.f}(a0_host);
     ck::utils::FillUniformDistributionIntegerValue<B0DataType>{-3.f, 3.f}(b0_host);
     ck::utils::FillUniformDistributionIntegerValue<B1DataType>{-3.f, 3.f}(b1_host);
+#elif 0
+    ck::utils::FillUniformDistribution<A0DataType>{-3.f, 3.f}(a0_host);
+    ck::utils::FillUniformDistribution<B0DataType>{-3.f, 3.f}(b0_host);
+    ck::utils::FillUniformDistribution<B1DataType>{-3.f, 3.f}(b1_host);
+#else
+    ck::utils::FillConstant<A0DataType>{1.0f}(a0_host);
+    ck::utils::FillConstant<A0DataType>{1.0f}(b0_host);
+    ck::utils::FillConstant<A0DataType>{1.0f}(b1_host);
+#endif
 
     // reference
     reference_gemm<A0DataType, B0DataType, C0DataType, float>(a0_host, b0_host, c0_host_ref);
@@ -137,6 +147,9 @@ int main(int argc, char* argv[])
 
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
+
+    // LogRangeAsType<float>(std::cout << "C1 dev: ", c1_host_dev.mData, ", ", 16, 20) << std::endl;
+    // LogRangeAsType<float>(std::cout << "C1 ref: ", c1_host_ref.mData, ", ", 16, 20) << std::endl;
 
     return !ck::utils::check_err(c1_host_dev, c1_host_ref);
 }

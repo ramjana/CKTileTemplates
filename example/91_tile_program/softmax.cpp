@@ -81,5 +81,8 @@ int main(int argc, char* argv[])
 
     std::cout << "Perf: " << ave_time << " ms, " << gb_per_sec << " GB/s" << std::endl;
 
+    LogRangeAsType<float>(std::cout << "dev: ", b_host_dev.mData, ", ") << std::endl;
+    LogRangeAsType<float>(std::cout << "ref: ", b_host_ref.mData, ", ") << std::endl;
+
     return !ck::utils::check_err(b_host_dev, b_host_ref);
 }

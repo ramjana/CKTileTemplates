@@ -221,17 +221,22 @@ struct GemmSoftmaxGemm
             b1_dram_block_window)){};
 
         const auto f_max = [](auto v0, auto v1) { return max(v0, v1); };
+        const auto f_sum = [](auto v0, auto v1) { return v0 + v1; };
 
         // init Acc1
         tile_elementwise_inout([](auto& acc1) { acc1 = 0; }, acc1_block_tile);
 
-        index_t iN0 = 0;
-
-        // init m , l
+        // m, l tile
         auto m = decltype(block_tile_reduce<Acc0DataType>(
             Acc0BlockTileType{}, Sequence<1>{}, f_max, Acc0DataType{0})){};
 
+        // init m, l
         auto l = make_static_distributed_tensor<Acc0DataType>(m.GetTileDistribution());
+
+        tile_elementwise_inout([](auto& m_v) { m_v = NumericLimits<Acc0DataType>::Lowest(); }, m);
+        tile_elementwise_inout([](auto& l_v) { l_v = 0; }, l);
+
+        index_t iN0 = 0;
 
         do
         {
@@ -240,8 +245,10 @@ struct GemmSoftmaxGemm
                 a0_dram_block_window, b0_dram_block_window, K0 / kK0PerBlock, p_smem_char);
 
             // rowmax(S[i][j])
-            const auto m_local = block_tile_reduce<Acc0DataType>(
+            auto m_local = block_tile_reduce<Acc0DataType>(
                 acc0_block_tile, Sequence<1>{}, f_max, NumericLimits<Acc0DataType>::Lowest());
+
+            block_tile_reduce_sync(m_local, f_max);
 
             // m[i][j-1]
             const auto m_old = m;
@@ -253,7 +260,7 @@ struct GemmSoftmaxGemm
                 m_old,
                 m_local);
 
-            // p[i][j]
+            // P[i][j]
             auto p =
                 make_static_distributed_tensor<Acc0DataType>(acc0_block_tile.GetTileDistribution());
 
@@ -275,8 +282,13 @@ struct GemmSoftmaxGemm
                 });
             });
 
-#if 1
-            // l[i][j]
+            // rowsum(P[i][j])
+            auto rowsum_p =
+                block_tile_reduce<Acc0DataType>(p, Sequence<1>{}, f_sum, Acc0DataType{0});
+
+            block_tile_reduce_sync(rowsum_p, f_sum);
+
+            // l[i][j], O[i][j]
             sweep_tile_span(p_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
 
@@ -284,31 +296,32 @@ struct GemmSoftmaxGemm
                 const auto m_v     = m.GetElementFromTileDistributedIndices(i_idx);
                 const auto l_old_v = l.GetElementFromTileDistributedIndices(i_idx);
 
-                const auto tmp = math::exp(m_old_v - m_v);
-
+                const auto tmp  = math::exp(m_old_v - m_v);
                 const auto tmp2 = 1 / tmp;
 
-                auto l_v = tmp * l_old_v;
+                auto l_v = tmp * l_old_v + rowsum_p.GetElementFromTileDistributedIndices(i_idx);
+
+                l.SetElementFromTileDistributedIndices(i_idx, l_v);
 
                 sweep_tile_span(p_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
-
-                    const auto p_v = p.GetElementFromTileDistributedIndices(i_j_idx);
-
-                    l_v += p_v;
 
                     // O[i][j]
                     const auto o_old_v =
                         acc1_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
 
+#if 0 // debug
+      // this use the same equation from FA v2 paper, but produce -nan
                     const auto o_v = o_old_v * tmp2;
+#elif 1
+                    // this use different equation from FA v2 paper, but produce correct result
+                    (void) tmp2;
+                    const auto o_v = o_old_v * tmp;
+#endif
 
                     acc1_block_tile.SetElementFromTileDistributedIndices(i_j_idx, o_v);
                 });
-
-                l.SetElementFromTileDistributedIndices(i_idx, l_v);
             });
-#endif
 
             // type cast p into a1
             const auto c0_block_tile =
