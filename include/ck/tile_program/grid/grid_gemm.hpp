@@ -24,12 +24,12 @@ struct GridGemm
     using BlockGemmPipeline = typename Policy::template BlockGemmPipeline<Problem>;
 
     template <typename AGridTensorView, typename BGridTensorView, typename CGridTensorView>
-    __host__ __device__ void operator()(const AGridTensorView& a_grid,
-                                        const BGridTensorView& b_grid,
-                                        CGridTensorView& c_grid,
-                                        const AElementFunction& a_element_func,
-                                        const BElementFunction& b_element_func,
-                                        const CElementFunction& c_element_func) const
+    __device__ void operator()(const AGridTensorView& a_grid,
+                               const BGridTensorView& b_grid,
+                               CGridTensorView& c_grid,
+                               const AElementFunction& a_element_func,
+                               const BElementFunction& b_element_func,
+                               const CElementFunction& c_element_func) const
     {
         using namespace ck;
         using namespace ck::tile_program;

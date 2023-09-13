@@ -194,10 +194,10 @@ struct BlockGemmPipelineAGmemBGmemCRegV1
     }
 
     template <typename ADramBlockWindowTmp, typename BDramBlockWindowTmp>
-    __host__ __device__ auto operator()(const ADramBlockWindowTmp& a_dram_block_window_tmp,
-                                        const BDramBlockWindowTmp& b_dram_block_window_tmp,
-                                        index_t num_loop,
-                                        void* p_smem) const
+    __device__ auto operator()(const ADramBlockWindowTmp& a_dram_block_window_tmp,
+                               const BDramBlockWindowTmp& b_dram_block_window_tmp,
+                               index_t num_loop,
+                               void* p_smem) const
     {
         return operator()(
             a_dram_block_window_tmp,
