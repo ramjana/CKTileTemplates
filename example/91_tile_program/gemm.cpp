@@ -114,23 +114,23 @@ int main(int argc, char* argv[])
                                   kGemmNPerBlock,
                                   kGemmKPerBlock>{};
 
-    float ave_time = launch_kernel(StreamConfig{nullptr, true},
-                                   gemm_kernel,
-                                   kGridSize,
-                                   kBlockSize,
-                                   0,
-                                   static_cast<ADataType*>(a_buf.GetDeviceBuffer()),
-                                   static_cast<BDataType*>(b_buf.GetDeviceBuffer()),
-                                   static_cast<CDataType*>(c_buf.GetDeviceBuffer()),
-                                   M,
-                                   N,
-                                   K,
-                                   K,
-                                   K,
-                                   N,
-                                   AElementFunction{},
-                                   BElementFunction{},
-                                   CElementFunction{});
+    float ave_time = launch_kernel<kBlockSize, 2>(StreamConfig{nullptr, true},
+                                                  gemm_kernel,
+                                                  kGridSize,
+                                                  kBlockSize,
+                                                  0,
+                                                  static_cast<ADataType*>(a_buf.GetDeviceBuffer()),
+                                                  static_cast<BDataType*>(b_buf.GetDeviceBuffer()),
+                                                  static_cast<CDataType*>(c_buf.GetDeviceBuffer()),
+                                                  M,
+                                                  N,
+                                                  K,
+                                                  K,
+                                                  K,
+                                                  N,
+                                                  AElementFunction{},
+                                                  BElementFunction{},
+                                                  CElementFunction{});
 
     c_buf.FromDevice(c_host_dev.mData.data());
 

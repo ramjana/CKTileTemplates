@@ -102,34 +102,35 @@ int main(int argc, char* argv[])
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-    float ave_time = launch_kernel(StreamConfig{nullptr, true},
-                                   GemmSoftmaxGemm<A0DataType,
-                                                   B0DataType,
-                                                   Acc0DataType,
-                                                   C0DataType,
-                                                   B1DataType,
-                                                   Acc1DataType,
-                                                   C1DataType,
-                                                   kBlockSize,
-                                                   kM0PerBlock,
-                                                   kN0PerBlock,
-                                                   kK0PerBlock,
-                                                   kN1PerBlock>{},
-                                   kGridSize,
-                                   kBlockSize,
-                                   0,
-                                   static_cast<A0DataType*>(a0_buf.GetDeviceBuffer()),
-                                   static_cast<B0DataType*>(b0_buf.GetDeviceBuffer()),
-                                   static_cast<B1DataType*>(b1_buf.GetDeviceBuffer()),
-                                   static_cast<C1DataType*>(c1_buf.GetDeviceBuffer()),
-                                   M0,
-                                   N0,
-                                   K0,
-                                   N1,
-                                   K0,  // Lda0
-                                   K0,  // Ldb0
-                                   N0,  // Ldb1
-                                   N1); // Ldc1
+    float ave_time =
+        launch_kernel<kBlockSize, 2>(StreamConfig{nullptr, true},
+                                     GemmSoftmaxGemm<A0DataType,
+                                                     B0DataType,
+                                                     Acc0DataType,
+                                                     C0DataType,
+                                                     B1DataType,
+                                                     Acc1DataType,
+                                                     C1DataType,
+                                                     kBlockSize,
+                                                     kM0PerBlock,
+                                                     kN0PerBlock,
+                                                     kK0PerBlock,
+                                                     kN1PerBlock>{},
+                                     kGridSize,
+                                     kBlockSize,
+                                     0,
+                                     static_cast<A0DataType*>(a0_buf.GetDeviceBuffer()),
+                                     static_cast<B0DataType*>(b0_buf.GetDeviceBuffer()),
+                                     static_cast<B1DataType*>(b1_buf.GetDeviceBuffer()),
+                                     static_cast<C1DataType*>(c1_buf.GetDeviceBuffer()),
+                                     M0,
+                                     N0,
+                                     K0,
+                                     N1,
+                                     K0,  // Lda0
+                                     K0,  // Ldb0
+                                     N0,  // Ldb1
+                                     N1); // Ldc1
 
     c1_buf.FromDevice(c1_host_dev.mData.data());
 
