@@ -22,10 +22,10 @@
 // O[M0, N1] = P[M0, N0] * V[N1, N0]
 template <typename QDataType,
           typename KDataType,
+          typename VDataType,
           typename SaccDataType,
           typename SMPLComputeDataType,
           typename PDataType,
-          typename VDataType,
           typename OaccDataType,
           typename ODataType,
           ck::index_t kBlockSize,
@@ -259,10 +259,7 @@ struct GemmSoftmaxGemm
 
             // m{j}
             tile_elementwise_inout(
-                [](auto& m_e, auto m_old_e, auto m_local_e) { m_e = max(m_old_e, m_local_e); },
-                m,
-                m_old,
-                m_local);
+                [](auto& e0, auto e1, auto e2) { e0 = max(e1, e2); }, m, m_old, m_local);
 
             // Pcompute{j}
             auto p_compute =

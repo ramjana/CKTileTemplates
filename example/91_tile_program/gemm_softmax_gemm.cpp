@@ -19,15 +19,14 @@
 
 int main(int argc, char* argv[])
 {
-    using A0DataType   = ck::half_t;
-    using B0DataType   = ck::half_t;
-    using Acc0DataType = float;
-    using SMLDataType  = float;
-    using C0DataType   = ck::half_t;
-    using D0DataType   = ck::half_t;
-    using B1DataType   = ck::half_t;
-    using Acc1DataType = float;
-    using C1DataType   = ck::half_t;
+    using QDataType           = ck::half_t;
+    using KDataType           = ck::half_t;
+    using VDataType           = ck::half_t;
+    using SaccDataType        = float;
+    using SMPLComputeDataType = float;
+    using PDataType           = ck::half_t;
+    using OaccDataType        = float;
+    using ODataType           = ck::half_t;
 
     ck::index_t M0 = 13312;
     ck::index_t N0 = 4096;
@@ -42,56 +41,57 @@ int main(int argc, char* argv[])
         N1 = std::stoi(argv[4]);
     }
 
-    std::array<ck::index_t, 2> a0_lengths{M0, K0};
-    std::array<ck::index_t, 2> a0_strides{K0, 1};
+    std::array<ck::index_t, 2> q_lengths{M0, K0};
+    std::array<ck::index_t, 2> q_strides{K0, 1};
 
-    std::array<ck::index_t, 2> b0_lengths{N0, K0};
-    std::array<ck::index_t, 2> b0_strides{K0, 1};
+    std::array<ck::index_t, 2> k_lengths{N0, K0};
+    std::array<ck::index_t, 2> k_strides{K0, 1};
 
-    std::array<ck::index_t, 2> c0_lengths{M0, N0};
-    std::array<ck::index_t, 2> c0_strides{N0, 1};
+    std::array<ck::index_t, 2> v_lengths{N1, N0};
+    std::array<ck::index_t, 2> v_strides{N0, 1};
 
-    std::array<ck::index_t, 2> d0_lengths{M0, N0};
-    std::array<ck::index_t, 2> d0_strides{N0, 1};
+    std::array<ck::index_t, 2> s_lengths{M0, N0};
+    std::array<ck::index_t, 2> s_strides{N0, 1};
 
-    std::array<ck::index_t, 2> b1_lengths{N1, N0};
-    std::array<ck::index_t, 2> b1_strides{N0, 1};
+    std::array<ck::index_t, 2> p_lengths{M0, N0};
+    std::array<ck::index_t, 2> p_strides{N0, 1};
 
-    std::array<ck::index_t, 2> c1_lengths{M0, N1};
-    std::array<ck::index_t, 2> c1_strides{N1, 1};
+    std::array<ck::index_t, 2> o_lengths{M0, N1};
+    std::array<ck::index_t, 2> o_strides{N1, 1};
 
     // host verify
-    Tensor<A0DataType> a0_host(a0_lengths, a0_strides);
-    Tensor<B0DataType> b0_host(b0_lengths, b0_strides);
-    Tensor<C0DataType> c0_host_ref(c0_lengths, c0_strides);
-    Tensor<D0DataType> d0_host_ref(d0_lengths, d0_strides);
-    Tensor<B1DataType> b1_host(b1_lengths, b1_strides);
-    Tensor<C1DataType> c1_host_ref(c1_lengths, c1_strides);
-    Tensor<C1DataType> c1_host_dev(c1_lengths, c1_strides);
+    Tensor<QDataType> q_host(q_lengths, q_strides);
+    Tensor<KDataType> k_host(k_lengths, k_strides);
+    Tensor<VDataType> v_host(v_lengths, v_strides);
+    Tensor<SMPLComputeDataType> s_host_ref(s_lengths, s_strides);
+    Tensor<PDataType> p_host_ref(p_lengths, p_strides);
+    Tensor<ODataType> o_host_ref(o_lengths, o_strides);
+    Tensor<ODataType> o_host_dev(o_lengths, o_strides);
 
 #if 0
-    ck::utils::FillUniformDistributionIntegerValue<A0DataType>{-3.f, 3.f}(a0_host);
-    ck::utils::FillUniformDistributionIntegerValue<B0DataType>{-3.f, 3.f}(b0_host);
-    ck::utils::FillUniformDistributionIntegerValue<B1DataType>{-3.f, 3.f}(b1_host);
+    ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
+    ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
+    ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
 #else
-    ck::utils::FillUniformDistribution<A0DataType>{-3.f, 3.f}(a0_host);
-    ck::utils::FillUniformDistribution<B0DataType>{-3.f, 3.f}(b0_host);
-    ck::utils::FillUniformDistribution<B1DataType>{-3.f, 3.f}(b1_host);
+    ck::utils::FillUniformDistribution<QDataType>{-3.f, 3.f}(q_host);
+    ck::utils::FillUniformDistribution<KDataType>{-3.f, 3.f}(k_host);
+    ck::utils::FillUniformDistribution<VDataType>{-3.f, 3.f}(v_host);
 #endif
 
     // reference
-    reference_gemm<A0DataType, B0DataType, C0DataType, float>(a0_host, b0_host, c0_host_ref);
-    reference_softmax<C0DataType, float, D0DataType>(c0_host_ref, d0_host_ref);
-    reference_gemm<D0DataType, B1DataType, C1DataType, float>(d0_host_ref, b1_host, c1_host_ref);
+    reference_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
+        q_host, k_host, s_host_ref);
+    reference_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, p_host_ref);
+    reference_gemm<PDataType, VDataType, OaccDataType, ODataType>(p_host_ref, v_host, o_host_ref);
 
-    DeviceMem a0_buf(sizeof(A0DataType) * a0_host.GetElementSpaceSize());
-    DeviceMem b0_buf(sizeof(B0DataType) * b0_host.GetElementSpaceSize());
-    DeviceMem b1_buf(sizeof(B1DataType) * b1_host.GetElementSpaceSize());
-    DeviceMem c1_buf(sizeof(C1DataType) * c1_host_ref.GetElementSpaceSize());
+    DeviceMem q_buf(sizeof(QDataType) * q_host.GetElementSpaceSize());
+    DeviceMem k_buf(sizeof(KDataType) * k_host.GetElementSpaceSize());
+    DeviceMem v_buf(sizeof(VDataType) * v_host.GetElementSpaceSize());
+    DeviceMem o_buf(sizeof(ODataType) * o_host_ref.GetElementSpaceSize());
 
-    a0_buf.ToDevice(a0_host.mData.data());
-    b0_buf.ToDevice(b0_host.mData.data());
-    b1_buf.ToDevice(b1_host.mData.data());
+    q_buf.ToDevice(q_host.mData.data());
+    k_buf.ToDevice(k_host.mData.data());
+    v_buf.ToDevice(v_host.mData.data());
 
     constexpr ck::index_t kM0PerBlock = 128;
     constexpr ck::index_t kN0PerBlock = 128;
@@ -103,42 +103,46 @@ int main(int argc, char* argv[])
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-    float ave_time =
-        launch_kernel<kBlockSize, 2>(StreamConfig{nullptr, true},
-                                     GemmSoftmaxGemm<A0DataType,
-                                                     B0DataType,
-                                                     Acc0DataType,
-                                                     SMLDataType,
-                                                     C0DataType,
-                                                     B1DataType,
-                                                     Acc1DataType,
-                                                     C1DataType,
-                                                     kBlockSize,
-                                                     kM0PerBlock,
-                                                     kN0PerBlock,
-                                                     kK0PerBlock,
-                                                     kN1PerBlock>{},
-                                     kGridSize,
-                                     kBlockSize,
-                                     0,
-                                     static_cast<A0DataType*>(a0_buf.GetDeviceBuffer()),
-                                     static_cast<B0DataType*>(b0_buf.GetDeviceBuffer()),
-                                     static_cast<B1DataType*>(b1_buf.GetDeviceBuffer()),
-                                     static_cast<C1DataType*>(c1_buf.GetDeviceBuffer()),
-                                     M0,
-                                     N0,
-                                     K0,
-                                     N1,
-                                     K0,  // Lda0
-                                     K0,  // Ldb0
-                                     N0,  // Ldb1
-                                     N1); // Ldc1
+    constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
+    constexpr ck::index_t kWarpPerBlock = kBlockSize / warpSize;
+    constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
 
-    c1_buf.FromDevice(c1_host_dev.mData.data());
+    float ave_time =
+        launch_kernel<kBlockSize, kBlockPerCu>(StreamConfig{nullptr, true},
+                                               GemmSoftmaxGemm<QDataType,
+                                                               KDataType,
+                                                               VDataType,
+                                                               SaccDataType,
+                                                               SMPLComputeDataType,
+                                                               PDataType,
+                                                               OaccDataType,
+                                                               ODataType,
+                                                               kBlockSize,
+                                                               kM0PerBlock,
+                                                               kN0PerBlock,
+                                                               kK0PerBlock,
+                                                               kN1PerBlock>{},
+                                               kGridSize,
+                                               kBlockSize,
+                                               0,
+                                               static_cast<QDataType*>(q_buf.GetDeviceBuffer()),
+                                               static_cast<KDataType*>(k_buf.GetDeviceBuffer()),
+                                               static_cast<VDataType*>(v_buf.GetDeviceBuffer()),
+                                               static_cast<ODataType*>(o_buf.GetDeviceBuffer()),
+                                               M0,
+                                               N0,
+                                               K0,
+                                               N1,
+                                               K0,  // Lda0
+                                               K0,  // Ldb0
+                                               N0,  // Ldb1
+                                               N1); // Ldc1
+
+    o_buf.FromDevice(o_host_dev.mData.data());
 
     std::size_t flop      = std::size_t(2) * M0 * N0 * K0 + std::size_t(2) * M0 * N1 * N0;
-    std::size_t num_btype = sizeof(A0DataType) * M0 * K0 + sizeof(B0DataType) * N0 * K0 +
-                            sizeof(B1DataType) * N1 * N0 + sizeof(C1DataType) * M0 * N1;
+    std::size_t num_btype = sizeof(QDataType) * M0 * K0 + sizeof(KDataType) * N0 * K0 +
+                            sizeof(VDataType) * N1 * N0 + sizeof(ODataType) * M0 * N1;
 
     float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
 
@@ -147,12 +151,5 @@ int main(int argc, char* argv[])
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
 
-    // LogRangeAsType<float>(std::cout << "C1 dev: ", c1_host_dev.mData, ", ", 16, 20) << std::endl;
-    // LogRangeAsType<float>(std::cout << "C1 ref: ", c1_host_ref.mData, ", ", 16, 20) << std::endl;
-
-#if 1
-    return !ck::utils::check_err(c1_host_dev, c1_host_ref);
-#else
-    return !ck::utils::check_err(c1_host_dev, c1_host_ref, "Error: Incorrect results!", 1e-3, 3e-4);
-#endif
+    return !ck::utils::check_err(o_host_dev, o_host_ref);
 }

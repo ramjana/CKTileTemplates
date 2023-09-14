@@ -6,7 +6,7 @@
 #include "ck/utility/common_header.hpp"
 #include "ck/library/utility/host_tensor.hpp"
 
-template <typename ADataType, typename BDataType, typename CDataType, typename AccDataType>
+template <typename ADataType, typename BDataType, typename AccDataType, typename CDataType>
 void reference_gemm(const Tensor<ADataType>& a_m_k,
                     const Tensor<BDataType>& b_n_k,
                     Tensor<CDataType>& c_m_n)

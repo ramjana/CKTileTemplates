@@ -108,7 +108,8 @@ struct StaticDistributedTensor
     template <typename TileDistributedIndices>
     __host__ __device__ constexpr const DataType& operator[](TileDistributedIndices) const
     {
-        static_assert(is_static_v<TileDistributedIndices>, "wrong!");
+        static_assert(is_static_v<TileDistributedIndices>,
+                      "wrong! Tile Distributed Indices should be static");
 
         constexpr auto y_idx =
             GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndices{});
@@ -119,7 +120,8 @@ struct StaticDistributedTensor
     template <typename TileDistributedIndices>
     __host__ __device__ constexpr DataType& operator()(TileDistributedIndices)
     {
-        static_assert(is_static_v<TileDistributedIndices>, "wrong!");
+        static_assert(is_static_v<TileDistributedIndices>,
+                      "wrong! Tile Distributed Indices should be static");
 
         constexpr auto y_idx =
             GetTileDistribution().GetYIndicesFromDistributedIndices(TileDistributedIndices{});
