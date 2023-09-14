@@ -133,10 +133,10 @@ int main(int argc, char* argv[])
                                                N0,
                                                K0,
                                                N1,
-                                               K0,  // Lda0
-                                               K0,  // Ldb0
-                                               N0,  // Ldb1
-                                               N1); // Ldc1
+                                               K0,  // StrideQ
+                                               K0,  // StrideK
+                                               N0,  // StrideV
+                                               N1); // StrideO
 
     o_buf.FromDevice(o_host_dev.mData.data());
 
