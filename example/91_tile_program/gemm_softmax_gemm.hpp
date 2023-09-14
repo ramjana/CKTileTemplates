@@ -290,23 +290,17 @@ struct GemmSoftmaxGemm
             sweep_tile_span(p_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
 
-                const auto tmp  = math::exp(m_old[i_idx] - m[i_idx]);
-                const auto tmp2 = 1 / tmp;
+                const auto tmp = math::exp(m_old[i_idx] - m[i_idx]);
 
                 l(i_idx) = tmp * l[i_idx] + rowsum_p[i_idx];
 
                 sweep_tile_span(p_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-#if 0
-                    // FIXME: this use the same equation from FA v2 paper, but produce -nan.
-                    //   Is the equation wrong?
-                    o_acc(i_j_idx) *= tmp2;
-#elif 1
-                    // this use different equation from FA v2 paper, but produce correct result
-                    (void) tmp2;
+                    // FIXME: this use different equation from FA v2 paper,
+                    // but produce correc result.
+                    // Is the equation wrong?
                     o_acc(i_j_idx) *= tmp;
-#endif
                 });
             });
 
