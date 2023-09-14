@@ -273,16 +273,10 @@ struct GemmSoftmaxGemm
             sweep_tile_span(p_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
 
-                const auto m_e = m.GetElementFromTileDistributedIndices(i_idx);
-
                 sweep_tile_span(p_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                    const auto s_e = s.GetElementFromTileDistributedIndices(i_j_idx);
-
-                    const auto p_e = math::exp(s_e - m_e);
-
-                    p_compute.SetElementFromTileDistributedIndices(i_j_idx, p_e);
+                    p_compute(i_j_idx) = math::exp(s[i_j_idx] - m[i_idx]);
                 });
             });
 
@@ -296,34 +290,23 @@ struct GemmSoftmaxGemm
             sweep_tile_span(p_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
 
-                const auto m_old_e = m_old.GetElementFromTileDistributedIndices(i_idx);
-                const auto m_e     = m.GetElementFromTileDistributedIndices(i_idx);
-                const auto l_old_v = l.GetElementFromTileDistributedIndices(i_idx);
-
-                const auto tmp  = math::exp(m_old_e - m_e);
+                const auto tmp  = math::exp(m_old[i_idx] - m[i_idx]);
                 const auto tmp2 = 1 / tmp;
 
-                auto l_e = tmp * l_old_v + rowsum_p.GetElementFromTileDistributedIndices(i_idx);
-
-                // l{j}
-                l.SetElementFromTileDistributedIndices(i_idx, l_e);
+                l(i_idx) = tmp * l[i_idx] + rowsum_p[i_idx];
 
                 sweep_tile_span(p_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                    // Oacc{j}
-                    const auto o_acc_old_v = o_acc.GetElementFromTileDistributedIndices(i_j_idx);
-
-#if 0 // debug
-      // FIXME: this use the same equation from FA v2 paper, but produce -nan Is the equation wrong?
-                    const auto o_e = o_old_v * tmp2;
+#if 0
+                    // FIXME: this use the same equation from FA v2 paper, but produce -nan.
+                    //   Is the equation wrong?
+                    o_acc(i_j_idx) *= tmp2;
 #elif 1
                     // this use different equation from FA v2 paper, but produce correct result
                     (void) tmp2;
-                    const auto o_acc_e = o_acc_old_v * tmp;
+                    o_acc(i_j_idx) *= tmp;
 #endif
-
-                    o_acc.SetElementFromTileDistributedIndices(i_j_idx, o_acc_e);
                 });
             });
 
@@ -365,18 +348,12 @@ struct GemmSoftmaxGemm
         sweep_tile_span(o_spans[I0], [&](auto idx0) {
             constexpr auto i_idx = make_tuple(idx0);
 
-            const auto l_e = l.GetElementFromTileDistributedIndices(i_idx);
-
-            const auto tmp = 1 / l_e;
+            const auto tmp = 1 / l[i_idx];
 
             sweep_tile_span(o_spans[I1], [&](auto idx1) {
                 constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                const auto o_acc_e = o_acc.GetElementFromTileDistributedIndices(i_j_idx);
-
-                const auto o_acc_new_e = o_acc_e * tmp;
-
-                o_acc.SetElementFromTileDistributedIndices(i_j_idx, o_acc_new_e);
+                o_acc(i_j_idx) *= tmp;
             });
         });
 
