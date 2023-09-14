@@ -17,15 +17,17 @@
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile/block_reduce.hpp"
 
-// C0 = A0 * B0
-// C1 = softmax(C0) * B1
-template <typename A0DataType,
-          typename B0DataType,
-          typename Acc0DataType,
-          typename C0DataType,
-          typename B1DataType,
-          typename Acc1DataType,
-          typename C1DataType,
+// S[M0, N0] = Q[M0, K0] * K[N0, K0]
+// P[M0, N0] = Softmax(S[M0, N0])
+// O[M0, N1] = P[M0, N0] * V[N1, N0]
+template <typename QDataType,
+          typename KDataType,
+          typename SaccDataType,
+          typename SMPLComputeDataType,
+          typename PDataType,
+          typename VDataType,
+          typename OaccDataType,
+          typename ODataType,
           ck::index_t kBlockSize,
           ck::index_t kM0PerBlock,
           ck::index_t kN0PerBlock,
@@ -36,9 +38,9 @@ struct GemmSoftmaxGemm
     // block gemm0 pipeline
     using BlockGemm0Pipeline = ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<
         ck::tile_program::block::BlockGemmPipelineProblem<
-            A0DataType,
-            B0DataType,
-            Acc0DataType,
+            QDataType,
+            KDataType,
+            SaccDataType,
             kBlockSize,
             ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>,
         ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>;
@@ -46,16 +48,16 @@ struct GemmSoftmaxGemm
     // block gemm1
     using BlockGemm1 = ck::tile_program::block::BlockGemmARegBSmemCRegV1<
         ck::tile_program::block::BlockGemmARegBSmemCRegV1Problem<
-            C0DataType,
-            B1DataType,
-            Acc1DataType,
+            PDataType,
+            VDataType,
+            OaccDataType,
             kBlockSize,
             ck::tile_program::TileGemmShape<kM0PerBlock, kN1PerBlock, kN0PerBlock>>,
         ck::tile_program::block::BlockGemmARegBSmemCRegV1DefaultPolicy>;
 
 #if 0
     // 2d
-    __device__ static constexpr auto MakeB1LdsBlockDescriptor()
+    __device__ static constexpr auto MakeVLdsBlockDescriptor()
     {
         using namespace ck;
 
@@ -69,11 +71,11 @@ struct GemmSoftmaxGemm
     }
 #else
     // fake XOR
-    __device__ static constexpr auto MakeB1LdsBlockDescriptor()
+    __device__ static constexpr auto MakeVLdsBlockDescriptor()
     {
         using namespace ck;
 
-        using BDataType = B1DataType;
+        using BDataType = VDataType;
 
         constexpr index_t kNPerBlock = kN1PerBlock;
         constexpr index_t kKPerBlock = kN0PerBlock;
@@ -101,12 +103,12 @@ struct GemmSoftmaxGemm
     }
 #endif
 
-    __device__ static constexpr auto MakeB1DramTileDistribution()
+    __device__ static constexpr auto MakeVDramTileDistribution()
     {
         using namespace ck;
         using namespace ck::tile_program;
 
-        using BDataType = B1DataType;
+        using BDataType = VDataType;
 
         constexpr index_t kNPerBlock = kN1PerBlock;
         constexpr index_t kKPerBlock = kN0PerBlock;
@@ -131,22 +133,22 @@ struct GemmSoftmaxGemm
         using namespace ck;
 
         return math::max(BlockGemm0Pipeline::GetStaticLdsSize(),
-                         static_cast<index_t>(MakeB1LdsBlockDescriptor().GetElementSpaceSize() *
-                                              sizeof(B1DataType)));
+                         static_cast<index_t>(MakeVLdsBlockDescriptor().GetElementSpaceSize() *
+                                              sizeof(VDataType)));
     }
 
-    __device__ void operator()(const A0DataType* p_a0,
-                               const B0DataType* p_b0,
-                               const B1DataType* p_b1,
-                               C1DataType* p_c1,
+    __device__ void operator()(const QDataType* q_ptr,
+                               const KDataType* k_ptr,
+                               const VDataType* v_ptr,
+                               ODataType* o_ptr,
                                ck::index_t M0,
                                ck::index_t N0,
                                ck::index_t K0,
                                ck::index_t N1,
-                               ck::index_t Lda0,
-                               ck::index_t Ldb0,
-                               ck::index_t Ldb1,
-                               ck::index_t Ldc1)
+                               ck::index_t StrideQ,
+                               ck::index_t StrideK,
+                               ck::index_t StrideV,
+                               ck::index_t StrideO)
     {
         using namespace ck;
         using namespace ck::tile_program;
@@ -155,15 +157,15 @@ struct GemmSoftmaxGemm
         constexpr auto I0 = Number<0>{};
         constexpr auto I1 = Number<1>{};
 
-        // FIXME: assume layout A0[M0, K0], B0[N0, K0], B1[N1, N0], C1[M0, N1]
-        const auto a0_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            p_a0, make_tuple(M0, K0), make_tuple(Lda0, 1), Number<32>{}, Number<1>{});
+        // FIXME: assume layout Q[M0, K0], K[N0, K0], V[N1, N0], O[M0, N1]
+        const auto q_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            q_ptr, make_tuple(M0, K0), make_tuple(StrideQ, 1), Number<32>{}, Number<1>{});
 
-        const auto b0_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            p_b0, make_tuple(N0, K0), make_tuple(Ldb0, 1), Number<32>{}, Number<1>{});
+        const auto k_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            k_ptr, make_tuple(N0, K0), make_tuple(StrideK, 1), Number<32>{}, Number<1>{});
 
-        const auto b1_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            p_b1, make_tuple(N1, N0), make_tuple(Ldb1, 1), Number<32>{}, Number<1>{});
+        const auto v_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            v_ptr, make_tuple(N1, N0), make_tuple(StrideV, 1), Number<32>{}, Number<1>{});
 
         // divide problem
         const auto num_tile_n1 = N1 / kN1PerBlock;
@@ -176,215 +178,225 @@ struct GemmSoftmaxGemm
         const auto iM0 = __builtin_amdgcn_readfirstlane(id_tile_m * kM0PerBlock);
         const auto iN1 = __builtin_amdgcn_readfirstlane(id_tile_n * kN1PerBlock);
 
-        __shared__ char p_smem_char[GetStaticLdsSize()];
+        // allocate LDS
+        __shared__ char smem_ptr[GetStaticLdsSize()];
 
-        // A0 DRAM block window
-        auto a0_dram_block_window = make_tile_window(
-            a0_dram_grid, make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}), {iM0, 0});
+        // Q DRAM block window
+        auto q_dram_block_window = make_tile_window(
+            q_dram_grid, make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}), {iM0, 0});
 
-        // B0 DRAM block window
-        auto b0_dram_block_window = make_tile_window(
-            b0_dram_grid, make_tuple(Number<kN0PerBlock>{}, Number<kK0PerBlock>{}), {0, 0});
+        // K DRAM block window
+        auto k_dram_block_window = make_tile_window(
+            k_dram_grid, make_tuple(Number<kN0PerBlock>{}, Number<kK0PerBlock>{}), {0, 0});
 
         // Block GEMM0 pipeline
         constexpr auto block_gemm0_pipeline = BlockGemm0Pipeline{};
 
-        // B1 DRAM window
-        auto b1_dram_block_window =
-            make_tile_window(b1_dram_grid,
+        // V DRAM window
+        auto v_dram_block_window =
+            make_tile_window(v_dram_grid,
                              make_tuple(Number<kN1PerBlock>{}, Number<kN0PerBlock>{}),
                              {iN1, 0},
-                             MakeB1DramTileDistribution());
+                             MakeVDramTileDistribution());
 
-        // B1 LDS tensor view: occupies the same LDS allocation as block_gemm0_pipeline
-        auto b1_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(
-            reinterpret_cast<B1DataType*>(p_smem_char), MakeB1LdsBlockDescriptor());
+        // V LDS tensor view: occupies the same LDS allocation as block_gemm0_pipeline
+        auto v_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(
+            reinterpret_cast<VDataType*>(smem_ptr), MakeVLdsBlockDescriptor());
 
-        auto b1_lds_block_window = make_tile_window(
-            b1_lds_block, make_tuple(Number<kN1PerBlock>{}, Number<kN0PerBlock>{}), {0, 0});
+        auto v_lds_block_window = make_tile_window(
+            v_lds_block, make_tuple(Number<kN1PerBlock>{}, Number<kN0PerBlock>{}), {0, 0});
 
-        // Bock GEMM1
+        // Block GEMM1
         constexpr auto block_gemm1 = BlockGemm1{};
 
-        // Acc0 tile
-        using Acc0BlockTileType =
-            decltype(block_gemm0_pipeline(a0_dram_block_window, b0_dram_block_window, 0, nullptr));
+        //
+        const auto f_max = [](auto e0, auto e1) { return max(e0, e1); };
+        const auto f_sum = [](auto e0, auto e1) { return e0 + e1; };
 
-        // Acc1 tile
-        auto acc1_block_tile = decltype(block_gemm1(
-            tile_elementwise_in(type_convert<C0DataType, Acc0DataType>, Acc0BlockTileType{}),
-            b1_dram_block_window)){};
+        // infer Sacc, S, P, M, L, Oacc type
+        using SaccBlockTileType =
+            decltype(block_gemm0_pipeline(q_dram_block_window, k_dram_block_window, 0, nullptr));
 
-        const auto f_max = [](auto v0, auto v1) { return max(v0, v1); };
-        const auto f_sum = [](auto v0, auto v1) { return v0 + v1; };
+        using SBlockTileType = decltype(tile_elementwise_in(
+            type_convert<SMPLComputeDataType, SaccDataType>, SaccBlockTileType{}));
 
-        // init Acc1
-        tile_elementwise_inout([](auto& acc1) { acc1 = 0; }, acc1_block_tile);
+        using PBlockTileType = decltype(tile_elementwise_in(type_convert<PDataType, SaccDataType>,
+                                                            SaccBlockTileType{}));
 
-        // m, l tile
-        auto m = decltype(block_tile_reduce<Acc0DataType>(
-            Acc0BlockTileType{}, Sequence<1>{}, f_max, Acc0DataType{0})){};
+        using MLBlockTileType = decltype(block_tile_reduce<SMPLComputeDataType>(
+            SBlockTileType{}, Sequence<1>{}, f_max, SMPLComputeDataType{0}));
 
-        // init m, l
-        auto l = make_static_distributed_tensor<Acc0DataType>(m.GetTileDistribution());
+        using OaccBlockTileType = decltype(block_gemm1(PBlockTileType{}, v_dram_block_window));
 
-        tile_elementwise_inout([](auto& m_v) { m_v = NumericLimits<Acc0DataType>::Lowest(); }, m);
-        tile_elementwise_inout([](auto& l_v) { l_v = 0; }, l);
+        // init Oacc, M, L
+        auto o_acc_block_tile = OaccBlockTileType{};
+        auto m                = MLBlockTileType{};
+        auto l                = MLBlockTileType{};
 
+        tile_elementwise_inout([](auto& e) { e = 0; }, o_acc_block_tile);
+        tile_elementwise_inout([](auto& e) { e = NumericLimits<SMPLComputeDataType>::Lowest(); },
+                               m);
+        tile_elementwise_inout([](auto& e) { e = 0; }, l);
+
+        // loop over Column of S (J loop)
         index_t iN0 = 0;
 
         do
         {
-            // S[i][j] = Q[i] * K[j]
-            const auto acc0_block_tile = block_gemm0_pipeline(
-                a0_dram_block_window, b0_dram_block_window, K0 / kK0PerBlock, p_smem_char);
+            // Sacc{j} = Q * K{j}
+            const auto s_acc_block_tile = block_gemm0_pipeline(
+                q_dram_block_window, k_dram_block_window, K0 / kK0PerBlock, smem_ptr);
 
-            // rowmax(S[i][j])
-            auto m_local = block_tile_reduce<Acc0DataType>(
-                acc0_block_tile, Sequence<1>{}, f_max, NumericLimits<Acc0DataType>::Lowest());
+            // S{j}
+            const auto s_block_tile = tile_elementwise_in(
+                type_convert<SMPLComputeDataType, SaccDataType>, s_acc_block_tile);
+
+            // m_local = rowmax(S{j})
+            auto m_local = block_tile_reduce<SMPLComputeDataType>(
+                s_block_tile, Sequence<1>{}, f_max, NumericLimits<SMPLComputeDataType>::Lowest());
 
             block_tile_reduce_sync(m_local, f_max);
 
-            // m[i][j-1]
+            // m{j-1}
             const auto m_old = m;
 
-            // m[i][j]
+            // m{j}
             tile_elementwise_inout(
-                [](auto& m_v, auto m_old_v, auto m_local_v) { m_v = max(m_old_v, m_local_v); },
+                [](auto& m_e, auto m_old_e, auto m_local_e) { m_e = max(m_old_e, m_local_e); },
                 m,
                 m_old,
                 m_local);
 
-            // P[i][j]
-            auto p =
-                make_static_distributed_tensor<Acc0DataType>(acc0_block_tile.GetTileDistribution());
+            // P{j}
+            auto p = make_static_distributed_tensor<SMPLComputeDataType>(
+                s_block_tile.GetTileDistribution());
 
             constexpr auto p_spans = decltype(p)::GetDistributedSpans();
 
             sweep_tile_span(p_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
 
-                const auto m_v = m.GetElementFromTileDistributedIndices(i_idx);
+                const auto m_e = m.GetElementFromTileDistributedIndices(i_idx);
 
                 sweep_tile_span(p_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                    const auto s_v = acc0_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
+                    const auto s_e = s_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
 
-                    const auto p_v = math::exp(s_v - m_v);
+                    const auto p_e = math::exp(s_e - m_e);
 
-                    p.SetElementFromTileDistributedIndices(i_j_idx, p_v);
+                    p.SetElementFromTileDistributedIndices(i_j_idx, p_e);
                 });
             });
 
-            // rowsum(P[i][j])
-            auto rowsum_p =
-                block_tile_reduce<Acc0DataType>(p, Sequence<1>{}, f_sum, Acc0DataType{0});
+            // rowsum(P{j})
+            auto rowsum_p = block_tile_reduce<SMPLComputeDataType>(
+                p, Sequence<1>{}, f_sum, SMPLComputeDataType{0});
 
             block_tile_reduce_sync(rowsum_p, f_sum);
 
-            // l[i][j], O[i][j]
+            // l{j}, O{j}
             sweep_tile_span(p_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
 
-                const auto m_old_v = m_old.GetElementFromTileDistributedIndices(i_idx);
-                const auto m_v     = m.GetElementFromTileDistributedIndices(i_idx);
+                const auto m_old_e = m_old.GetElementFromTileDistributedIndices(i_idx);
+                const auto m_e     = m.GetElementFromTileDistributedIndices(i_idx);
                 const auto l_old_v = l.GetElementFromTileDistributedIndices(i_idx);
 
-                const auto tmp  = math::exp(m_old_v - m_v);
+                const auto tmp  = math::exp(m_old_e - m_e);
                 const auto tmp2 = 1 / tmp;
 
-                auto l_v = tmp * l_old_v + rowsum_p.GetElementFromTileDistributedIndices(i_idx);
+                auto l_e = tmp * l_old_v + rowsum_p.GetElementFromTileDistributedIndices(i_idx);
 
-                l.SetElementFromTileDistributedIndices(i_idx, l_v);
+                l.SetElementFromTileDistributedIndices(i_idx, l_e);
 
                 sweep_tile_span(p_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                    // O[i][j]
-                    const auto o_old_v =
-                        acc1_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
+                    // O{j}
+                    const auto o_acc_old_v =
+                        o_acc_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
 
 #if 0 // debug
       // this use the same equation from FA v2 paper, but produce -nan
-                    const auto o_v = o_old_v * tmp2;
+                    const auto o_e = o_old_v * tmp2;
 #elif 1
                     // this use different equation from FA v2 paper, but produce correct result
                     (void) tmp2;
-                    const auto o_v = o_old_v * tmp;
+                    const auto o_acc_e = o_acc_old_v * tmp;
 #endif
 
-                    acc1_block_tile.SetElementFromTileDistributedIndices(i_j_idx, o_v);
+                    o_acc_block_tile.SetElementFromTileDistributedIndices(i_j_idx, o_acc_e);
                 });
             });
 
-            // type cast p into a1
-            const auto c0_block_tile =
-                tile_elementwise_in(type_convert<C0DataType, Acc0DataType>, p);
+            // type cast P{j}
+            const auto p_block_tile =
+                tile_elementwise_in(type_convert<PDataType, SMPLComputeDataType>, p);
 
-            // Block GEMM1: acc1 += c0 * b1
+            // Block GEMM1: Oacc{j} += P{j} * V{j}
             {
-                // load b1
-                const auto b1_block_tile = load_tile(b1_dram_block_window);
+                // load V{j}
+                const auto v_block_tile = load_tile(v_dram_block_window);
 
                 // wait for block gemm0 pipeline to finish
                 block_sync_lds();
 
-                store_tile(b1_lds_block_window, b1_block_tile);
+                store_tile(v_lds_block_window, v_block_tile);
 
                 // wait for store_tile to finish
                 block_sync_lds();
 
-                // acc1 += c0 * b1
-                block_gemm1(acc1_block_tile, c0_block_tile, b1_lds_block_window);
+                // Oacc{j} += P{j} * V{j}
+                block_gemm1(o_acc_block_tile, p_block_tile, v_lds_block_window);
 
                 // wait for block gemm1 to finish
                 block_sync_lds();
             }
 
             // move tile windows
-            move_tile_window(b0_dram_block_window, {kN0PerBlock, 0});
-            move_tile_window(b1_dram_block_window, {0, kN0PerBlock});
+            move_tile_window(k_dram_block_window, {kN0PerBlock, 0});
+            move_tile_window(v_dram_block_window, {0, kN0PerBlock});
 
             iN0 += kN0PerBlock;
 
         } while(iN0 < N0);
 
-        // o[i][J-1]
-        constexpr auto o_spans = decltype(acc1_block_tile)::GetDistributedSpans();
+        // O
+        constexpr auto o_spans = decltype(o_acc_block_tile)::GetDistributedSpans();
 
         sweep_tile_span(o_spans[I0], [&](auto idx0) {
             constexpr auto i_idx = make_tuple(idx0);
 
-            const auto l_v = l.GetElementFromTileDistributedIndices(i_idx);
+            const auto l_e = l.GetElementFromTileDistributedIndices(i_idx);
 
-            const auto tmp = 1 / l_v;
+            const auto tmp = 1 / l_e;
 
             sweep_tile_span(o_spans[I1], [&](auto idx1) {
                 constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                const auto o_v = acc1_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
+                const auto o_acc_e = o_acc_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
 
-                const auto o_new_v = o_v * tmp;
+                const auto o_acc_new_e = o_acc_e * tmp;
 
-                acc1_block_tile.SetElementFromTileDistributedIndices(i_j_idx, o_new_v);
+                o_acc_block_tile.SetElementFromTileDistributedIndices(i_j_idx, o_acc_new_e);
             });
         });
 
-        // type cast acc1 into c1
-        const auto c1_block_tile =
-            tile_elementwise_in(type_convert<C1DataType, Acc1DataType>, acc1_block_tile);
+        // type cast Oacc into O
+        const auto o_block_tile =
+            tile_elementwise_in(type_convert<ODataType, OaccDataType>, o_acc_block_tile);
 
-        // store c1
-        auto c1_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            p_c1, make_tuple(M0, N1), make_tuple(Ldc1, 1), Number<32>{}, Number<1>{});
+        // store O
+        auto o_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            o_ptr, make_tuple(M0, N1), make_tuple(StrideO, 1), Number<32>{}, Number<1>{});
 
-        auto c1_dram_window =
-            make_tile_window(c1_dram_grid,
+        auto o_dram_window =
+            make_tile_window(o_dram_grid,
                              make_tuple(Number<kM0PerBlock>{}, Number<kN1PerBlock>{}),
                              {iM0, iN1},
-                             c1_block_tile.GetTileDistribution());
+                             o_block_tile.GetTileDistribution());
 
-        store_tile(c1_dram_window, c1_block_tile);
+        store_tile(o_dram_window, o_block_tile);
     }
 };

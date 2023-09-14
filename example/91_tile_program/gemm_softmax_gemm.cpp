@@ -22,6 +22,7 @@ int main(int argc, char* argv[])
     using A0DataType   = ck::half_t;
     using B0DataType   = ck::half_t;
     using Acc0DataType = float;
+    using SMLDataType  = float;
     using C0DataType   = ck::half_t;
     using D0DataType   = ck::half_t;
     using B1DataType   = ck::half_t;
@@ -68,7 +69,7 @@ int main(int argc, char* argv[])
     Tensor<C1DataType> c1_host_ref(c1_lengths, c1_strides);
     Tensor<C1DataType> c1_host_dev(c1_lengths, c1_strides);
 
-#if 1
+#if 0
     ck::utils::FillUniformDistributionIntegerValue<A0DataType>{-3.f, 3.f}(a0_host);
     ck::utils::FillUniformDistributionIntegerValue<B0DataType>{-3.f, 3.f}(b0_host);
     ck::utils::FillUniformDistributionIntegerValue<B1DataType>{-3.f, 3.f}(b1_host);
@@ -107,6 +108,7 @@ int main(int argc, char* argv[])
                                      GemmSoftmaxGemm<A0DataType,
                                                      B0DataType,
                                                      Acc0DataType,
+                                                     SMLDataType,
                                                      C0DataType,
                                                      B1DataType,
                                                      Acc1DataType,
@@ -148,5 +150,9 @@ int main(int argc, char* argv[])
     // LogRangeAsType<float>(std::cout << "C1 dev: ", c1_host_dev.mData, ", ", 16, 20) << std::endl;
     // LogRangeAsType<float>(std::cout << "C1 ref: ", c1_host_ref.mData, ", ", 16, 20) << std::endl;
 
+#if 1
     return !ck::utils::check_err(c1_host_dev, c1_host_ref);
+#else
+    return !ck::utils::check_err(c1_host_dev, c1_host_ref, "Error: Incorrect results!", 1e-3, 3e-4);
+#endif
 }
