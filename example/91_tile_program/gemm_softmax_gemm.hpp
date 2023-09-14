@@ -64,10 +64,10 @@ struct GemmSoftmaxGemm
         constexpr index_t kNPerBlock = kN1PerBlock;
         constexpr index_t kKPerBlock = kN0PerBlock;
 
-        constexpr auto b_lds_block_desc =
+        constexpr auto b_lds_desc =
             make_naive_tensor_descriptor_packed(make_tuple(kNPerBlock, kKPerBlock), Number<32>{});
 
-        return b_lds_block_desc;
+        return b_lds_desc;
     }
 #else
     // fake XOR
@@ -80,26 +80,26 @@ struct GemmSoftmaxGemm
         constexpr index_t kNPerBlock = kN1PerBlock;
         constexpr index_t kKPerBlock = kN0PerBlock;
 
-        constexpr auto b_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
+        constexpr auto b_lds_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
             make_tuple(kNPerBlock / 2, 2, kKPerBlock), Number<kKPerBlock>{});
 
         constexpr index_t kK1 = 16 / sizeof(BDataType);
 
-        constexpr auto b_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
-            b_lds_block_desc_d1_d2_d3,
+        constexpr auto b_lds_desc_d4_d5_d6 = transform_tensor_descriptor(
+            b_lds_desc_d1_d2_d3,
             make_tuple(make_xor_transform(make_tuple(kNPerBlock / 2, kKPerBlock), kK1),
                        make_pass_through_transform(2)),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
             make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
 
-        constexpr auto b_lds_block_desc_n_k = transform_tensor_descriptor(
-            b_lds_block_desc_d4_d5_d6,
+        constexpr auto b_lds_desc_n_k = transform_tensor_descriptor(
+            b_lds_desc_d4_d5_d6,
             make_tuple(make_merge_transform(make_tuple(kNPerBlock / 2, 2)),
                        make_pass_through_transform(kKPerBlock)),
             make_tuple(Sequence<0, 1>{}, Sequence<2>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}));
 
-        return b_lds_block_desc_n_k;
+        return b_lds_desc_n_k;
     }
 #endif
 
@@ -157,16 +157,6 @@ struct GemmSoftmaxGemm
         constexpr auto I0 = Number<0>{};
         constexpr auto I1 = Number<1>{};
 
-        // FIXME: assume layout Q[M0, K0], K[N0, K0], V[N1, N0], O[M0, N1]
-        const auto q_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            q_ptr, make_tuple(M0, K0), make_tuple(StrideQ, 1), Number<32>{}, Number<1>{});
-
-        const auto k_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            k_ptr, make_tuple(N0, K0), make_tuple(StrideK, 1), Number<32>{}, Number<1>{});
-
-        const auto v_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            v_ptr, make_tuple(N1, N0), make_tuple(StrideV, 1), Number<32>{}, Number<1>{});
-
         // divide problem
         const auto num_tile_n1 = N1 / kN1PerBlock;
 
@@ -181,41 +171,48 @@ struct GemmSoftmaxGemm
         // allocate LDS
         __shared__ char smem_ptr[GetStaticLdsSize()];
 
-        // Q DRAM block window
-        auto q_dram_block_window = make_tile_window(
-            q_dram_grid, make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}), {iM0, 0});
+        // Q/K/V DRAM and DRAM window
+        // FIXME: assume layout Q[M0, K0], K[N0, K0], V[N1, N0], O[M0, N1]
+        const auto q_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            q_ptr, make_tuple(M0, K0), make_tuple(StrideQ, 1), Number<32>{}, Number<1>{});
 
-        // K DRAM block window
-        auto k_dram_block_window = make_tile_window(
-            k_dram_grid, make_tuple(Number<kN0PerBlock>{}, Number<kK0PerBlock>{}), {0, 0});
+        const auto k_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            k_ptr, make_tuple(N0, K0), make_tuple(StrideK, 1), Number<32>{}, Number<1>{});
 
-        // Block GEMM0 pipeline
-        constexpr auto block_gemm0_pipeline = BlockGemm0Pipeline{};
+        const auto v_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            v_ptr, make_tuple(N1, N0), make_tuple(StrideV, 1), Number<32>{}, Number<1>{});
 
-        // V DRAM window
-        auto v_dram_block_window =
-            make_tile_window(v_dram_grid,
+        auto q_dram_window = make_tile_window(
+            q_dram, make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}), {iM0, 0});
+
+        auto k_dram_window = make_tile_window(
+            k_dram, make_tuple(Number<kN0PerBlock>{}, Number<kK0PerBlock>{}), {0, 0});
+
+        auto v_dram_window =
+            make_tile_window(v_dram,
                              make_tuple(Number<kN1PerBlock>{}, Number<kN0PerBlock>{}),
                              {iN1, 0},
                              MakeVDramTileDistribution());
 
-        // V LDS tensor view: occupies the same LDS allocation as block_gemm0_pipeline
-        auto v_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(
-            reinterpret_cast<VDataType*>(smem_ptr), MakeVLdsBlockDescriptor());
+        // V LDS and LDS window
+        // V LDS occupies the same LDS allocation Q/K LDS
+        auto v_lds = make_tensor_view<AddressSpaceEnum::Lds>(reinterpret_cast<VDataType*>(smem_ptr),
+                                                             MakeVLdsBlockDescriptor());
 
-        auto v_lds_block_window = make_tile_window(
-            v_lds_block, make_tuple(Number<kN1PerBlock>{}, Number<kN0PerBlock>{}), {0, 0});
+        auto v_lds_window = make_tile_window(
+            v_lds, make_tuple(Number<kN1PerBlock>{}, Number<kN0PerBlock>{}), {0, 0});
 
-        // Block GEMM1
-        constexpr auto block_gemm1 = BlockGemm1{};
+        // Block GEMM0 pipeline and Block GEMM1
+        constexpr auto gemm0_pipeline = BlockGemm0Pipeline{};
+        constexpr auto gemm1          = BlockGemm1{};
 
-        //
+        // reduction function for softmax
         const auto f_max = [](auto e0, auto e1) { return max(e0, e1); };
         const auto f_sum = [](auto e0, auto e1) { return e0 + e1; };
 
         // infer Sacc, S, P, M, L, Oacc type
         using SaccBlockTileType =
-            decltype(block_gemm0_pipeline(q_dram_block_window, k_dram_block_window, 0, nullptr));
+            decltype(gemm0_pipeline(q_dram_window, k_dram_window, 0, nullptr));
 
         using SBlockTileType = decltype(tile_elementwise_in(
             type_convert<SMPLComputeDataType, SaccDataType>, SaccBlockTileType{}));
@@ -226,14 +223,14 @@ struct GemmSoftmaxGemm
         using MLBlockTileType = decltype(block_tile_reduce<SMPLComputeDataType>(
             SBlockTileType{}, Sequence<1>{}, f_max, SMPLComputeDataType{0}));
 
-        using OaccBlockTileType = decltype(block_gemm1(PBlockTileType{}, v_dram_block_window));
+        using OaccBlockTileType = decltype(gemm1(PBlockTileType{}, v_dram_window));
 
         // init Oacc, M, L
-        auto o_acc_block_tile = OaccBlockTileType{};
-        auto m                = MLBlockTileType{};
-        auto l                = MLBlockTileType{};
+        auto o_acc = OaccBlockTileType{};
+        auto m     = MLBlockTileType{};
+        auto l     = MLBlockTileType{};
 
-        tile_elementwise_inout([](auto& e) { e = 0; }, o_acc_block_tile);
+        tile_elementwise_inout([](auto& e) { e = 0; }, o_acc);
         tile_elementwise_inout([](auto& e) { e = NumericLimits<SMPLComputeDataType>::Lowest(); },
                                m);
         tile_elementwise_inout([](auto& e) { e = 0; }, l);
@@ -244,16 +241,16 @@ struct GemmSoftmaxGemm
         do
         {
             // Sacc{j} = Q * K{j}
-            const auto s_acc_block_tile = block_gemm0_pipeline(
-                q_dram_block_window, k_dram_block_window, K0 / kK0PerBlock, smem_ptr);
+            const auto s_acc =
+                gemm0_pipeline(q_dram_window, k_dram_window, K0 / kK0PerBlock, smem_ptr);
 
             // S{j}
-            const auto s_block_tile = tile_elementwise_in(
-                type_convert<SMPLComputeDataType, SaccDataType>, s_acc_block_tile);
+            const auto s =
+                tile_elementwise_in(type_convert<SMPLComputeDataType, SaccDataType>, s_acc);
 
             // m_local = rowmax(S{j})
             auto m_local = block_tile_reduce<SMPLComputeDataType>(
-                s_block_tile, Sequence<1>{}, f_max, NumericLimits<SMPLComputeDataType>::Lowest());
+                s, Sequence<1>{}, f_max, NumericLimits<SMPLComputeDataType>::Lowest());
 
             block_tile_reduce_sync(m_local, f_max);
 
@@ -267,11 +264,11 @@ struct GemmSoftmaxGemm
                 m_old,
                 m_local);
 
-            // P{j}
-            auto p = make_static_distributed_tensor<SMPLComputeDataType>(
-                s_block_tile.GetTileDistribution());
+            // Pcompute{j}
+            auto p_compute =
+                make_static_distributed_tensor<SMPLComputeDataType>(s.GetTileDistribution());
 
-            constexpr auto p_spans = decltype(p)::GetDistributedSpans();
+            constexpr auto p_spans = decltype(p_compute)::GetDistributedSpans();
 
             sweep_tile_span(p_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
@@ -281,21 +278,21 @@ struct GemmSoftmaxGemm
                 sweep_tile_span(p_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                    const auto s_e = s_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
+                    const auto s_e = s.GetElementFromTileDistributedIndices(i_j_idx);
 
                     const auto p_e = math::exp(s_e - m_e);
 
-                    p.SetElementFromTileDistributedIndices(i_j_idx, p_e);
+                    p_compute.SetElementFromTileDistributedIndices(i_j_idx, p_e);
                 });
             });
 
-            // rowsum(P{j})
+            // rowsum(Pcompute{j})
             auto rowsum_p = block_tile_reduce<SMPLComputeDataType>(
-                p, Sequence<1>{}, f_sum, SMPLComputeDataType{0});
+                p_compute, Sequence<1>{}, f_sum, SMPLComputeDataType{0});
 
             block_tile_reduce_sync(rowsum_p, f_sum);
 
-            // l{j}, O{j}
+            // l{j}, Oacc{j}
             sweep_tile_span(p_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
 
@@ -308,17 +305,17 @@ struct GemmSoftmaxGemm
 
                 auto l_e = tmp * l_old_v + rowsum_p.GetElementFromTileDistributedIndices(i_idx);
 
+                // l{j}
                 l.SetElementFromTileDistributedIndices(i_idx, l_e);
 
                 sweep_tile_span(p_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                    // O{j}
-                    const auto o_acc_old_v =
-                        o_acc_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
+                    // Oacc{j}
+                    const auto o_acc_old_v = o_acc.GetElementFromTileDistributedIndices(i_j_idx);
 
 #if 0 // debug
-      // this use the same equation from FA v2 paper, but produce -nan
+      // FIXME: this use the same equation from FA v2 paper, but produce -nan Is the equation wrong?
                     const auto o_e = o_old_v * tmp2;
 #elif 1
                     // this use different equation from FA v2 paper, but produce correct result
@@ -326,44 +323,44 @@ struct GemmSoftmaxGemm
                     const auto o_acc_e = o_acc_old_v * tmp;
 #endif
 
-                    o_acc_block_tile.SetElementFromTileDistributedIndices(i_j_idx, o_acc_e);
+                    o_acc.SetElementFromTileDistributedIndices(i_j_idx, o_acc_e);
                 });
             });
 
-            // type cast P{j}
-            const auto p_block_tile =
-                tile_elementwise_in(type_convert<PDataType, SMPLComputeDataType>, p);
+            // type cast Pcompute{j} into P{j}
+            const auto p =
+                tile_elementwise_in(type_convert<PDataType, SMPLComputeDataType>, p_compute);
 
             // Block GEMM1: Oacc{j} += P{j} * V{j}
             {
                 // load V{j}
-                const auto v_block_tile = load_tile(v_dram_block_window);
+                const auto v = load_tile(v_dram_window);
 
-                // wait for block gemm0 pipeline to finish
+                // wait for gemm0 pipeline to finish
                 block_sync_lds();
 
-                store_tile(v_lds_block_window, v_block_tile);
+                store_tile(v_lds_window, v);
 
                 // wait for store_tile to finish
                 block_sync_lds();
 
                 // Oacc{j} += P{j} * V{j}
-                block_gemm1(o_acc_block_tile, p_block_tile, v_lds_block_window);
+                gemm1(o_acc, p, v_lds_window);
 
-                // wait for block gemm1 to finish
+                // wait for gemm1 to finish
                 block_sync_lds();
             }
 
             // move tile windows
-            move_tile_window(k_dram_block_window, {kN0PerBlock, 0});
-            move_tile_window(v_dram_block_window, {0, kN0PerBlock});
+            move_tile_window(k_dram_window, {kN0PerBlock, 0});
+            move_tile_window(v_dram_window, {0, kN0PerBlock});
 
             iN0 += kN0PerBlock;
 
         } while(iN0 < N0);
 
         // O
-        constexpr auto o_spans = decltype(o_acc_block_tile)::GetDistributedSpans();
+        constexpr auto o_spans = decltype(o_acc)::GetDistributedSpans();
 
         sweep_tile_span(o_spans[I0], [&](auto idx0) {
             constexpr auto i_idx = make_tuple(idx0);
@@ -375,28 +372,28 @@ struct GemmSoftmaxGemm
             sweep_tile_span(o_spans[I1], [&](auto idx1) {
                 constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                const auto o_acc_e = o_acc_block_tile.GetElementFromTileDistributedIndices(i_j_idx);
+                const auto o_acc_e = o_acc.GetElementFromTileDistributedIndices(i_j_idx);
 
                 const auto o_acc_new_e = o_acc_e * tmp;
 
-                o_acc_block_tile.SetElementFromTileDistributedIndices(i_j_idx, o_acc_new_e);
+                o_acc.SetElementFromTileDistributedIndices(i_j_idx, o_acc_new_e);
             });
         });
 
         // type cast Oacc into O
-        const auto o_block_tile =
-            tile_elementwise_in(type_convert<ODataType, OaccDataType>, o_acc_block_tile);
+        const auto o = tile_elementwise_in(type_convert<ODataType, OaccDataType>, o_acc);
 
-        // store O
-        auto o_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
+        // O DRAM and O DRAM window
+        auto o_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             o_ptr, make_tuple(M0, N1), make_tuple(StrideO, 1), Number<32>{}, Number<1>{});
 
         auto o_dram_window =
-            make_tile_window(o_dram_grid,
+            make_tile_window(o_dram,
                              make_tuple(Number<kM0PerBlock>{}, Number<kN1PerBlock>{}),
                              {iM0, iN1},
-                             o_block_tile.GetTileDistribution());
+                             o.GetTileDistribution());
 
-        store_tile(o_dram_window, o_block_tile);
+        // store O
+        store_tile(o_dram_window, o);
     }
 };
