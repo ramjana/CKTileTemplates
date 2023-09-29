@@ -15,9 +15,9 @@
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
-#include "ck/tile_program/grid/grid_gemm.hpp"
-#include "ck/tile_program/grid/grid_gemm_policy.hpp"
 #include "ck/tile_program/grid/grid_gemm_problem.hpp"
+#include "ck/tile_program/grid/grid_gemm_v1.hpp"
+#include "ck/tile_program/grid/grid_gemm_v1_default_policy.hpp"
 
 // C = A * B
 template <typename ADataType,
@@ -30,10 +30,10 @@ template <typename ADataType,
           typename AElementFunction,
           typename BElementFunction,
           typename CElementFunction,
-          ck::index_t kBlockSize,
-          ck::index_t kMPerBlock,
-          ck::index_t kNPerBlock,
-          ck::index_t kKPerBlock>
+          ck::index_t kBlockSize_,
+          ck::index_t kMPerBlock_,
+          ck::index_t kNPerBlock_,
+          ck::index_t kKPerBlock_>
 struct Gemm
 {
     static_assert(std::is_same_v<ALayout, ck::tensor_layout::gemm::RowMajor> &&
@@ -48,16 +48,50 @@ struct Gemm
                                                             BElementFunction,
                                                             CElementFunction>;
 
-    using Policy = ck::tile_program::grid::GridGemmPolicy<
-        kBlockSize,
-        kMPerBlock,
-        kNPerBlock,
-        kKPerBlock,
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2,
-        ck::Tuple<ck::tile_program::grid::DefaultBlock2TileMap,
-                  ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>>;
+    struct Policy
+    {
+        static constexpr ck::index_t kBlockSize = kBlockSize_;
+        static constexpr ck::index_t kMPerBlock = kMPerBlock_;
+        static constexpr ck::index_t kNPerBlock = kNPerBlock_;
+        static constexpr ck::index_t kKPerBlock = kKPerBlock_;
 
-    using GridGemm = ck::tile_program::grid::GridGemm<Problem, Policy>;
+        template <typename Problem>
+        __host__ __device__ static constexpr auto MakeBlock2TileMap(ck::index_t NumTilesM,
+                                                                    ck::index_t NumTilesN)
+        {
+            using namespace ck;
+
+            const auto unmerge = make_merge_transform(make_tuple(NumTilesN, NumTilesM));
+
+            return [unmerge](index_t block_id) {
+                MultiIndex<2> unmerged;
+                unmerge.CalculateLowerIndex(unmerged, make_multi_index(block_id));
+
+                return make_multi_index(unmerged.At<1>(), unmerged.At<0>());
+            };
+        }
+
+        template <typename Problem>
+        __host__ __device__ static constexpr auto GetBlockGemmPipeline()
+        {
+            using namespace ck;
+            using namespace ck::tile_program;
+            using namespace ck::tile_program::block;
+
+            using BlockGemmPipelineProblem_ =
+                BlockGemmPipelineProblem<ADataType,
+                                         BDataType,
+                                         AccDataType,
+                                         kBlockSize,
+                                         TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
+
+            return BlockGemmPipelineAGmemBGmemCRegV2<
+                BlockGemmPipelineProblem_,
+                BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>{};
+        }
+    };
+
+    using GridGemm = ck::GridGemmV1<Problem, Policy>;
 
     __device__ void operator()(const ADataType* p_a,
                                const BDataType* p_b,
