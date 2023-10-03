@@ -31,9 +31,9 @@ struct GridGemmV1
         using namespace ck::tile_program;
         using namespace ck::tile_program::block;
 
-        const auto M = a_grid.desc_.GetLength(Number<0>{});
-        const auto N = c_grid.desc_.GetLength(Number<1>{});
-        const auto K = a_grid.desc_.GetLength(Number<1>{});
+        const auto M = a_grid.GetTensorDescriptor().GetLength(Number<0>{});
+        const auto N = c_grid.GetTensorDescriptor().GetLength(Number<1>{});
+        const auto K = a_grid.GetTensorDescriptor().GetLength(Number<1>{});
 
         // divide problem
         const auto id_block = get_block_id();

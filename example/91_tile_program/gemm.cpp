@@ -90,12 +90,18 @@ int main(int argc, char* argv[])
     a_buf.ToDevice(a_host.mData.data());
     b_buf.ToDevice(b_host.mData.data());
 
+    // Alignment
+    constexpr ck::index_t kAAlignment = 32;
+    constexpr ck::index_t kBAlignment = 32;
+    constexpr ck::index_t kCAlignment = 32;
+
+    constexpr ck::index_t kBlockSize = 256;
+
     constexpr ck::index_t kGemmMPerBlock = 256;
     constexpr ck::index_t kGemmNPerBlock = 128;
     constexpr ck::index_t kGemmKPerBlock = 32;
 
-    constexpr ck::index_t kBlockSize = 256;
-    ck::index_t kGridSize            = (M / kGemmMPerBlock) * (N / kGemmNPerBlock);
+    ck::index_t kGridSize = (M / kGemmMPerBlock) * (N / kGemmNPerBlock);
 
     std::cout << "grid size " << kGridSize << std::endl;
 
@@ -113,6 +119,9 @@ int main(int argc, char* argv[])
                                   AElementFunction,
                                   BElementFunction,
                                   CElementFunction,
+                                  kAAlignment,
+                                  kBAlignment,
+                                  kCAlignment,
                                   kBlockSize,
                                   kGemmMPerBlock,
                                   kGemmNPerBlock,

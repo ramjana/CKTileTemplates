@@ -30,25 +30,24 @@ template <typename ADataType,
           typename AElementFunction,
           typename BElementFunction,
           typename CElementFunction,
+          ck::index_t kAAlignment,
+          ck::index_t kBAlignment,
+          ck::index_t kCAlignment,
           ck::index_t kBlockSize_,
           ck::index_t kMPerBlock_,
           ck::index_t kNPerBlock_,
           ck::index_t kKPerBlock_>
 struct Gemm
 {
-    static_assert(std::is_same_v<ALayout, ck::tensor_layout::gemm::RowMajor> &&
-                  std::is_same_v<BLayout, ck::tensor_layout::gemm::ColumnMajor> &&
-                  std::is_same_v<CLayout, ck::tensor_layout::gemm::RowMajor>);
+    using GridGemmProblem = ck::tile_program::grid::GridGemmProblem<ADataType,
+                                                                    BDataType,
+                                                                    AccDataType,
+                                                                    CDataType,
+                                                                    AElementFunction,
+                                                                    BElementFunction,
+                                                                    CElementFunction>;
 
-    using Problem = ck::tile_program::grid::GridGemmProblem<ADataType,
-                                                            BDataType,
-                                                            AccDataType,
-                                                            CDataType,
-                                                            AElementFunction,
-                                                            BElementFunction,
-                                                            CElementFunction>;
-
-    struct Policy
+    struct GridGemmPolicy
     {
         static constexpr ck::index_t kBlockSize = kBlockSize_;
         static constexpr ck::index_t kMPerBlock = kMPerBlock_;
@@ -91,7 +90,7 @@ struct Gemm
         }
     };
 
-    using GridGemm = ck::GridGemmV1<Problem, Policy>;
+    using GridGemm = ck::GridGemmV1<GridGemmProblem, GridGemmPolicy>;
 
     __device__ void operator()(const ADataType* p_a,
                                const BDataType* p_b,
@@ -110,17 +109,63 @@ struct Gemm
         using namespace ck::tile_program;
         using namespace ck::tile_program::block;
 
-        // FIXME: assume RCR layout
-        const auto a_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            p_a, make_tuple(M, K), make_tuple(Lda, 1), Number<32>{}, Number<1>{});
+        const auto a_dram = [&] {
+            if constexpr(is_same_v<ALayout, ck::tensor_layout::gemm::RowMajor>)
+            {
+                return make_naive_tensor_view<AddressSpaceEnum::Global>(
+                    p_a, make_tuple(M, K), make_tuple(Lda, 1), Number<kAAlignment>{}, Number<1>{});
+            }
+            else
+            {
+                const auto a_k_m_desc = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                    p_a, make_tuple(K, M), make_tuple(Lda, 1), Number<kAAlignment>{}, Number<1>{});
 
-        const auto b_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            p_b, make_tuple(N, K), make_tuple(Ldb, 1), Number<32>{}, Number<1>{});
+                return transform_tensor_view(
+                    a_k_m_desc,
+                    make_tuple(make_pass_through_transform(M), make_pass_through_transform(K)),
+                    make_tuple(Sequence<1>{}, Sequence<0>{}),
+                    make_tuple(Sequence<0>{}, Sequence<1>{}));
+            }
+        }();
 
-        auto c_dram_grid = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<32>{}, Number<1>{});
+        const auto b_dram = [&] {
+            if constexpr(is_same_v<BLayout, ck::tensor_layout::gemm::ColumnMajor>)
+            {
+                return make_naive_tensor_view<AddressSpaceEnum::Global>(
+                    p_b, make_tuple(N, K), make_tuple(Ldb, 1), Number<kBAlignment>{}, Number<1>{});
+            }
+            else
+            {
+                const auto b_k_n_desc = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                    p_b, make_tuple(K, N), make_tuple(Ldb, 1), Number<kBAlignment>{}, Number<1>{});
 
-        GridGemm{}(
-            a_dram_grid, b_dram_grid, c_dram_grid, a_element_func, b_element_func, c_element_func);
+                return transform_tensor_view(
+                    b_k_n_desc,
+                    make_tuple(make_pass_through_transform(N), make_pass_through_transform(K)),
+                    make_tuple(Sequence<1>{}, Sequence<0>{}),
+                    make_tuple(Sequence<0>{}, Sequence<1>{}));
+            }
+        }();
+
+        const auto c_dram = [&] {
+            if constexpr(is_same_v<CLayout, ck::tensor_layout::gemm::RowMajor>)
+            {
+                return make_naive_tensor_view<AddressSpaceEnum::Global>(
+                    p_c, make_tuple(M, N), make_tuple(Ldc, 1), Number<kCAlignment>{}, Number<1>{});
+            }
+            else
+            {
+                const auto c_n_m_desc = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                    p_a, make_tuple(N, M), make_tuple(Ldc, 1), Number<kCAlignment>{}, Number<1>{});
+
+                return transform_tensor_view(
+                    c_n_m_desc,
+                    make_tuple(make_pass_through_transform(M), make_pass_through_transform(N)),
+                    make_tuple(Sequence<1>{}, Sequence<0>{}),
+                    make_tuple(Sequence<0>{}, Sequence<1>{}));
+            }
+        }();
+
+        GridGemm{}(a_dram, b_dram, c_dram, a_element_func, b_element_func, c_element_func);
     }
 };
