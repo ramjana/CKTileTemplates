@@ -51,6 +51,10 @@ int main(int argc, char* argv[])
     using AccDataType = float;
     using CDataType   = ck::half_t;
 
+    using ALayout = ck::tensor_layout::gemm::ColumnMajor;
+    using BLayout = ck::tensor_layout::gemm::RowMajor;
+    using CLayout = ck::tensor_layout::gemm::ColumnMajor;
+
     ck::index_t M = 3328;
     ck::index_t N = 4096;
     ck::index_t K = 4096;
@@ -62,14 +66,24 @@ int main(int argc, char* argv[])
         K = std::stoi(argv[3]);
     }
 
-    std::array<ck::index_t, 2> a_lengths{M, K};
-    std::array<ck::index_t, 2> a_strides{K, 1};
+    const ck::index_t Lda = std::is_same_v<ALayout, ck::tensor_layout::gemm::RowMajor> ? K : M;
+    const ck::index_t Ldb = std::is_same_v<BLayout, ck::tensor_layout::gemm::ColumnMajor> ? K : N;
+    const ck::index_t Ldc = std::is_same_v<CLayout, ck::tensor_layout::gemm::RowMajor> ? N : M;
 
-    std::array<ck::index_t, 2> b_lengths{N, K};
-    std::array<ck::index_t, 2> b_strides{K, 1};
+    const auto a_lengths = std::array<ck::index_t, 2>{M, K};
+    const auto a_strides = std::is_same_v<ALayout, ck::tensor_layout::gemm::RowMajor>
+                               ? std::array<ck::index_t, 2>{Lda, 1}
+                               : std::array<ck::index_t, 2>{1, Lda};
 
-    std::array<ck::index_t, 2> c_lengths{M, N};
-    std::array<ck::index_t, 2> c_strides{N, 1};
+    const auto b_lengths = std::array<ck::index_t, 2>{N, K};
+    const auto b_strides = std::is_same_v<BLayout, ck::tensor_layout::gemm::ColumnMajor>
+                               ? std::array<ck::index_t, 2>{Ldb, 1}
+                               : std::array<ck::index_t, 2>{1, Ldb};
+
+    const auto c_lengths = std::array<ck::index_t, 2>{M, N};
+    const auto c_strides = std::is_same_v<CLayout, ck::tensor_layout::gemm::RowMajor>
+                               ? std::array<ck::index_t, 2>{Ldc, 1}
+                               : std::array<ck::index_t, 2>{1, Ldc};
 
     // host verify
     Tensor<ADataType> a_host(a_lengths, a_strides);
@@ -113,9 +127,9 @@ int main(int argc, char* argv[])
                                   BDataType,
                                   AccDataType,
                                   CDataType,
-                                  ck::tensor_layout::gemm::RowMajor,
-                                  ck::tensor_layout::gemm::ColumnMajor,
-                                  ck::tensor_layout::gemm::RowMajor,
+                                  ALayout,
+                                  BLayout,
+                                  CLayout,
                                   AElementFunction,
                                   BElementFunction,
                                   CElementFunction,
@@ -139,9 +153,9 @@ int main(int argc, char* argv[])
                                                M,
                                                N,
                                                K,
-                                               K,
-                                               K,
-                                               N,
+                                               Lda,
+                                               Ldb,
+                                               Ldc,
                                                AElementFunction{},
                                                BElementFunction{},
                                                CElementFunction{});

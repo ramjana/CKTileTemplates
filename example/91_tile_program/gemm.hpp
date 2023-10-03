@@ -156,7 +156,7 @@ struct Gemm
             else
             {
                 const auto c_n_m_desc = make_naive_tensor_view<AddressSpaceEnum::Global>(
-                    p_a, make_tuple(N, M), make_tuple(Ldc, 1), Number<kCAlignment>{}, Number<1>{});
+                    p_c, make_tuple(N, M), make_tuple(Ldc, 1), Number<kCAlignment>{}, Number<1>{});
 
                 return transform_tensor_view(
                     c_n_m_desc,
