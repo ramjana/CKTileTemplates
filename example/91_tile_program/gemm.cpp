@@ -51,9 +51,9 @@ int main(int argc, char* argv[])
     using AccDataType = float;
     using CDataType   = ck::half_t;
 
-    using ALayout = ck::tensor_layout::gemm::ColumnMajor;
-    using BLayout = ck::tensor_layout::gemm::RowMajor;
-    using CLayout = ck::tensor_layout::gemm::ColumnMajor;
+    using ALayout = ck::tensor_layout::gemm::RowMajor;
+    using BLayout = ck::tensor_layout::gemm::ColumnMajor;
+    using CLayout = ck::tensor_layout::gemm::RowMajor;
 
     ck::index_t M = 3328;
     ck::index_t N = 4096;
