@@ -22,6 +22,8 @@ namespace block {
 // Default policy class should not be templated, put template on member functions instead
 struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
 {
+    using BlockGemmPolicy = BlockGemmASmemBSmemCRegV1DefaultPolicy;
+
 #if 0
     // 2d
     template <typename Problem>
@@ -253,8 +255,6 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
     template <typename Problem>
     __host__ __device__ static constexpr auto GetBlockGemm()
     {
-        using BlockGemmPolicy = BlockGemmASmemBSmemCRegV1DefaultPolicy;
-
         return BlockGemmASmemBSmemCRegV1<Problem, BlockGemmPolicy>{};
     }
 
@@ -266,19 +266,62 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
     template <typename Problem>
     __device__ static constexpr auto ScheduleReductionLoop()
     {
+        constexpr index_t BlockSize = Problem::kBlockSize;
+
+        constexpr auto MPerBlock = Problem::BlockGemmShape::kM;
+        constexpr auto NPerBlock = Problem::BlockGemmShape::kN;
+        constexpr auto KPerBlock = Problem::BlockGemmShape::kK;
+
+        constexpr auto config = BlockGemmPolicy::template GetWarpGemmMWarpNWarp<Problem>();
+
+        using WarpGemm = remove_cvref_t<decltype(config.template At<0>())>;
+
+        constexpr auto MPerWarp = WarpGemm::kM;
+        constexpr auto NPerWarp = WarpGemm::kN;
+        constexpr auto KPerWarp = WarpGemm::kK;
+
+        constexpr index_t MWarp = config.template At<1>();
+        constexpr index_t NWarp = config.template At<2>();
+
+        constexpr index_t MIterPerWarp = MPerBlock / (MWarp * MPerWarp);
+        constexpr index_t NIterPerWarp = NPerBlock / (NWarp * NPerWarp);
+        constexpr index_t KIterPerWarp = KPerBlock / KPerWarp;
+
+        constexpr index_t NumInstPerWarpGemm = 2;
+
+        constexpr index_t TileSize = (MPerBlock + NPerBlock) * KPerBlock;
+
+        constexpr index_t LdsStoreScalarPerVector   = 8;
+        constexpr index_t GlobalLoadScalarPerVector = 8;
+
+        constexpr index_t NumLdsLoad    = KIterPerWarp * (MIterPerWarp + NIterPerWarp);
+        constexpr index_t NumLdsStore   = TileSize / BlockSize / LdsStoreScalarPerVector;
+        constexpr index_t NumGlobalLoad = TileSize / BlockSize / GlobalLoadScalarPerVector;
+        constexpr index_t NumMfma = KIterPerWarp * MIterPerWarp * NIterPerWarp * NumInstPerWarpGemm;
+
+        static_assert(NumLdsStore <= NumGlobalLoad);
+
+        enum SchedGroupMask
+        {
+            DS_READ   = 1u << 8,
+            MFMA      = 1u << 3,
+            DS_WRITE  = 1u << 9,
+            VMEM_READ = 1u << 5,
+        };
+
         // pipeline #1
-        __builtin_amdgcn_sched_group_barrier(0x100, 5, 1); // ds_read
-        __builtin_amdgcn_sched_group_barrier(0x008, 8, 1); // v_mfma
-        __builtin_amdgcn_sched_group_barrier(0x100, 5, 1); // ds_read
-        __builtin_amdgcn_sched_group_barrier(0x008, 8, 1); // v_mfma
+        static_for<0, KIterPerWarp, 1>{}([](auto) {
+            __builtin_amdgcn_sched_group_barrier(DS_READ, NumLdsLoad / KIterPerWarp, 1);
+            __builtin_amdgcn_sched_group_barrier(MFMA, NumMfma / KIterPerWarp, 1);
+        });
 
         // pipeline #2
-        __builtin_amdgcn_sched_group_barrier(0x008, 8, 2); // v_mfma
+        __builtin_amdgcn_sched_group_barrier(MFMA, NumMfma - (NumMfma / KIterPerWarp), 2);
 
-        static_for<0, 4, 1>{}([](auto) {
-            __builtin_amdgcn_sched_group_barrier(0x200, 1, 2); // ds_write
-            __builtin_amdgcn_sched_group_barrier(0x020, 1, 2); // buffer_load
-            __builtin_amdgcn_sched_group_barrier(0x008, 2, 2); // v_mfma
+        static_for<0, NumLdsStore / 2, 1>{}([](auto) {
+            __builtin_amdgcn_sched_group_barrier(MFMA, 2, 2);
+            __builtin_amdgcn_sched_group_barrier(DS_WRITE, 2, 2);
+            __builtin_amdgcn_sched_group_barrier(VMEM_READ, (NumGlobalLoad / NumLdsStore) * 2, 2);
         });
     }
 };
