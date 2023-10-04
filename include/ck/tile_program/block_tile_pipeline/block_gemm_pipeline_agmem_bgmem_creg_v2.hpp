@@ -136,6 +136,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2
         auto a_block_tile = load_tile(a_copy_dram_window);
         auto b_block_tile = load_tile(b_copy_dram_window);
 
+        __builtin_amdgcn_sched_barrier(0);
+
         {
             // move to 1
             move_tile_window(a_copy_dram_window, {0, kKPerBlock});
@@ -143,6 +145,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2
 
             // Initialize C
             tile_elementwise_inout([](auto& c) { c = 0; }, c_block_tile);
+
+            __builtin_amdgcn_sched_barrier(0);
 
             // LDS write 0
             const auto a_block_tile_tmp = tile_elementwise_in(a_element_func, a_block_tile);
@@ -186,6 +190,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2
 
             iCounter--;
 
+            Policy::template ScheduleReductionLoop<Problem>();
         } while(iCounter > 0);
 
         // tail

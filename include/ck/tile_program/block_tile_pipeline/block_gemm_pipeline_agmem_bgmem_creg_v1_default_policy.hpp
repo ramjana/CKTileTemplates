@@ -257,6 +257,30 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
 
         return BlockGemmASmemBSmemCRegV1<Problem, BlockGemmPolicy>{};
     }
+
+    template <typename Problem>
+    __host__ static constexpr auto ScheduleReductionLoop()
+    {
+    }
+
+    template <typename Problem>
+    __device__ static constexpr auto ScheduleReductionLoop()
+    {
+        // pipeline #1
+        __builtin_amdgcn_sched_group_barrier(0x100, 5, 1); // ds_read
+        __builtin_amdgcn_sched_group_barrier(0x008, 8, 1); // v_mfma
+        __builtin_amdgcn_sched_group_barrier(0x100, 5, 1); // ds_read
+        __builtin_amdgcn_sched_group_barrier(0x008, 8, 1); // v_mfma
+
+        // pipeline #2
+        __builtin_amdgcn_sched_group_barrier(0x008, 8, 2); // v_mfma
+
+        static_for<0, 4, 1>{}([](auto) {
+            __builtin_amdgcn_sched_group_barrier(0x200, 1, 2); // ds_write
+            __builtin_amdgcn_sched_group_barrier(0x020, 1, 2); // buffer_load
+            __builtin_amdgcn_sched_group_barrier(0x008, 2, 2); // v_mfma
+        });
+    }
 };
 
 } // namespace block
