@@ -70,6 +70,21 @@ struct StaticTileDistributionEncoding
         static constexpr auto rhs_lengthss_ =
             to_array_of_array(container_concat(make_tuple(rs_lengths_), hs_lengthss_));
 
+        // ys_lengths_
+        static constexpr auto ys_lengths_ = [] {
+            Array<index_t, NDimY> ys_lengths_tmp{-1};
+
+            for(index_t i = 0; i < NDimY; i++)
+            {
+                index_t rh_major = ys_to_rhs_major_[i];
+                index_t rh_minor = ys_to_rhs_minor_[i];
+
+                ys_lengths_tmp(i) = rhs_lengthss_[rh_major][rh_minor];
+            }
+
+            return ys_lengths_tmp;
+        }();
+
         // rhs_major_minor_to_ys_[ndim_rh_majpr_][max_ndim_rh_minor_]
         static constexpr auto rhs_major_minor_to_ys_ = [] {
             Array<Array<index_t, max_ndim_rh_minor_>, NDimX + 1> rhs_major_minor_to_ys_tmp{{-1}};
@@ -315,6 +330,10 @@ struct StaticTileDistributionEncoding
             //
             printf("rhs_lengthss_: ");
             print(rhs_lengthss_);
+            printf(", ");
+            //
+            printf("ys_lengths_: ");
+            print(ys_lengths_);
             printf(", ");
             //
             printf("rhs_major_minor_to_ys_: ");
