@@ -34,7 +34,7 @@ __host__ __device__ constexpr auto get_slice_tile(const StaticDistributedTensor_
 
     auto sliced_tensor = make_static_distributed_tensor<DataType>(sliced_dstr);
 
-    sliced_tensor.GetThreadBuffer() = tile.GetSlicedThreadData(sliced_y_origins, sliced_y_lengths);
+    sliced_tensor.GetThreadBuffer() = tile.GetYSlicedThreadData(sliced_y_origins, sliced_y_lengths);
 
     return sliced_tensor;
 }

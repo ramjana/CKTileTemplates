@@ -166,9 +166,7 @@ __device__ auto load_sliced_thread_data_from_tile_window(
 // output:
 //   A StaticBuffer holding thread data, and data layout is hardcoded to be in the order of
 //   [Y0, Y1, Y2, ...]
-template <typename BottomTensorView_,
-          typename WindowLengths_,
-          typename TileDistribution_>
+template <typename BottomTensorView_, typename WindowLengths_, typename TileDistribution_>
 __device__ auto load_thread_data_from_tile_window(
     TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&
         tile_window)
@@ -228,8 +226,9 @@ __device__ auto load_thread_data_from_tile_window(
     using vector_type_t = vector_type_maker_t<DataType, ScalarPerVector>;
     using vector_t      = typename vector_type_t::type;
 
-    using SFC_Ys =
-        SpaceFillingCurve<decltype(thread_tensor_lengths_ys), DimAccessOrder, decltype(scalars_per_access)>;
+    using SFC_Ys = SpaceFillingCurve<decltype(thread_tensor_lengths_ys),
+                                     DimAccessOrder,
+                                     decltype(scalars_per_access)>;
 
     constexpr index_t num_access = SFC_Ys::GetNumOfAccess();
 
@@ -304,8 +303,7 @@ load_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, Ti
 
     auto dstr_tensor = make_static_distributed_tensor<DataType>(tile_dstr);
 
-    dstr_tensor.GetThreadBuffer() = detail::load_thread_data_from_tile_window(
-        tile_window);
+    dstr_tensor.GetThreadBuffer() = detail::load_thread_data_from_tile_window(tile_window);
 
     return dstr_tensor;
 }

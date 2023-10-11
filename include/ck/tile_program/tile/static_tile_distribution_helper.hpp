@@ -11,6 +11,22 @@ namespace ck {
 namespace tile_program {
 namespace detail {
 
+template <typename Distribution>
+__host__ __device__ auto get_partition_index(Distribution)
+{
+    // only support warp-tile and block-tile
+    static_assert(Distribution::NDimP == 1 or Distribution::NDimP == 2, "wrong!");
+
+    if constexpr(Distribution::NDimP == 1)
+    {
+        return Array<index_t, 1>{get_lane_id()};
+    }
+    else if constexpr(Distribution::NDimP == 2)
+    {
+        return Array<index_t, 2>{get_warp_id(), get_lane_id()};
+    }
+}
+
 template <typename OuterDstr, typename InnerDstr>
 __host__ __device__ constexpr auto make_embed_tile_distribution_encoding(OuterDstr, InnerDstr)
 {

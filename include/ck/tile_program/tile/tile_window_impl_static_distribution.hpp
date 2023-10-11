@@ -57,9 +57,10 @@ struct TileWindowWithStaticDistribution
           window_origin_{window_origin},
           bottom_tensor_thread_coord_{},
           tile_dstr_{tile_distribution},
-          window_adaptor_thread_coord_{
-              make_tensor_adaptor_coordinate(tile_distribution.GetPsYs2XsAdaptor(),
-                                             AdaptorTopIndex{get_warp_id(), get_lane_id(), 0})}
+          window_adaptor_thread_coord_{make_tensor_adaptor_coordinate(
+              tile_distribution.GetPsYs2XsAdaptor(),
+              container_concat(detail::get_partition_index(tile_distribution),
+                               Array<index_t, TileDstr::NDimY>{0}))}
     {
         BottomTensorIndex bottom_tensor_thread_origin_idx;
 
