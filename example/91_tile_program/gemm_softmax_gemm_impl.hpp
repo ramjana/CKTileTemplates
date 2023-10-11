@@ -208,8 +208,8 @@ struct GemmSoftmaxGemmImpl
         using SBlockTileType = decltype(tile_elementwise_in(
             type_convert<SMPLComputeDataType, SaccDataType>, SaccBlockTileType{}));
 
-        using PBlockTileType = decltype(tile_elementwise_in(type_convert<PDataType, SaccDataType>,
-                                                            SaccBlockTileType{}));
+        using PBlockTileType = decltype(
+            tile_elementwise_in(type_convert<PDataType, SaccDataType>, SaccBlockTileType{}));
 
         using MLBlockTileType = decltype(block_tile_reduce<SMPLComputeDataType>(
             SBlockTileType{}, Sequence<1>{}, f_max, SMPLComputeDataType{0}));
@@ -231,11 +231,14 @@ struct GemmSoftmaxGemmImpl
 
         do
         {
-            // Sacc{j} = Q * K{j}
+            // GEMM0: Sacc{j} = Q * K{j}
             const auto s_acc =
                 gemm0_pipeline(q_dram_window, k_dram_window, K0 / kK0PerBlock, smem_ptr);
 
-            // S{j}
+            // Block GEMM1: load V{j}
+            const auto v = load_tile(v_dram_window);
+
+            // GEMM0: S{j}
             const auto s =
                 tile_elementwise_in(type_convert<SMPLComputeDataType, SaccDataType>, s_acc);
 
@@ -296,11 +299,20 @@ struct GemmSoftmaxGemmImpl
             const auto p =
                 tile_elementwise_in(type_convert<PDataType, SMPLComputeDataType>, p_compute);
 
+            enum SchedGroupMask
+            {
+                DS_READ   = 1u << 8,
+                MFMA      = 1u << 3,
+                DS_WRITE  = 1u << 9,
+                VMEM_READ = 1u << 5,
+            };
+
+            __builtin_amdgcn_sched_barrier(0);
+            asm volatile("; POYENC start GEMM1" ::);
+            __builtin_amdgcn_sched_barrier(0);
+
             // Block GEMM1: Oacc{j} += P{j} * V{j}
             {
-                // load V{j}
-                const auto v = load_tile(v_dram_window);
-
                 // wait for gemm0 pipeline to finish
                 block_sync_lds();
 
@@ -315,6 +327,10 @@ struct GemmSoftmaxGemmImpl
                 // wait for gemm1 to finish
                 block_sync_lds();
             }
+
+            __builtin_amdgcn_sched_barrier(0);
+            asm volatile("; POYENC end GEMM1" ::);
+            __builtin_amdgcn_sched_barrier(0);
 
             // move tile windows
             move_tile_window(k_dram_window, {kN0PerBlock, 0});
