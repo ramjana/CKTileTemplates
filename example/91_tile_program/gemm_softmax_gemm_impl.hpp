@@ -321,14 +321,14 @@ struct GemmSoftmaxGemmImpl
 
                 store_tile(v_lds_window, v);
 
+                // move tile window: K
+                move_tile_window(k_dram_window, {kN0PerBlock, 0});
+
                 // wait for store_tile to finish
                 block_sync_lds();
 
                 // Oacc{j} += P{j} * V{j}
                 gemm1(o_acc, p, v_lds_window);
-
-                // move tile window: K
-                move_tile_window(k_dram_window, {kN0PerBlock, 0});
 
                 // GEMM0: prefetch 0
                 ab_block_tiles = gemm0_pipeline.WarmUp(q_dram_window, k_dram_window);
