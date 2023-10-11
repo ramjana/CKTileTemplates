@@ -46,6 +46,7 @@ struct BlockGemmASmemBSmemCRegV1
     using BDataType      = remove_cvref_t<typename Problem::BDataType>;
     using CDataType      = remove_cvref_t<typename Problem::CDataType>;
     using BlockGemmShape = remove_cvref_t<typename Problem::BlockGemmShape>;
+    using BlockGemmPolicy= remove_cvref_t<typename Policy>;
 
     static constexpr index_t kBlockSize = Problem::kBlockSize;
 
