@@ -330,12 +330,26 @@ struct GemmSoftmaxGemmImpl
                 // Oacc{j} += P{j} * V{j}
                 gemm1(o_acc, p, v_lds_window);
 
+                __builtin_amdgcn_sched_group_barrier(DS_READ, 2, 2);
+                __builtin_amdgcn_sched_group_barrier(MFMA, 1, 2);
+
+                static_for<0, 63, 1>{}([&](auto) {
+                    __builtin_amdgcn_sched_group_barrier(DS_READ, 1, 2);
+                    __builtin_amdgcn_sched_group_barrier(MFMA, 1, 2);
+                });
+
+                __builtin_amdgcn_sched_barrier(0);
+
                 // GEMM0: prefetch 0
                 ab_block_tiles = gemm0_pipeline.WarmUp(q_dram_window, k_dram_window);
 
                 // wait for gemm1 to finish
                 block_sync_lds();
             }
+
+            __builtin_amdgcn_sched_barrier(0);
+            asm volatile("; POYENC end GEMM1" ::);
+            __builtin_amdgcn_sched_barrier(0);
 
             // move tile window: V
             move_tile_window(v_dram_window, {0, kN0PerBlock});
