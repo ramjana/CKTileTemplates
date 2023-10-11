@@ -229,11 +229,14 @@ struct GemmSoftmaxGemmImpl
         // loop over Column of S (J loop)
         index_t iN0 = 0;
 
+        // GEMM0: prefetch 0
+        auto ab_block_tiles = gemm0_pipeline.WarmUp(q_dram_window, k_dram_window);
+
         do
         {
             // GEMM0: Sacc{j} = Q * K{j}
-            const auto s_acc =
-                gemm0_pipeline(q_dram_window, k_dram_window, K0 / kK0PerBlock, smem_ptr);
+            const auto s_acc = gemm0_pipeline(
+                q_dram_window, k_dram_window, ab_block_tiles, K0 / kK0PerBlock, smem_ptr);
 
             // Block GEMM1: load V{j}
             const auto v = load_tile(v_dram_window);
@@ -324,16 +327,17 @@ struct GemmSoftmaxGemmImpl
                 // Oacc{j} += P{j} * V{j}
                 gemm1(o_acc, p, v_lds_window);
 
+                // move tile window: K
+                move_tile_window(k_dram_window, {kN0PerBlock, 0});
+
+                // GEMM0: prefetch 0
+                ab_block_tiles = gemm0_pipeline.WarmUp(q_dram_window, k_dram_window);
+
                 // wait for gemm1 to finish
                 block_sync_lds();
             }
 
-            __builtin_amdgcn_sched_barrier(0);
-            asm volatile("; POYENC end GEMM1" ::);
-            __builtin_amdgcn_sched_barrier(0);
-
-            // move tile windows
-            move_tile_window(k_dram_window, {kN0PerBlock, 0});
+            // move tile window: V
             move_tile_window(v_dram_window, {0, kN0PerBlock});
 
             iN0 += kN0PerBlock;
