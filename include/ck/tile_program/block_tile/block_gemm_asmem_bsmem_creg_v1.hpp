@@ -93,6 +93,7 @@ struct BlockGemmASmemBSmemCRegV1
             a_block_window_tmp.GetWindowOrigin() + MultiIndex<2>{iMWarp * WG::kM, 0},
             make_static_tile_distribution(typename WG::AWarpDstrEncoding{}));
 
+#if 0 // FIXME: using Array will cause register spill
         Array<Array<decltype(a_warp_window_tmp), KIterPerWarp>, MIterPerWarp> a_warp_windows{
             {a_warp_window_tmp}};
 
@@ -104,6 +105,20 @@ struct BlockGemmASmemBSmemCRegV1
                                  {mIter * MPerBlockPerIter, kIter * KPerBlockPerIter});
             }
         }
+#else
+        StaticallyIndexedArray<StaticallyIndexedArray<decltype(a_warp_window_tmp), KIterPerWarp>,
+                               MIterPerWarp>
+            a_warp_windows;
+
+        static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
+            static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
+                a_warp_windows(mIter)(kIter) = a_warp_window_tmp;
+
+                move_tile_window(a_warp_windows(mIter)(kIter),
+                                 {mIter * MPerBlockPerIter, kIter * KPerBlockPerIter});
+            });
+        });
+#endif
 
         // construct B-warp-window
         auto b_warp_window_tmp = make_tile_window(
@@ -112,6 +127,7 @@ struct BlockGemmASmemBSmemCRegV1
             b_block_window_tmp.GetWindowOrigin() + MultiIndex<2>{iNWarp * WG::kN, 0},
             make_static_tile_distribution(typename WG::BWarpDstrEncoding{}));
 
+#if 0 // FIXME: using Array will cause register spill
         Array<Array<decltype(b_warp_window_tmp), KIterPerWarp>, NIterPerWarp> b_warp_windows{
             {b_warp_window_tmp}};
 
@@ -123,6 +139,20 @@ struct BlockGemmASmemBSmemCRegV1
                                  {nIter * NPerBlockPerIter, kIter * KPerBlockPerIter});
             }
         }
+#else
+        StaticallyIndexedArray<StaticallyIndexedArray<decltype(b_warp_window_tmp), KIterPerWarp>,
+                               NIterPerWarp>
+            b_warp_windows;
+
+        static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
+            static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
+                b_warp_windows(nIter)(kIter) = b_warp_window_tmp;
+
+                move_tile_window(b_warp_windows(nIter)(kIter),
+                                 {nIter * NPerBlockPerIter, kIter * KPerBlockPerIter});
+            });
+        });
+#endif
 
         using CWarpDstr   = typename WG::CWarpDstr;
         using CWarpTensor = typename WG::CWarpTensor;
@@ -202,6 +232,7 @@ struct BlockGemmASmemBSmemCRegV1
             a_block_window_tmp.GetWindowOrigin() + MultiIndex<2>{iMWarp * WG::kM, 0},
             make_static_tile_distribution(typename WG::AWarpDstrEncoding{}));
 
+#if 0 // FIXME: using Array will cause register spill
         Array<Array<decltype(a_warp_window_tmp), KIterPerWarp>, MIterPerWarp> a_warp_windows{
             {a_warp_window_tmp}};
 
@@ -213,6 +244,20 @@ struct BlockGemmASmemBSmemCRegV1
                                  {mIter * MPerBlockPerIter, kIter * KPerBlockPerIter});
             }
         }
+#else
+        StaticallyIndexedArray<StaticallyIndexedArray<decltype(a_warp_window_tmp), KIterPerWarp>,
+                               MIterPerWarp>
+            a_warp_windows;
+
+        static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
+            static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
+                a_warp_windows(mIter)(kIter) = a_warp_window_tmp;
+
+                move_tile_window(a_warp_windows(mIter)(kIter),
+                                 {mIter * MPerBlockPerIter, kIter * KPerBlockPerIter});
+            });
+        });
+#endif
 
         // construct B-warp-window
         auto b_warp_window_tmp = make_tile_window(
@@ -221,6 +266,7 @@ struct BlockGemmASmemBSmemCRegV1
             b_block_window_tmp.GetWindowOrigin() + MultiIndex<2>{iNWarp * WG::kN, 0},
             make_static_tile_distribution(typename WG::BWarpDstrEncoding{}));
 
+#if 0 // FIXME: using Array will cause register spill
         Array<Array<decltype(b_warp_window_tmp), KIterPerWarp>, NIterPerWarp> b_warp_windows{
             {b_warp_window_tmp}};
 
@@ -232,6 +278,20 @@ struct BlockGemmASmemBSmemCRegV1
                                  {nIter * NPerBlockPerIter, kIter * KPerBlockPerIter});
             }
         }
+#else
+        StaticallyIndexedArray<StaticallyIndexedArray<decltype(b_warp_window_tmp), KIterPerWarp>,
+                               NIterPerWarp>
+            b_warp_windows;
+
+        static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
+            static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
+                b_warp_windows(nIter)(kIter) = b_warp_window_tmp;
+
+                move_tile_window(b_warp_windows(nIter)(kIter),
+                                 {nIter * NPerBlockPerIter, kIter * KPerBlockPerIter});
+            });
+        });
+#endif
 
         static_assert(is_same_v<CDataType, typename WG::CDataType>, "wrong!");
 

@@ -122,6 +122,7 @@ struct BlockGemmARegBSmemCRegV1
             b_block_window_tmp.GetWindowOrigin() + MultiIndex<2>{iNWarp * WG::kN, 0},
             make_static_tile_distribution(typename WG::BWarpDstrEncoding{}));
 
+#if 0 // FIXME: using Array will cause register spill
         Array<Array<decltype(b_warp_window_tmp), KIterPerWarp>, NIterPerWarp> b_warp_windows{
             {b_warp_window_tmp}};
 
@@ -133,6 +134,20 @@ struct BlockGemmARegBSmemCRegV1
                                  {nIter * NPerBlockPerIter, kIter * KPerBlockPerIter});
             }
         }
+#else
+        StaticallyIndexedArray<StaticallyIndexedArray<decltype(b_warp_window_tmp), KIterPerWarp>,
+                               NIterPerWarp>
+            b_warp_windows;
+
+        static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
+            static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
+                b_warp_windows(nIter)(kIter) = b_warp_window_tmp;
+
+                move_tile_window(b_warp_windows(nIter)(kIter),
+                                 {nIter * NPerBlockPerIter, kIter * KPerBlockPerIter});
+            });
+        });
+#endif
 
         // check C-block-distribution
         static_assert(is_same_v<remove_cvref_t<decltype(c_block_dstr_encode)>,
@@ -259,6 +274,7 @@ struct BlockGemmARegBSmemCRegV1
             b_block_window_tmp.GetWindowOrigin() + MultiIndex<2>{iNWarp * WG::kN, 0},
             make_static_tile_distribution(typename WG::BWarpDstrEncoding{}));
 
+#if 0 // FIXME: using Array will cause register spill
         Array<Array<decltype(b_warp_window_tmp), KIterPerWarp>, NIterPerWarp> b_warp_windows{
             {b_warp_window_tmp}};
 
@@ -270,6 +286,20 @@ struct BlockGemmARegBSmemCRegV1
                                  {nIter * NPerBlockPerIter, kIter * KPerBlockPerIter});
             }
         }
+#else
+        StaticallyIndexedArray<StaticallyIndexedArray<decltype(b_warp_window_tmp), KIterPerWarp>,
+                               NIterPerWarp>
+            b_warp_windows;
+
+        static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
+            static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
+                b_warp_windows(nIter)(kIter) = b_warp_window_tmp;
+
+                move_tile_window(b_warp_windows(nIter)(kIter),
+                                 {nIter * NPerBlockPerIter, kIter * KPerBlockPerIter});
+            });
+        });
+#endif
 
         // Construct C-Block-Tensor
         auto c_block_tensor = make_static_distributed_tensor<CDataType>(c_block_dstr);
