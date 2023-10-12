@@ -243,6 +243,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2
 
             block_sync_lds();
 
+            __builtin_amdgcn_sched_barrier(0);
+
             // GEMM num_loop - 1
             block_gemm(c_block_tile, a_lds_gemm_window, b_lds_gemm_window);
         }
