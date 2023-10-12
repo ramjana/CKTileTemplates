@@ -19,7 +19,7 @@ namespace tile_program {
 // detail used by tile-programming APIs(), not supposed to be used directly
 namespace detail {
 
-#if 0
+// TODO: deprecate
 // "Y dimension": Y dimensions inside TileWindowWithStaticDistribution
 // input:
 //   y_slice_origin: starting slice origin of Y dimension
@@ -158,18 +158,13 @@ __device__ auto load_sliced_thread_data_from_tile_window(
 
     return thread_buf;
 }
-#endif
 
-// "Y dimension": Y dimensions inside TileWindowWithStaticDistribution
-// input:
-//   tile_window
-// output:
-//   A StaticBuffer holding thread data, and data layout is hardcoded to be in the order of
-//   [Y0, Y1, Y2, ...]
+} // namespace detail
+
 template <typename BottomTensorView_, typename WindowLengths_, typename TileDistribution_>
-__device__ auto load_thread_data_from_tile_window(
-    TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&
-        tile_window)
+__device__ auto
+load_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&
+              tile_window)
 {
     using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
     using BottomTensorView = remove_cvref_t<BottomTensorView_>;
@@ -177,7 +172,13 @@ __device__ auto load_thread_data_from_tile_window(
     using TileDstr         = remove_cvref_t<TileDistribution_>;
     using TileWindow = TileWindowWithStaticDistribution<BottomTensorView, WindowLengths, TileDstr>;
 
+    static_assert(is_known_at_compile_time<WindowLengths>::value,
+                  "wrong! lengths should be static");
+    static_assert(TileWindow::HasStaticTileDistribution(), "wrong!");
+
     constexpr auto tile_dstr = TileDstr{};
+
+    auto dst_tensor = make_static_distributed_tensor<DataType>(tile_dstr);
 
     constexpr auto thread_tensor_lengths_ys =
         to_sequence(tile_dstr.GetYs2DDescriptor().GetLengths());
@@ -187,11 +188,6 @@ __device__ auto load_thread_data_from_tile_window(
 
     static_assert(TileWindow::HasStaticTileDistribution(),
                   "wrong! assume static tile distribution");
-
-    constexpr index_t thread_element_size =
-        container_reduce(thread_tensor_lengths_ys, math::multiplies{}, 1);
-
-    StaticBuffer<AddressSpaceEnum::Vgpr, DataType, thread_element_size, true> thread_buf;
 
     constexpr auto tmp = [&thread_tensor_lengths_ys]() {
         const auto [ys_vector_lengths, ys_vector_strides] =
@@ -256,7 +252,7 @@ __device__ auto load_thread_data_from_tile_window(
 
             constexpr index_t d = tile_dstr.GetYs2DDescriptor().CalculateOffset(idx_ys);
 
-            thread_buf.template At<d>() = vec.template AsType<DataType>()[j];
+            dst_tensor.GetThreadBuffer().template At<d>() = vec.template AsType<DataType>()[j];
         });
 
         // move thread coordinate
@@ -279,33 +275,7 @@ __device__ auto load_thread_data_from_tile_window(
         tile_window.MoveWindowAdaptorAndBottomTensorThreadCoordinate(idx_diff_ps_ys);
     }
 
-    return thread_buf;
-}
-
-} // namespace detail
-
-template <typename BottomTensorView_, typename WindowLengths_, typename TileDistribution_>
-__device__ auto
-load_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, TileDistribution_>&
-              tile_window)
-{
-    using DataType         = remove_cvref_t<typename BottomTensorView_::DataType>;
-    using BottomTensorView = remove_cvref_t<BottomTensorView_>;
-    using WindowLengths    = remove_cvref_t<WindowLengths_>;
-    using TileDstr         = remove_cvref_t<TileDistribution_>;
-    using TileWindow = TileWindowWithStaticDistribution<BottomTensorView, WindowLengths, TileDstr>;
-
-    static_assert(is_known_at_compile_time<WindowLengths>::value,
-                  "wrong! lengths should be static");
-    static_assert(TileWindow::HasStaticTileDistribution(), "wrong!");
-
-    constexpr auto tile_dstr = TileDstr{};
-
-    auto dstr_tensor = make_static_distributed_tensor<DataType>(tile_dstr);
-
-    dstr_tensor.GetThreadBuffer() = detail::load_thread_data_from_tile_window(tile_window);
-
-    return dstr_tensor;
+    return dst_tensor;
 }
 
 } // namespace tile_program
