@@ -310,18 +310,9 @@ struct BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy
         };
 
         // pipeline #1
-        static_for<0, KIterPerWarp, 1>{}([](auto) {
-            __builtin_amdgcn_sched_group_barrier(DS_READ, NumLdsLoad / KIterPerWarp, 1);
-            __builtin_amdgcn_sched_group_barrier(MFMA, NumMfma / KIterPerWarp, 1);
-        });
-
-        // pipeline #2
-        __builtin_amdgcn_sched_group_barrier(MFMA, NumMfma - (NumMfma / KIterPerWarp), 2);
-
-        static_for<0, NumLdsStore / 2, 1>{}([](auto) {
-            __builtin_amdgcn_sched_group_barrier(MFMA, 2, 2);
-            __builtin_amdgcn_sched_group_barrier(DS_WRITE, 2, 2);
-            __builtin_amdgcn_sched_group_barrier(VMEM_READ, (NumGlobalLoad / NumLdsStore) * 2, 2);
+        static_for<0, KIterPerWarp * 2, 1>{}([](auto) {
+            __builtin_amdgcn_sched_group_barrier(DS_READ, NumLdsLoad / KIterPerWarp / 2, 1);
+            __builtin_amdgcn_sched_group_barrier(MFMA, NumMfma / KIterPerWarp / 2, 1);
         });
     }
 };
