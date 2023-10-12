@@ -232,6 +232,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2
             // GEMM num_loop - 2
             block_gemm(c_block_tile, a_lds_gemm_window, b_lds_gemm_window);
 
+            __builtin_amdgcn_sched_barrier(0);
+
             block_sync_lds();
 
             // LDS write num_loop - 1
