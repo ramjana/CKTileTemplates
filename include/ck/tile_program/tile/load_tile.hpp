@@ -230,7 +230,7 @@ load_tile(TileWindowWithStaticDistribution<BottomTensorView_, WindowLengths_, Ti
 
     static_assert(num_access > 0, "wrong! num_access should be larger than 0");
 
-#if 0
+#if 1 // debug
     // loop over thread tensor space [y0, y1, ...]
     static_for<0, num_access, 1>{}([&](auto iAccess) {
         // read from bottom tensor
