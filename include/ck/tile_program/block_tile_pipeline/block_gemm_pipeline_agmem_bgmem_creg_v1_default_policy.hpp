@@ -13,6 +13,7 @@
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile/block_gemm_asmem_bsmem_creg_v1.hpp"
+#include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1.hpp"
 
 namespace ck {
 namespace tile_program {

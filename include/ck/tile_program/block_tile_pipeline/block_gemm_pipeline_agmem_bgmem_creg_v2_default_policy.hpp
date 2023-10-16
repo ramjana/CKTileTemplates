@@ -30,21 +30,33 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy : BlockGemmPipelineAGmemB
 
         constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
         constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
+        
+        constexpr auto BlockGemm = GetBlockGemm<Problem>();
+        constexpr auto config = decltype(BlockGemm)::BlockGemmPolicy::template GetWarpGemmMWarpNWarp<Problem>();
+        
+        using WG = remove_cvref_t<decltype(config.template At<0>())>;
 
-        constexpr auto a_lds_block_desc_0 = make_naive_tensor_descriptor(
-            make_tuple(Number<kKPerBlock / 8>{}, Number<kMPerBlock>{}, Number<8>{}),
-            make_tuple(Number<(kMPerBlock + 1) * 8>{}, Number<8>{}, Number<1>{}),
-            Number<8>{},
-            Number<1>{});
+        constexpr index_t MWarp = config.template At<1>();
+        constexpr index_t NWarp = config.template At<2>();
 
-        constexpr auto a_lds_block_desc = transform_tensor_descriptor(
-            a_lds_block_desc_0,
-            make_tuple(make_pass_through_transform(kMPerBlock),
-                       make_merge_transform(make_tuple(kKPerBlock / 8, 8))),
-            make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
-            make_tuple(Sequence<0>{}, Sequence<1>{}));
+        constexpr index_t MIterPerWarp = kMPerBlock / (MWarp * WG::kM);
+        constexpr index_t KIterPerWarp = kKPerBlock / WG::kK;
 
-        return a_lds_block_desc;
+        constexpr auto a_block_outer_dstr_encoding = StaticTileDistributionEncoding<
+            Sequence<NWarp>,
+            Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<KIterPerWarp>>,
+            Tuple<Sequence<1, 0>>,
+            Tuple<Sequence<1, 0>>,
+            Sequence<1, 2>,
+            Sequence<0, 0>>{};
+
+        constexpr auto a_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
+            a_block_outer_dstr_encoding, typename WG::AWarpDstrEncoding{});
+        
+        constexpr auto a_block_dstr = make_static_tile_distribution(a_block_dstr_encode);
+
+        // What is difference between distribution and descriptor
+        return a_block_dstr;
     }
 
     // kK = KRepeat * kABKLane * KPerRead
@@ -64,8 +76,6 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy : BlockGemmPipelineAGmemB
         using WG = remove_cvref_t<decltype(config.template At<0>())>;
         
         constexpr index_t MWarp = config.template At<1>();
-
-        constexpr index_t kBlockSize = Problem::kBlockSize;
 
         constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
         constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;

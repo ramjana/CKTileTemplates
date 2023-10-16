@@ -43,7 +43,7 @@ struct GemmSoftmaxGemmImpl
             SaccDataType,
             kBlockSize,
             ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>,
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>;
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy>;
 
     // block gemm1
     using BlockGemm1 = ck::tile_program::block::BlockGemmARegBSmemCRegV1<

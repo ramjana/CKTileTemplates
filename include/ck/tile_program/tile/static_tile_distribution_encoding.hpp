@@ -17,6 +17,11 @@ template <typename RsLengths_,    // Sequence<...>
           typename Ys2RHsMinor_>  // Sequence<...>
 struct StaticTileDistributionEncoding
 {
+    // R: replicate
+    // P: partition
+    // Y: data in thread
+    // X: data in tile
+    // H: hidden, unmerge from X
     using RsLengths    = remove_cvref_t<RsLengths_>;
     using HsLengthss   = remove_cvref_t<HsLengthss_>;
     using Ps2RHssMajor = remove_cvref_t<Ps2RHssMajor_>;
