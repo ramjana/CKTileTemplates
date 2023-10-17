@@ -274,7 +274,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
                       "wrong!");
 
         // A tile in Reg，blockTensor
-        // This tensor distribution used to construct both distributed tensor for local buffer store and read
+        // This tensor distribution used to construct both distributed tensor for local buffer store and read. without buffer address info
         constexpr auto a_reg_block_dstr = Policy::template MakeARegBlockDescriptor<Problem>();
 
         // B tile in LDS, blockWindow
@@ -283,7 +283,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
 
         constexpr auto b_lds_block_desc = Policy::template MakeBLdsBlockDescriptor<Problem>();
         
-        // This tensor view used to construct both tile window for lds store and read
+        // This tensor view used to construct both tile window for lds store and read, with buffer address info
         auto b_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_b_lds, b_lds_block_desc);
         
         // A DRAM tile window for load
@@ -294,7 +294,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
                              Policy::template MakeADramTileDistribution<Problem>());
 
         
-        // A Reg tensor for store
+        // A Reg tensor for store, also used for block GEMM
         auto a_copy_reg_tensor =
             make_static_distributed_tensor<ADataType>(a_reg_block_dstr);
 
@@ -313,8 +313,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
                              b_copy_dram_window.GetTileDistribution());
 
         // A Reg tensor for block GEMM
-        auto a_reg_gemm_tensor =
-            make_static_distributed_tensor<ADataType>(a_reg_block_dstr);
+        // auto a_reg_gemm_tensor =
+            // make_static_distributed_tensor<ADataType>(a_reg_block_dstr);
 
         // B LDS tile for block GEMM
         auto b_lds_gemm_window = make_tile_window(
@@ -324,13 +324,25 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
         constexpr auto block_gemm = Policy::template GetBlockGemm<Problem>();
 
         // Acc register tile
-        auto c_block_tile = decltype(block_gemm(a_reg_gemm_tensor, b_lds_gemm_window)){};
+        auto c_block_tile = decltype(block_gemm(a_copy_reg_tensor, b_lds_gemm_window)){};
 
         // prefetch
         // global read 0
         auto a_block_tile = load_tile(a_copy_dram_window);
+        // asm volatile("s_endpgm" ::);
         auto b_block_tile = load_tile(b_copy_dram_window);
-
+#if 0
+        printf("Tid: %03d, global read A: %04x %04x %04x %04x| %04x %04x %04x %04x|\n",
+                get_thread_local_1d_id(),
+                *(reinterpret_cast<const uint16_t*>(&(a_block_tile.GetThreadBuffer()[Number<0>{}]))),
+                *(reinterpret_cast<const uint16_t*>(&(a_block_tile.GetThreadBuffer()[Number<1>{}]))),
+                *(reinterpret_cast<const uint16_t*>(&(a_block_tile.GetThreadBuffer()[Number<2>{}]))),
+                *(reinterpret_cast<const uint16_t*>(&(a_block_tile.GetThreadBuffer()[Number<3>{}]))),
+                *(reinterpret_cast<const uint16_t*>(&(a_block_tile.GetThreadBuffer()[Number<4>{}]))),
+                *(reinterpret_cast<const uint16_t*>(&(a_block_tile.GetThreadBuffer()[Number<5>{}]))),
+                *(reinterpret_cast<const uint16_t*>(&(a_block_tile.GetThreadBuffer()[Number<6>{}]))),
+                *(reinterpret_cast<const uint16_t*>(&(a_block_tile.GetThreadBuffer()[Number<7>{}]))));
+#endif 
         {
             // move to 1
             move_tile_window(a_copy_dram_window, {0, kKPerBlock});
@@ -359,8 +371,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
             block_sync_lds();
 
             // GEMM i
-            a_reg_gemm_tensor.GetThreadBuffer() = a_copy_reg_tensor.GetThreadBuffer();
-            block_gemm(c_block_tile, a_reg_gemm_tensor, b_lds_gemm_window);
+            // a_reg_gemm_tensor.GetThreadBuffer() = a_copy_reg_tensor.GetThreadBuffer();
+            block_gemm(c_block_tile, a_copy_reg_tensor, b_lds_gemm_window);
 
             block_sync_lds();
 
@@ -389,8 +401,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
             block_sync_lds();
 
             // GEMM num_loop - 2
-            a_reg_gemm_tensor.GetThreadBuffer() = a_copy_reg_tensor.GetThreadBuffer();
-            block_gemm(c_block_tile, a_reg_gemm_tensor, b_lds_gemm_window);
+            // a_reg_gemm_tensor.GetThreadBuffer() = a_copy_reg_tensor.GetThreadBuffer();
+            block_gemm(c_block_tile, a_copy_reg_tensor, b_lds_gemm_window);
 
             block_sync_lds();
 
@@ -404,8 +416,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
             block_sync_lds();
 
             // GEMM num_loop - 1
-            a_reg_gemm_tensor.GetThreadBuffer() = a_copy_reg_tensor.GetThreadBuffer();
-            block_gemm(c_block_tile, a_reg_gemm_tensor, b_lds_gemm_window);
+            // a_reg_gemm_tensor.GetThreadBuffer() = a_copy_reg_tensor.GetThreadBuffer();
+            block_gemm(c_block_tile, a_copy_reg_tensor, b_lds_gemm_window);
         }
 
         return c_block_tile;

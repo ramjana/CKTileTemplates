@@ -53,6 +53,17 @@ struct BlockGemmARegBSmemCRegV1DefaultPolicy
     }
 };
 
+struct BlockGemmARegBSmemCRegV1K8Policy
+{
+    template <typename Problem>
+    __host__ __device__ static constexpr auto GetWarpGemmMWarpNWarp()
+    {
+        using namespace ck::tile_program::warp;
+
+        return make_tuple(WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution{}, 4, 1);
+    }
+};
+
 } // namespace block
 } // namespace tile_program
 } // namespace ck

@@ -68,7 +68,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy : BlockGemmPipelineAGmemB
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeADramTileDistribution()
     {
-        using ADataType = remove_cvref_t<typename Problem::ADataType>;
+        // using ADataType = remove_cvref_t<typename Problem::ADataType>;
         
         constexpr auto BlockGemm = GetBlockGemm<Problem>();
         constexpr auto config = decltype(BlockGemm)::BlockGemmPolicy::template GetWarpGemmMWarpNWarp<Problem>();
@@ -80,10 +80,30 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy : BlockGemmPipelineAGmemB
         constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
         constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
 
+#if 0
+        constexpr index_t NWarp = config.template At<2>();
+        constexpr index_t MIterPerWarp = kMPerBlock / (MWarp * WG::kM);
+        constexpr index_t KIterPerWarp = kKPerBlock / WG::kK;
+
+        constexpr auto a_block_outer_dstr_encoding = StaticTileDistributionEncoding<
+            Sequence<NWarp>,
+            Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<KIterPerWarp>>,
+            Tuple<Sequence<1, 0>>,
+            Tuple<Sequence<1, 0>>,
+            Sequence<1, 2>,
+            Sequence<0, 0>>{};
+        
+        constexpr auto a_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
+            a_block_outer_dstr_encoding, typename WG::AWarpDstrEncoding{});
+        
+        return a_block_dstr_encode;
+#endif
         // Try replace with
         // detail::make_embed_tile_distribution_encoding(
         // a_block_outer_dstr_encoding, typename WG::AWarpDstrEncoding{});
-        constexpr index_t K2 = 16 / sizeof(ADataType);
+#if 1   
+        // This cover KIter > 1 condition
+        constexpr index_t K2 = WG::kK/ WG::WarpGemmAttribute::Impl::kABKLane; //WG::WarpGemmAttribute::Impl::kABKPerLane; // 16 / sizeof(ADataType);
         constexpr index_t K1 = WG::WarpGemmAttribute::Impl::kABKLane;
         constexpr index_t K0 = kKPerBlock / (K1 * K2);
 
@@ -94,16 +114,17 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy : BlockGemmPipelineAGmemB
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
                                            Tuple<Sequence<M0, M1, M2>, Sequence<K0, K1, K2>>,
-                                           Tuple<Sequence<1>, Sequence<1, 2>>,
                                            Tuple<Sequence<1>, Sequence<2, 1>>,
+                                           Tuple<Sequence<1>, Sequence<1, 2>>,
                                            Sequence<2, 1, 2>,
                                            Sequence<0, 0, 2>>{});
+#endif
     }
 
     template <typename Problem>
     __host__ __device__ static constexpr auto GetBlockGemm()
     {
-        using BlockGemmPolicy = BlockGemmARegBSmemCRegV1DefaultPolicy;
+        using BlockGemmPolicy = BlockGemmARegBSmemCRegV1K8Policy;
 
         return BlockGemmARegBSmemCRegV1<Problem, BlockGemmPolicy>{};
     }

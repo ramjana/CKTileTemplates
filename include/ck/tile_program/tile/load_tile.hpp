@@ -112,7 +112,11 @@ __device__ auto load_sliced_thread_data_from_tile_window(
         const vector_t vec_value =
             tile_window.GetBottomTensorView().template GetVectorizedElements<vector_t>(
                 tile_window.GetBottomTensorThreadCoordinate());
-
+#if 0
+            printf("Tid: %03d, global read offset: %05d\n", 
+                    get_thread_local_1d_id(),
+                    tile_window.GetBottomTensorThreadCoordinate().GetOffset());
+#endif
         const vector_type_t vec{vec_value};
 
         // data index [y0, y1, ...]
