@@ -14,6 +14,7 @@
 #include "ck/tile_program/tile/slice_tile.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2_askiplds.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile/block_reduce.hpp"
@@ -37,15 +38,15 @@ template <typename QDataType,
           ck::index_t kK1PerBlock>
 struct GemmSoftmaxGemmImpl
 {
-    // block gemm0 pipeline
-    using BlockGemm0Pipeline = ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<
-        ck::tile_program::block::BlockGemmPipelineProblem<
-            QDataType,
-            KDataType,
-            SaccDataType,
-            kBlockSize,
-            ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>,
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>;
+    // block gemm0
+    using BlockGemm0Problem = ck::tile_program::block::BlockGemmPipelineProblem<
+                                QDataType,
+                                KDataType,
+                                SaccDataType,
+                                kBlockSize,
+                                ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>;
+    using BlockGemm0Policy  = BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy;
+    using BlockGemm0        = decltype(BlockGemm0Policy::GetBlockGemm<BlockGemm0Problem>());
 
     // block gemm1
     using BlockGemm1 = ck::tile_program::block::BlockGemmARegBSmemCRegV1<
@@ -162,7 +163,8 @@ struct GemmSoftmaxGemmImpl
     {
         using namespace ck;
 
-        return math::max(BlockGemm0Pipeline::GetStaticLdsSize(),
+        return math::max(sizeof(KDataType) *
+                   Policy::template MakeBLdsBlockDescriptor<Problem>().GetElementSpaceSize(),
                          static_cast<index_t>(MakeVLdsBlockDescriptor().GetElementSpaceSize() *
                                               sizeof(VDataType)));
     }
@@ -204,10 +206,16 @@ struct GemmSoftmaxGemmImpl
             v_ptr, make_tuple(N1, N0), make_tuple(StrideV, 1), Number<32>{}, Number<1>{});
 
         auto q_dram_window = make_tile_window(
-            q_dram, make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}), {iM0, 0});
+            q_dram,
+            make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}),
+            {iM0, 0},
+            BlockGemm0Policy::MakeADramTileDistribution<BlockGemm0Problem>());
 
         auto k_dram_window = make_tile_window(
-            k_dram, make_tuple(Number<kN0PerBlock>{}, Number<kK0PerBlock>{}), {0, 0});
+            k_dram,
+            make_tuple(Number<kN0PerBlock>{}, Number<kK0PerBlock>{}),
+            {0, 0},
+            BlockGemm0Policy::MakeBDramTileDistribution<BlockGemm0Problem>());
 
         auto v_dram_window =
             make_tile_window(v_dram,
@@ -224,7 +232,7 @@ struct GemmSoftmaxGemmImpl
             v_lds, make_tuple(Number<kN1PerBlock>{}, Number<kK1PerBlock>{}), {0, 0});
 
         // Block GEMM0 pipeline and Block GEMM1
-        constexpr auto gemm0_pipeline = BlockGemm0Pipeline{};
+        constexpr auto gemm0          = BlockGemm0{};
         constexpr auto gemm1          = BlockGemm1{};
 
         // reduction function for softmax
@@ -267,6 +275,16 @@ struct GemmSoftmaxGemmImpl
             // Sacc{j} = Q * K{j}
             const auto s_acc =
                 gemm0_pipeline(q_dram_window, k_dram_window, K0 / kK0PerBlock, smem_ptr);
+            
+            // Expand gemm0 pipeline
+            if (iN0 == 0)
+            {
+                /* Cold Q_Reg_Cache */
+            }
+            else
+            {
+                /* Hot Q_Reg_Cache */
+            }
 
             // S{j}
             const auto s =

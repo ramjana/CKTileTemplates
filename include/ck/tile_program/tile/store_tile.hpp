@@ -12,3 +12,4 @@
 #include "ck/tile_program/tile/tile_distribution.hpp"
 #include "ck/tile_program/tile/store_tile_impl_static_distribution.hpp"
 #include "ck/tile_program/tile/store_tile_impl_static_lengths.hpp"
+#include "ck/tile_program/tile/store_tile_impl_static_tensor.hpp"

@@ -14,6 +14,7 @@
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1_default_policy.hpp"
+#include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1_iteratek_policy.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -45,6 +46,7 @@ struct BlockGemmARegBSmemCRegV1
     using BDataType      = remove_cvref_t<typename Problem::BDataType>;
     using CDataType      = remove_cvref_t<typename Problem::CDataType>;
     using BlockGemmShape = remove_cvref_t<typename Problem::BlockGemmShape>;
+    using BlockGemmPolicy= Policy;
 
     static constexpr index_t kBlockSize = Problem::kBlockSize;
 
