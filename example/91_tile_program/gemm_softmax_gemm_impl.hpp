@@ -43,7 +43,7 @@ struct GemmSoftmaxGemmImpl
             SaccDataType,
             kBlockSize,
             ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>,
-        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy>;
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2_SkipALds_PersistentQRegCachePolicy>;
 
     // block gemm1
     using BlockGemm1 = ck::tile_program::block::BlockGemmARegBSmemCRegV1<
@@ -232,8 +232,17 @@ struct GemmSoftmaxGemmImpl
         do
         {
             // Sacc{j} = Q * K{j}
+            // Add dynamic arg "ColdQRegCache",
+            // ColdQRegCache = iN0 > 0 ? False : True
+            // If ColdQRegCache == True, Enable Qdram read in gemm0
+            // If ColdQRegCache == False, disbale Qdram read in gemm0
+            // q_distributed_tensor 128x128
+            // k_dram_window 128x32
             const auto s_acc =
-                gemm0_pipeline(q_dram_window, k_dram_window, K0 / kK0PerBlock, smem_ptr);
+                gemm0_pipeline(q_dram_window, k_dram_window, K0 / kK0PerBlock, smem_ptr, iN0 > 0 ? false : true);
+            {
+                \**\
+            }
 
             // S{j}
             const auto s =

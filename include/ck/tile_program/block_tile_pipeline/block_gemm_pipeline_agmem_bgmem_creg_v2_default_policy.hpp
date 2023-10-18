@@ -19,6 +19,7 @@ using BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy =
     BlockGemmPipelineAGmemBGmemCRegV1DefaultPolicy;
 
 // NOTE: Assume A is K-Major
+// depracate inherit, reuse as function
 struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy : BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy
 {
     // TODO: More general API name called MakeABlockDescriptor, It could be Reg/Lds.
@@ -127,6 +128,47 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy : BlockGemmPipelineAGmemB
         using BlockGemmPolicy = BlockGemmARegBSmemCRegV1K8Policy;
 
         return BlockGemmARegBSmemCRegV1<Problem, BlockGemmPolicy>{};
+    }
+};
+
+struct BlockGemmPipelineAGmemBGmemCRegV2_SkipALds_PersistentQRegCachePolicy : BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy
+{
+    // TODO: More general API name called MakeABlockDescriptor, It could be Reg/Lds.
+    // With general API name we can implement various policy with inherit and overload.
+    template <typename Problem>
+    __host__ __device__ static constexpr auto MakeARegBlockDescriptor()
+    {
+        using namespace ck;
+
+        constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
+        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
+        
+        constexpr auto BlockGemm = GetBlockGemm<Problem>();
+        constexpr auto config = decltype(BlockGemm)::BlockGemmPolicy::template GetWarpGemmMWarpNWarp<Problem>();
+        
+        using WG = remove_cvref_t<decltype(config.template At<0>())>;
+
+        constexpr index_t MWarp = config.template At<1>();
+        constexpr index_t NWarp = config.template At<2>();
+
+        constexpr index_t MIterPerWarp = kMPerBlock / (MWarp * WG::kM);
+        constexpr index_t KIterPerWarp = kKPerBlock / WG::kK;
+
+        constexpr auto a_block_outer_dstr_encoding = StaticTileDistributionEncoding<
+            Sequence<NWarp>,
+            Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<KIterPerWarp>>,
+            Tuple<Sequence<1, 0>>,
+            Tuple<Sequence<1, 0>>,
+            Sequence<1, 2>,
+            Sequence<0, 0>>{};
+
+        constexpr auto a_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
+            a_block_outer_dstr_encoding, typename WG::AWarpDstrEncoding{});
+        
+        constexpr auto a_block_dstr = make_static_tile_distribution(a_block_dstr_encode);
+
+        // What is difference between distribution and descriptor
+        return a_block_dstr;
     }
 };
 
