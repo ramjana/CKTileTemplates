@@ -38,7 +38,7 @@ struct BlockGemmARegBGmemCRegV1
 
     // use BlockGemmARegBSmemCRegV1 as the underlying block-GEMM implementation
     using BlockGemmARegBSmemCRegImpl =
-        BlockGemmARegBSmemCRegV1<BlockGemmARegBSmemCRegV1Problem<ADataType,
+        BlockGemmARegBSmemCRegV1<BlockGemmARegBSmemCRegProblem<ADataType,
                                                                  BDataType,
                                                                  CDataType,
                                                                  kBlockSize,

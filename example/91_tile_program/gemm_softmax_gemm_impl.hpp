@@ -88,7 +88,7 @@ struct GemmSoftmaxGemmImpl
         // allocate LDS
         __shared__ char smem_ptr[GetStaticLdsSize()];
 
-        // Q/K/V DRAM and DRAM window
+        // Q/K/V DRAM
         // FIXME: assume layout Q[M0, K0], K[N0, K0], V[N1, N0], O[M0, N1]
         const auto q_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             q_ptr, make_tuple(M0, K0), make_tuple(StrideQ, 1), Number<32>{}, Number<1>{});
@@ -99,6 +99,7 @@ struct GemmSoftmaxGemmImpl
         const auto v_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             v_ptr, make_tuple(N1, N0), make_tuple(StrideV, 1), Number<32>{}, Number<1>{});
 
+        // Q/K/V DRAM window
         auto q_dram_window = make_tile_window(
             q_dram, make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}), {iM0, 0});
 
