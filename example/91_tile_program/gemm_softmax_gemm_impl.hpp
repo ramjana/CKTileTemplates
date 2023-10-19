@@ -9,11 +9,11 @@
 #include "ck/tensor_description/tensor_adaptor.hpp"
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
-#include "ck/tile_program/tile/tile_elementwise.hpp"
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
-#include "ck/tile_program/warp_tile/warp_gemm.hpp"
-#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
+#include "ck/tile_program/tile/tile_elementwise.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_problem.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2_default_policy.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bgmem_creg_problem.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bgmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1_default_policy.hpp"
@@ -218,7 +218,7 @@ struct GemmSoftmaxGemmImpl
             // Block GEMM1: Oacc{j} += P{j} * V{j}
             gemm1(o_acc, p, v_dram_window, smem_ptr);
 
-            // move tile windows for next iteration (J loop)
+            // move K/V tile windows for next iteration (J loop)
             move_tile_window(k_dram_window, {kN0PerBlock, 0});
             move_tile_window(v_dram_window, {0, kN0PerBlock});
 
