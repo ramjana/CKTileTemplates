@@ -30,7 +30,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
     using BDataType      = remove_cvref_t<typename Problem::BDataType>;
     using CDataType      = remove_cvref_t<typename Problem::CDataType>;
     using BlockGemmShape = remove_cvref_t<typename Problem::BlockGemmShape>;
-    using Policy = BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy;
+    using Policy         = BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy;
 
     static constexpr index_t kBlockSize = Problem::kBlockSize;
 
@@ -41,9 +41,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
     // Move this part into Policy?
     __host__ __device__ static constexpr ck::index_t GetStaticLdsSize()
     {
-        return 
-               sizeof(BDataType) *
-                   Policy::template MakeBLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        return sizeof(BDataType) *
+               Policy::template MakeBLdsBlockDescriptor<Problem>().GetElementSpaceSize();
     }
 
     template <typename ADramBlockWindowTmp,
@@ -68,16 +67,18 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
                       "wrong!");
 
         // A tile in Reg，blockTensor
-        // This tensor distribution used to construct both distributed tensor for local buffer store and read. without buffer address info
+        // This tensor distribution used to construct both distributed tensor for local buffer store
+        // and read. without buffer address info
         constexpr auto a_reg_block_dstr = Policy::template MakeARegBlockDescriptor<Problem>();
 
         // B tile in LDS, blockWindow
-        BDataType* p_b_lds = static_cast<BDataType*>(
-            static_cast<void*>(static_cast<char*>(p_smem)));
+        BDataType* p_b_lds =
+            static_cast<BDataType*>(static_cast<void*>(static_cast<char*>(p_smem)));
 
         constexpr auto b_lds_block_desc = Policy::template MakeBLdsBlockDescriptor<Problem>();
 
-        // This tensor view used to construct both tile window for lds store and read, with buffer address info
+        // This tensor view used to construct both tile window for lds store and read, with buffer
+        // address info
         auto b_lds_block = make_tensor_view<AddressSpaceEnum::Lds>(p_b_lds, b_lds_block_desc);
 
         // A DRAM tile window for load
@@ -87,10 +88,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
                              a_dram_block_window_tmp.GetWindowOrigin(),
                              Policy::template MakeADramTileDistribution<Problem>());
 
-
         // A Reg tensor for store, also used for block GEMM
-        auto a_copy_reg_tensor =
-            make_static_distributed_tensor<ADataType>(a_reg_block_dstr);
+        auto a_copy_reg_tensor = make_static_distributed_tensor<ADataType>(a_reg_block_dstr);
 
         // B DRAM tile window for load
         auto b_copy_dram_window =

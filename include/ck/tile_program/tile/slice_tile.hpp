@@ -49,17 +49,18 @@ __host__ __device__ constexpr auto set_slice_tile(DstStaticDistributedTensor_& d
                                                   Sequence<SliceEnds...> slice_ends)
 {
     using DstDistribution = decltype(DstStaticDistributedTensor_::GetTileDistribution());
+    // using SrcDistribution = decltype(SrcStaticDistributedTensor_::GetTileDistribution());
 
     constexpr auto sliced_dstr_yidx_ylen =
         detail::slice_distribution_from_x(DstDistribution{}, slice_begins, slice_ends);
 
-    constexpr auto sliced_dstr      = sliced_dstr_yidx_ylen.template At<0>();
+    // constexpr auto sliced_dstr      = sliced_dstr_yidx_ylen.template At<0>();
     constexpr auto sliced_y_origins = sliced_dstr_yidx_ylen.template At<1>();
     constexpr auto sliced_y_lengths = sliced_dstr_yidx_ylen.template At<2>();
 
-    static_assert(is_same_v<decltype(sliced_dstr), DstDistribution>, "wrong!");
+    // static_assert(is_same_v<decltype(sliced_dstr), SrcDistribution>, "wrong!");
 
-    dst_tile.SetSlicedThreadData(sliced_y_origins, sliced_y_lengths, src_tile.GetThreadBuffer());
+    dst_tile.SetYSlicedThreadData(sliced_y_origins, sliced_y_lengths, src_tile.GetThreadBuffer());
 }
 
 } // namespace tile_program

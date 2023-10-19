@@ -15,9 +15,7 @@
 namespace ck {
 namespace tile_program {
 
-template <typename SrcTileDistribution_,
-          typename DstTileDistribution_,
-          typename DataType_>
+template <typename SrcTileDistribution_, typename DstTileDistribution_, typename DataType_>
 __device__ void
 store_tile(StaticDistributedTensor<DataType_, DstTileDistribution_>& dst_dstr_tensor,
            const StaticDistributedTensor<DataType_, SrcTileDistribution_>& src_dstr_tensor)

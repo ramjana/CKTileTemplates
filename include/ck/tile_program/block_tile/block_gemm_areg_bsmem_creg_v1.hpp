@@ -42,11 +42,11 @@ struct BlockGemmARegBSmemCRegV1Problem
 template <typename Problem, typename Policy = BlockGemmARegBSmemCRegV1DefaultPolicy>
 struct BlockGemmARegBSmemCRegV1
 {
-    using ADataType      = remove_cvref_t<typename Problem::ADataType>;
-    using BDataType      = remove_cvref_t<typename Problem::BDataType>;
-    using CDataType      = remove_cvref_t<typename Problem::CDataType>;
-    using BlockGemmShape = remove_cvref_t<typename Problem::BlockGemmShape>;
-    using BlockGemmPolicy= Policy;
+    using ADataType       = remove_cvref_t<typename Problem::ADataType>;
+    using BDataType       = remove_cvref_t<typename Problem::BDataType>;
+    using CDataType       = remove_cvref_t<typename Problem::CDataType>;
+    using BlockGemmShape  = remove_cvref_t<typename Problem::BlockGemmShape>;
+    using BlockGemmPolicy = Policy;
 
     static constexpr index_t kBlockSize = Problem::kBlockSize;
 

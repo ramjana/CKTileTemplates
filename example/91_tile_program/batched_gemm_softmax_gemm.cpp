@@ -29,18 +29,28 @@ int main(int argc, char* argv[])
     using ODataType           = ck::half_t;
 
     ck::index_t Batch = 16;
-    ck::index_t M0    = 3328;
+    ck::index_t M0    = 4096;
     ck::index_t N0    = 4096;
     ck::index_t K0    = 128;
     ck::index_t N1    = 128;
+    ck::index_t init_method = 1;
+    ck::index_t time_kernel = 0;
 
-    if(argc == 6)
+    if(argc == 3)
     {
-        Batch = std::stoi(argv[1]);
-        M0    = std::stoi(argv[2]);
-        N0    = std::stoi(argv[3]);
-        K0    = std::stoi(argv[4]);
-        N1    = std::stoi(argv[5]);
+        init_method = std::stoi(argv[1]);
+        time_kernel = std::stoi(argv[2]);
+    }
+
+    if(argc == 8)
+    {
+        init_method = std::stoi(argv[1]);
+        time_kernel = std::stoi(argv[2]);
+        Batch = std::stoi(argv[3]);
+        M0    = std::stoi(argv[4]);
+        N0    = std::stoi(argv[5]);
+        K0    = std::stoi(argv[6]);
+        N1    = std::stoi(argv[7]);
     }
 
     std::array<ck::index_t, 3> q_lengths{Batch, M0, K0};
@@ -70,6 +80,105 @@ int main(int argc, char* argv[])
     Tensor<ODataType> o_host_ref(o_lengths, o_strides);
     Tensor<ODataType> o_host_dev(o_lengths, o_strides);
 
+    switch(init_method)
+    {
+    case 0: break;
+    case 1:
+        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
+        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
+        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
+        break;
+    case 2:
+        ck::utils::FillUniformDistribution<QDataType>{-3.f, 3.f}(q_host);
+        ck::utils::FillUniformDistribution<KDataType>{-3.f, 3.f}(k_host);
+        ck::utils::FillUniformDistribution<VDataType>{-3.f, 3.f}(v_host);
+        break;
+    case 3:
+        ck::utils::FillConstant<QDataType>{1.f}(q_host);
+        ck::utils::FillConstant<KDataType>{1.f}(k_host);
+        ck::utils::FillConstant<VDataType>{1.f}(v_host);
+        break;
+    case 4:
+        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
+        ck::utils::FillConstant<KDataType>{1.f}(k_host);
+        ck::utils::FillConstant<VDataType>{1.f}(v_host);
+        break;
+    case 5:
+        ck::utils::FillConstant<QDataType>{1.f}(q_host);
+        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
+        ck::utils::FillConstant<VDataType>{1.f}(v_host);
+        break;
+    case 6:
+        ck::utils::FillConstant<QDataType>{1.f}(q_host);
+        ck::utils::FillConstant<KDataType>{1.f}(k_host);
+        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
+        break;
+    case 7:
+        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
+        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
+        ck::utils::FillConstant<VDataType>{1.f}(v_host);
+        break;
+    case 8:
+        ck::utils::FillConstant<QDataType>{1.f}(q_host);
+        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
+        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
+        break;
+    case 9:
+        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
+        ck::utils::FillConstant<KDataType>{1.f}(k_host);
+        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
+        break;
+    default:
+        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
+        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f}(k_host);
+        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
+    }
+#if 0
+    for (int im = 0; im < M0; im++)
+    {
+        for (int ik = 0; ik < K0; ik++)
+        {
+            printf("%04x ",*(reinterpret_cast<const uint16_t*>(&(q_host(0, im, ik)))));
+            if (ik % 4 == 3)
+            {
+                printf("|");
+            }
+        }
+        printf("\n");
+    }
+#endif
+
+#if 0
+    for (int in = 0; in < N0; in++)
+    {
+        for (int ik = 0; ik < K0; ik++)
+        {
+            printf("%04x ",*(reinterpret_cast<const uint16_t*>(&(k_host(0, in, ik)))));
+            if (ik % 8 == 7)
+            {
+                printf("|");
+            }
+        }
+        printf("\n");
+    }
+#endif
+
+#if 1
+    for (int in = 0; in < N1; in++)
+    {
+        for (int ik = 0; ik < N0; ik++)
+        {
+            printf("%04x ",*(reinterpret_cast<const uint16_t*>(&(v_host(0, in, ik)))));
+            if (ik % 8 == 7)
+            {
+                printf("|");
+            }
+        }
+        printf("\n");
+    }
+#endif
+
+/*
 #if 0
     ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
     ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
@@ -79,6 +188,7 @@ int main(int argc, char* argv[])
     ck::utils::FillUniformDistribution<KDataType>{-3.f, 3.f}(k_host);
     ck::utils::FillUniformDistribution<VDataType>{-3.f, 3.f}(v_host);
 #endif
+*/
 
     // reference
     reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
@@ -104,6 +214,8 @@ int main(int argc, char* argv[])
     constexpr ck::index_t kK1PerBlock = 32;
 
     constexpr ck::index_t kBlockSize = 256;
+    constexpr ck::index_t kHeadDim   = 128;
+
     ck::index_t kGridSize            = Batch * (M0 / kM0PerBlock) * (N1 / kN1PerBlock);
 
     std::cout << "grid size " << kGridSize << std::endl;
@@ -113,7 +225,7 @@ int main(int argc, char* argv[])
     constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
 
     float ave_time =
-        launch_kernel<kBlockSize, kBlockPerCu>(StreamConfig{nullptr, true},
+        launch_kernel<kBlockSize, kBlockPerCu>(StreamConfig{nullptr, static_cast<bool>(time_kernel)},
                                                BatchedGemmSoftmaxGemm<QDataType,
                                                                       KDataType,
                                                                       VDataType,
@@ -123,6 +235,7 @@ int main(int argc, char* argv[])
                                                                       OaccDataType,
                                                                       ODataType,
                                                                       kBlockSize,
+                                                                      kHeadDim,
                                                                       kM0PerBlock,
                                                                       kN0PerBlock,
                                                                       kK0PerBlock,
