@@ -229,7 +229,7 @@ struct GemmSoftmaxGemmImpl
 
         } while(iN0 < N0);
 
-        // O
+        // per row scaling of Oacc
         constexpr auto o_spans = decltype(o_acc)::GetDistributedSpans();
 
         sweep_tile_span(o_spans[I0], [&](auto idx0) {
@@ -247,10 +247,11 @@ struct GemmSoftmaxGemmImpl
         // type cast Oacc into O
         const auto o = tile_elementwise_in(type_convert<ODataType, OaccDataType>, o_acc);
 
-        // O DRAM and O DRAM window
+        // O DRAM
         auto o_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             o_ptr, make_tuple(M0, N1), make_tuple(StrideO, 1), Number<32>{}, Number<1>{});
 
+        // O DRAM window
         auto o_dram_window =
             make_tile_window(o_dram,
                              make_tuple(Number<kM0PerBlock>{}, Number<kN1PerBlock>{}),
