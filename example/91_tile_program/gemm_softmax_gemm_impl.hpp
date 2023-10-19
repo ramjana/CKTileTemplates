@@ -130,7 +130,7 @@ struct GemmSoftmaxGemmImpl
         using MLBlockTileType = decltype(block_tile_reduce<SMPLComputeDataType>(
             SBlockTileType{}, Sequence<1>{}, f_max, SMPLComputeDataType{0}));
 
-        using OaccBlockTileType = decltype(gemm1(PBlockTileType{}, v_dram_window, smem_ptr));
+        using OaccBlockTileType = decltype(gemm1(PBlockTileType{}, v_dram_window, nullptr));
 
         // init Oacc, M, L
         auto o_acc = OaccBlockTileType{};

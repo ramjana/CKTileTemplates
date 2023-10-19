@@ -42,7 +42,7 @@ int main(int argc, char* argv[])
     using AccDataType = float;
     using BDataType   = ck::half_t;
 
-    ck::index_t M = 3328;
+    ck::index_t M = 26624;
     ck::index_t N = 4096;
 
     if(argc == 3)
