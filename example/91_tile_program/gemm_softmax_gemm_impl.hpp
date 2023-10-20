@@ -216,7 +216,7 @@ struct GemmSoftmaxGemmImpl
                              BlockGemm0Policy::MakeADramTileDistribution<BlockGemm0Problem>());
 
         // Q in Register
-        auto q_reg = make_static_distributed_tensor<QDataType>(
+        auto q_reg_tensor = make_static_distributed_tensor<QDataType>(
             BlockGemm0Policy::template MakeARegBlockDescriptor<BlockGemm0Problem, kHeadDim>());
 
         auto k_dram_window =
@@ -256,7 +256,7 @@ struct GemmSoftmaxGemmImpl
 
         // infer Sacc, S, P, M, L, Oacc type
         using SaccBlockTileType = decltype(gemm0(
-            get_slice_tile(q_reg, Sequence<0, 0>{}, Sequence<kM0PerBlock, kK0PerBlock>{}),
+            get_slice_tile(q_reg_tensor, Sequence<0, 0>{}, Sequence<kM0PerBlock, kK0PerBlock>{}),
             k_lds_window));
 
         using SBlockTileType = decltype(tile_elementwise_in(
@@ -291,7 +291,7 @@ struct GemmSoftmaxGemmImpl
         // Cold Q_Reg_Cache
         auto q_block_tile = load_tile(q_dram_window);
 #if 0
-        printf("Blockid: %02d, Tid: %03d, q_thread_buf: %04x %04x %04x %04x| %04x %04x %04x %04x|\n",
+        printf("Blockid: %02d, Tid: %03d, q_thread_buf(0-7): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
             get_block_1d_id(), get_thread_local_1d_id(),
             *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<0>{}]))),
             *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<1>{}]))),
@@ -301,6 +301,18 @@ struct GemmSoftmaxGemmImpl
             *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<5>{}]))),
             *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<6>{}]))),
             *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<7>{}])))
+            );
+
+        printf("Blockid: %02d, Tid: %03d, q_thread_buf(8-15): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
+            get_block_1d_id(), get_thread_local_1d_id(),
+            *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<8>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<9>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<10>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<11>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<12>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<13>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<14>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_block_tile.GetThreadBuffer()[Number<15>{}])))
             );
 #endif
         auto k_block_tile = load_tile(k_dram_window);
@@ -324,18 +336,42 @@ struct GemmSoftmaxGemmImpl
             tile_elementwise_inout([](auto& s) { s = 0; }, s_acc);
 
             set_slice_tile(
-                q_reg, q_block_tile, Sequence<0, 0>{}, Sequence<kM0PerBlock, kK0PerBlock>{});
+                q_reg_tensor, q_block_tile, Sequence<0, 0>{}, Sequence<kM0PerBlock, kK0PerBlock>{});
             q_block_tile = load_tile(q_dram_window);
+#if 1
+        printf("Blockid: %02d, Tid: %03d, q_thread_buf(0-7): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
+            get_block_1d_id(), get_thread_local_1d_id(),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<0>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<1>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<2>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<3>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<4>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<5>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<6>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<7>{}])))
+            );
 
+        printf("Blockid: %02d, Tid: %03d, q_thread_buf(8-15): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
+            get_block_1d_id(), get_thread_local_1d_id(),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<8>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<9>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<10>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<11>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<12>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<13>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<14>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<15>{}])))
+            );
+#endif
             store_tile(k_lds_window, k_block_tile);
             k_block_tile = load_tile(k_dram_window);
         }
-
+        if constexpr(k0_loops > 2){
         static_for<0, k0_loops - 3, 1>{}([&](auto i_k0) {
             block_sync_lds();
 
             gemm0(s_acc,
-                  get_slice_tile(q_reg,
+                  get_slice_tile(q_reg_tensor,
                                  Sequence<0, (i_k0)*kK0PerBlock>{},
                                  Sequence<kM0PerBlock, (i_k0 + 1) * kK0PerBlock>{}),
                   k_lds_window);
@@ -345,7 +381,7 @@ struct GemmSoftmaxGemmImpl
             move_tile_window(q_dram_window, {0, kK0PerBlock});
             move_tile_window(k_dram_window, {0, kK0PerBlock});
 
-            set_slice_tile(q_reg,
+            set_slice_tile(q_reg_tensor,
                            q_block_tile,
                            Sequence<0, (i_k0 + 1) * kK0PerBlock>{},
                            Sequence<kM0PerBlock, (i_k0 + 2) * kK0PerBlock>{});
@@ -354,30 +390,55 @@ struct GemmSoftmaxGemmImpl
             store_tile(k_lds_window, k_block_tile);
             k_block_tile = load_tile(k_dram_window);
         });
+        }
 
         // tail
         {
             block_sync_lds();
 
             gemm0(s_acc,
-                  get_slice_tile(q_reg,
+                  get_slice_tile(q_reg_tensor,
                                  Sequence<0, (k0_loops - 2) * kK0PerBlock>{},
                                  Sequence<kM0PerBlock, (k0_loops - 1) * kK0PerBlock>{}),
                   k_lds_window);
 
             block_sync_lds();
 
-            set_slice_tile(q_reg,
+            set_slice_tile(q_reg_tensor,
                            q_block_tile,
                            Sequence<0, (k0_loops - 1) * kK0PerBlock>{},
                            Sequence<kM0PerBlock, k0_loops * kK0PerBlock>{});
+#if 1
+        printf("Blockid: %02d, Tid: %03d, q_thread_buf(16-23): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
+            get_block_1d_id(), get_thread_local_1d_id(),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<16>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<17>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<18>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<19>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<20>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<21>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<22>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<23>{}])))
+            );
 
+        printf("Blockid: %02d, Tid: %03d, q_thread_buf(24-31): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
+            get_block_1d_id(), get_thread_local_1d_id(),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<24>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<25>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<26>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<27>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<28>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<29>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<30>{}]))),
+            *(reinterpret_cast<const uint16_t*>(&(q_reg_tensor.GetThreadBuffer()[Number<31>{}])))
+            );
+#endif
             store_tile(k_lds_window, k_block_tile);
 
             block_sync_lds();
 
             gemm0(s_acc,
-                  get_slice_tile(q_reg,
+                  get_slice_tile(q_reg_tensor,
                                  Sequence<0, (k0_loops - 1) * kK0PerBlock>{},
                                  Sequence<kM0PerBlock, (k0_loops)*kK0PerBlock>{}),
                   k_lds_window);
@@ -397,12 +458,12 @@ struct GemmSoftmaxGemmImpl
                     store_tile(k_lds_window, k_block_tile);
                     k_block_tile = load_tile(k_dram_window);
                 }
-
+                if constexpr(k0_loops > 2){
                 static_for<0, k0_loops - 3, 1>{}([&](auto i_k0) {
                     block_sync_lds();
 
                     gemm0(s_acc,
-                          get_slice_tile(q_reg,
+                          get_slice_tile(q_reg_tensor,
                                          Sequence<0, (i_k0)*kK0PerBlock>{},
                                          Sequence<kM0PerBlock, (i_k0 + 1) * kK0PerBlock>{}),
                           k_lds_window);
@@ -414,13 +475,14 @@ struct GemmSoftmaxGemmImpl
                     store_tile(k_lds_window, k_block_tile);
                     k_block_tile = load_tile(k_dram_window);
                 });
+                }
 
                 // tail
                 {
                     block_sync_lds();
 
                     gemm0(s_acc,
-                          get_slice_tile(q_reg,
+                          get_slice_tile(q_reg_tensor,
                                          Sequence<0, (k0_loops - 2) * kK0PerBlock>{},
                                          Sequence<kM0PerBlock, (k0_loops - 1) * kK0PerBlock>{}),
                           k_lds_window);
@@ -432,7 +494,7 @@ struct GemmSoftmaxGemmImpl
                     block_sync_lds();
 
                     gemm0(s_acc,
-                          get_slice_tile(q_reg,
+                          get_slice_tile(q_reg_tensor,
                                          Sequence<0, (k0_loops - 1) * kK0PerBlock>{},
                                          Sequence<kM0PerBlock, (k0_loops)*kK0PerBlock>{}),
                           k_lds_window);
@@ -444,7 +506,7 @@ struct GemmSoftmaxGemmImpl
 
             // prefetch load v tile
             const auto v_prefetch = load_tile(v_dram_window);
-
+#if 0
             printf("Blockid: %02d, Tid: %03d, v_thread_buf: %04x %04x %04x %04x %04x %04x %04x %04x|\n",
             get_block_1d_id(), get_thread_local_1d_id(),
             *(reinterpret_cast<const uint16_t*>(&(v_prefetch.GetThreadBuffer()[Number<0>{}]))),
@@ -456,7 +518,7 @@ struct GemmSoftmaxGemmImpl
             *(reinterpret_cast<const uint16_t*>(&(v_prefetch.GetThreadBuffer()[Number<6>{}]))),
             *(reinterpret_cast<const uint16_t*>(&(v_prefetch.GetThreadBuffer()[Number<7>{}])))
             );
-
+#endif
             // m_local = rowmax(S{j})
             auto m_local = block_tile_reduce<SMPLComputeDataType>(
                 s, Sequence<1>{}, f_max, NumericLimits<SMPLComputeDataType>::Lowest());

@@ -133,13 +133,14 @@ int main(int argc, char* argv[])
         ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f}(k_host);
         ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
     }
-#if 0
+#if 1
+    std::cout<<"Print Q matrix"<<std::endl;
     for (int im = 0; im < M0; im++)
     {
         for (int ik = 0; ik < K0; ik++)
         {
             printf("%04x ",*(reinterpret_cast<const uint16_t*>(&(q_host(0, im, ik)))));
-            if (ik % 4 == 3)
+            if (ik % 8 == 7)
             {
                 printf("|");
             }
@@ -149,6 +150,7 @@ int main(int argc, char* argv[])
 #endif
 
 #if 0
+    std::cout<<"Print K matrix"<<std::endl;
     for (int in = 0; in < N0; in++)
     {
         for (int ik = 0; ik < K0; ik++)
@@ -163,7 +165,8 @@ int main(int argc, char* argv[])
     }
 #endif
 
-#if 1
+#if 0
+    std::cout<<"Print V matrix"<<std::endl;
     for (int in = 0; in < N1; in++)
     {
         for (int ik = 0; ik < N0; ik++)
@@ -208,13 +211,13 @@ int main(int argc, char* argv[])
     v_buf.ToDevice(v_host.mData.data());
 
     constexpr ck::index_t kM0PerBlock = 128;
-    constexpr ck::index_t kN0PerBlock = 128;
+    constexpr ck::index_t kN0PerBlock = 32;
     constexpr ck::index_t kK0PerBlock = 32;
-    constexpr ck::index_t kN1PerBlock = 128;
+    constexpr ck::index_t kN1PerBlock = 64;
     constexpr ck::index_t kK1PerBlock = 32;
 
     constexpr ck::index_t kBlockSize = 256;
-    constexpr ck::index_t kHeadDim   = 128;
+    constexpr ck::index_t kHeadDim   = 64;
 
     ck::index_t kGridSize            = Batch * (M0 / kM0PerBlock) * (N1 / kN1PerBlock);
 
