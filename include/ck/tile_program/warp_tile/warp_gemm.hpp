@@ -14,24 +14,24 @@ namespace tile_program {
 namespace warp {
 
 using WarpGemmMfmaF16F16F32M32N32K8 =
-    WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
+    WarpGemmImpl<WarpGemmAttributeMfma<WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
 
 using WarpGemmMfmaF16F16F32M16N16K16 =
-    WarpGemmImpl<WarpGemmAtrributeMfma<WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>;
+    WarpGemmImpl<WarpGemmAttributeMfma<WarpGemmAttributeMfmaImplF16F16F32M16N16K16>>;
 
 using WarpGemmMfmaF16F16F32M32N32K16 =
-    WarpGemmImpl<WarpGemmAtrributeMfmaIterateK<WarpGemmAttributeMfmaImplF16F16F32M32N32K8, 2>>;
+    WarpGemmImpl<WarpGemmAttributeMfmaIterateK<WarpGemmAttributeMfmaImplF16F16F32M32N32K8, 2>>;
 
 using WarpGemmMfmaF16F16F32M32N32K8TransposedCDistribution = WarpGemmImpl<
-    WarpGemmAtrributeMfmaTransposedCDistribution<WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
+    WarpGemmAttributeMfmaTransposedCDistribution<WarpGemmAttributeMfmaImplF16F16F32M32N32K8>>;
 
 using WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution =
-    WarpGemmImpl<WarpGemmAtrributeMfmaIterateKAndTransposedCDistribution<
+    WarpGemmImpl<WarpGemmAttributeMfmaIterateKAndTransposedCDistribution<
         WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
         2>>;
 
 using WarpGemmMfmaF16F16F32M16N16K32TransposedCDistribution =
-    WarpGemmImpl<WarpGemmAtrributeMfmaIterateKAndTransposedCDistribution<
+    WarpGemmImpl<WarpGemmAttributeMfmaIterateKAndTransposedCDistribution<
         WarpGemmAttributeMfmaImplF16F16F32M16N16K16,
         2>>;
 

@@ -16,7 +16,7 @@ namespace tile_program {
 namespace warp {
 
 template <typename WarpGemmAttributeMfmaImpl_>
-struct WarpGemmAtrributeMfma
+struct WarpGemmAttributeMfma
 {
     using Impl = remove_cvref_t<WarpGemmAttributeMfmaImpl_>;
 
@@ -71,7 +71,7 @@ struct WarpGemmAtrributeMfma
 };
 
 template <typename WarpGemmAttributeMfmaImpl_, index_t kKIter>
-struct WarpGemmAtrributeMfmaIterateK
+struct WarpGemmAttributeMfmaIterateK
 {
     static_assert(kKIter > 0, "wrong!");
 
@@ -151,7 +151,7 @@ struct WarpGemmAtrributeMfmaIterateK
 };
 
 template <typename WarpGemmAttributeMfmaImpl_>
-struct WarpGemmAtrributeMfmaTransposedCDistribution
+struct WarpGemmAttributeMfmaTransposedCDistribution
 {
     using Impl = remove_cvref_t<WarpGemmAttributeMfmaImpl_>;
 
@@ -208,7 +208,7 @@ struct WarpGemmAtrributeMfmaTransposedCDistribution
 };
 
 template <typename WarpGemmAttributeMfmaImpl_, index_t kKIter>
-struct WarpGemmAtrributeMfmaIterateKAndTransposedCDistribution
+struct WarpGemmAttributeMfmaIterateKAndTransposedCDistribution
 {
     using Impl = remove_cvref_t<WarpGemmAttributeMfmaImpl_>;
 
