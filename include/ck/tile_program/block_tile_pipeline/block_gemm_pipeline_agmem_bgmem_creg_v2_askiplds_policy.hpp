@@ -40,7 +40,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeBDramTileDistribution()
     {
-        return policy_impl::MakeADramTileDistribution<Problem>();
+        return policy_impl::MakeBDramTileDistribution<Problem>();
     }
 
     template <typename Problem>

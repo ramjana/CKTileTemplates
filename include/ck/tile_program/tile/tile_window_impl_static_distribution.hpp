@@ -287,6 +287,8 @@ struct TileWindowWithStaticDistribution
                 const vector_t vec_value =
                     GetBottomTensorView().template GetVectorizedElements<vector_t>(
                         bottom_tensor_thread_coord);
+                // printf("Blockid: %02d, Tid: %03d, K read to lds: %05d\n", get_block_1d_id(),
+                // get_thread_local_1d_id(), bottom_tensor_thread_coord.GetOffset());
 
                 const vector_type_t vec{vec_value};
 
@@ -366,6 +368,8 @@ struct TileWindowWithStaticDistribution
                 // write into bottom tensor
                 GetBottomTensorView().template SetVectorizedElements<vector_t>(
                     bottom_tensor_thread_coord, vec_value);
+                // printf("Blockid: %02d, Tid: %03d, K write to lds: %05d\n", get_block_1d_id(),
+                // get_thread_local_1d_id(), bottom_tensor_thread_coord.GetOffset());
 
                 // move thread coordinate
                 if constexpr(iCoordAccess != (NumAccessPerCoord - 1))
