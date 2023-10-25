@@ -291,19 +291,6 @@ struct GemmSoftmaxGemmImpl
         // Cold Q_Reg_Cache
         auto q_block_tile = load_tile(q_dram_window);
         auto k_block_tile = load_tile(k_dram_window);
-#if 0
-        printf("Blockid: %02d, Tid: %03d, k_thread_buf(0-7): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
-            get_block_1d_id(), get_thread_local_1d_id(),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<0>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<1>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<2>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<3>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<4>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<5>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<6>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<7>{}])))
-            );
-#endif
         {
             move_tile_window(q_dram_window, {0, kK0PerBlock});
             move_tile_window(k_dram_window, {0, kK0PerBlock});
@@ -316,19 +303,6 @@ struct GemmSoftmaxGemmImpl
 
             store_tile(k_lds_window, k_block_tile);
             k_block_tile = load_tile(k_dram_window);
-#if 0
-        printf("Blockid: %02d, Tid: %03d, k_thread_buf(8-15): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
-            get_block_1d_id(), get_thread_local_1d_id(),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<0>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<1>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<2>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<3>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<4>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<5>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<6>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<7>{}])))
-            );
-#endif
         }
         if constexpr(k0_loops > 2)
         {
@@ -354,19 +328,6 @@ struct GemmSoftmaxGemmImpl
 
                 store_tile(k_lds_window, k_block_tile);
                 k_block_tile = load_tile(k_dram_window);
-#if 0
-        printf("Blockid: %02d, Tid: %03d, k_thread_buf(16-31): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
-            get_block_1d_id(), get_thread_local_1d_id(),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<0>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<1>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<2>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<3>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<4>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<5>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<6>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<7>{}])))
-            );
-#endif
             });
         }
 
@@ -396,59 +357,6 @@ struct GemmSoftmaxGemmImpl
                                  Sequence<0, (k0_loops - 1) * kK0PerBlock>{},
                                  Sequence<kM0PerBlock, (k0_loops)*kK0PerBlock>{}),
                   k_lds_window);
-#if 0
-            printf("gemm:01, Blockid: %02d, Tid: %03d, s(0-7): %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf "
-                   "%.0lf %.0lf|\n",
-                   get_block_1d_id(),
-                   get_thread_local_1d_id(),
-                   s_acc.GetThreadBuffer()[Number<0>{}],
-                   s_acc.GetThreadBuffer()[Number<1>{}],
-                   s_acc.GetThreadBuffer()[Number<2>{}],
-                   s_acc.GetThreadBuffer()[Number<3>{}],
-                   s_acc.GetThreadBuffer()[Number<4>{}],
-                   s_acc.GetThreadBuffer()[Number<5>{}],
-                   s_acc.GetThreadBuffer()[Number<6>{}],
-                   s_acc.GetThreadBuffer()[Number<7>{}]);
-
-            printf("gemm:01, Blockid: %02d, Tid: %03d, s(8-15): %.0lf %.0lf %.0lf %.0lf %.0lf "
-                   "%.0lf %.0lf %.0lf|\n",
-                   get_block_1d_id(),
-                   get_thread_local_1d_id(),
-                   s_acc.GetThreadBuffer()[Number<8 + 0>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 1>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 2>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 3>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 4>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 5>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 6>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 7>{}]);
-
-            printf("gemm:01, Blockid: %02d, Tid: %03d, s(16-23): %.0lf %.0lf %.0lf %.0lf %.0lf "
-                   "%.0lf %.0lf %.0lf|\n",
-                   get_block_1d_id(),
-                   get_thread_local_1d_id(),
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 0>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 1>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 2>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 3>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 4>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 5>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 6>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 7>{}]);
-
-            printf("gemm:01, Blockid: %02d, Tid: %03d, s(24-31): %.0lf %.0lf %.0lf %.0lf %.0lf "
-                   "%.0lf %.0lf %.0lf|\n",
-                   get_block_1d_id(),
-                   get_thread_local_1d_id(),
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 8 + 0>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 8 + 1>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 8 + 2>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 8 + 3>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 8 + 4>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 8 + 5>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 8 + 6>{}],
-                   s_acc.GetThreadBuffer()[Number<8 + 8 + 8 + 7>{}]);
-#endif
         }
 
         do
@@ -457,19 +365,6 @@ struct GemmSoftmaxGemmImpl
             if(iN0 > 0)
             {
                 k_block_tile = load_tile(k_dram_window);
-#if 0
-        printf("iN0==1, Blockid: %02d, Tid: %03d, k_block_tile(0-7): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
-            get_block_1d_id(), get_thread_local_1d_id(),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<0>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<1>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<2>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<3>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<4>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<5>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<6>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<7>{}])))
-            );
-#endif
                 {
                     move_tile_window(k_dram_window, {0, kK0PerBlock});
 
@@ -477,19 +372,6 @@ struct GemmSoftmaxGemmImpl
 
                     store_tile(k_lds_window, k_block_tile);
                     k_block_tile = load_tile(k_dram_window);
-#if 0
-        printf("iN0==1, Blockid: %02d, Tid: %03d, k_block_tile(8-15): %04x %04x %04x %04x %04x %04x %04x %04x|\n",
-            get_block_1d_id(), get_thread_local_1d_id(),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<0>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<1>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<2>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<3>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<4>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<5>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<6>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(k_block_tile.GetThreadBuffer()[Number<7>{}])))
-            );
-#endif
                 }
                 if constexpr(k0_loops > 2)
                 {
@@ -538,55 +420,7 @@ struct GemmSoftmaxGemmImpl
             // S{j}
             const auto s =
                 tile_elementwise_in(type_convert<SMPLComputeDataType, SaccDataType>, s_acc);
-#if 0
-            printf("Nloop:%02d, Blockid: %02d, Tid: %03d, s(0-7): %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf|\n",
-            iN0, get_block_1d_id(), get_thread_local_1d_id(),
-            s.GetThreadBuffer()[Number<0>{}],
-            s.GetThreadBuffer()[Number<1>{}],
-            s.GetThreadBuffer()[Number<2>{}],
-            s.GetThreadBuffer()[Number<3>{}],
-            s.GetThreadBuffer()[Number<4>{}],
-            s.GetThreadBuffer()[Number<5>{}],
-            s.GetThreadBuffer()[Number<6>{}],
-            s.GetThreadBuffer()[Number<7>{}]
-            );
 
-            printf("Nloop:%02d, Blockid: %02d, Tid: %03d, s(8-15): %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf|\n",
-            iN0, get_block_1d_id(), get_thread_local_1d_id(),
-            s.GetThreadBuffer()[Number<8+0>{}],
-            s.GetThreadBuffer()[Number<8+1>{}],
-            s.GetThreadBuffer()[Number<8+2>{}],
-            s.GetThreadBuffer()[Number<8+3>{}],
-            s.GetThreadBuffer()[Number<8+4>{}],
-            s.GetThreadBuffer()[Number<8+5>{}],
-            s.GetThreadBuffer()[Number<8+6>{}],
-            s.GetThreadBuffer()[Number<8+7>{}]
-            );
-
-            printf("Nloop:%02d, Blockid: %02d, Tid: %03d, s(16-23): %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf|\n",
-            iN0, get_block_1d_id(), get_thread_local_1d_id(),
-            s.GetThreadBuffer()[Number<8+8+0>{}],
-            s.GetThreadBuffer()[Number<8+8+1>{}],
-            s.GetThreadBuffer()[Number<8+8+2>{}],
-            s.GetThreadBuffer()[Number<8+8+3>{}],
-            s.GetThreadBuffer()[Number<8+8+4>{}],
-            s.GetThreadBuffer()[Number<8+8+5>{}],
-            s.GetThreadBuffer()[Number<8+8+6>{}],
-            s.GetThreadBuffer()[Number<8+8+7>{}]
-            );
-
-            printf("Nloop:%02d, Blockid: %02d, Tid: %03d, s(24-31): %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf %.0lf|\n",
-            iN0, get_block_1d_id(), get_thread_local_1d_id(),
-            s.GetThreadBuffer()[Number<8+8+8+0>{}],
-            s.GetThreadBuffer()[Number<8+8+8+1>{}],
-            s.GetThreadBuffer()[Number<8+8+8+2>{}],
-            s.GetThreadBuffer()[Number<8+8+8+3>{}],
-            s.GetThreadBuffer()[Number<8+8+8+4>{}],
-            s.GetThreadBuffer()[Number<8+8+8+5>{}],
-            s.GetThreadBuffer()[Number<8+8+8+6>{}],
-            s.GetThreadBuffer()[Number<8+8+8+7>{}]
-            );
-#endif
             // prefetch load v tile
             const auto v_prefetch = load_tile(v_dram_window);
 

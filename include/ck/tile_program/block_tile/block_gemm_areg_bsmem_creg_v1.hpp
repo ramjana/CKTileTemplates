@@ -178,28 +178,10 @@ struct BlockGemmARegBSmemCRegV1
                 a_warp_tensor.GetThreadBuffer() = a_block_tensor.GetYSlicedThreadData(
                     merge_sequences(Sequence<mIter, kIter>{}, a_warp_y_index_zeros),
                     merge_sequences(Sequence<1, 1>{}, a_warp_y_lengths));
-#if 0
-        printf("(m: %02d, k:%02d) Blockid: %02d, Tid: %03d, a_thread_buf: %04x %04x %04x %04x|\n",
-            mIter.value, kIter.value,
-            get_block_1d_id(), get_thread_local_1d_id(),
-            *(reinterpret_cast<const uint16_t*>(&(a_warp_tensor.GetThreadBuffer()[Number<0>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(a_warp_tensor.GetThreadBuffer()[Number<1>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(a_warp_tensor.GetThreadBuffer()[Number<2>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(a_warp_tensor.GetThreadBuffer()[Number<3>{}])))
-            );
-#endif
+
                 static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
                     // read B warp tensor from B Block window
                     const auto b_warp_tensor = load_tile(b_warp_windows(nIter)(kIter));
-#if 0
-        printf("(m: %02d, n: %02d, k:%02d) Blockid: %02d, Tid: %03d, b_thread_buf: %04x %04x %04x %04x|\n",
-            mIter.value, nIter.value, kIter.value, get_block_1d_id(), get_thread_local_1d_id(),
-            *(reinterpret_cast<const uint16_t*>(&(b_warp_tensor.GetThreadBuffer()[Number<0>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(b_warp_tensor.GetThreadBuffer()[Number<1>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(b_warp_tensor.GetThreadBuffer()[Number<2>{}]))),
-            *(reinterpret_cast<const uint16_t*>(&(b_warp_tensor.GetThreadBuffer()[Number<3>{}])))
-            );
-#endif
                     // read C warp tensor from C block tensor
                     CWarpTensor c_warp_tensor;
 
