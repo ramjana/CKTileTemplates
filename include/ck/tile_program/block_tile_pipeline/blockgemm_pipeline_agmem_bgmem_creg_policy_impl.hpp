@@ -14,7 +14,7 @@ namespace block {
 namespace policy_impl {
 // 3d + padding
 template <typename Problem>
-__host__ __device__ static constexpr auto make_a_lds_block_descriptor()
+__host__ __device__ static constexpr auto make_a_lds_block_descriptor_3d_pad()
 {
     using namespace ck;
 
@@ -39,7 +39,7 @@ __host__ __device__ static constexpr auto make_a_lds_block_descriptor()
 
 // 3d + padding
 template <typename Problem>
-__host__ __device__ static constexpr auto make_b_lds_block_descriptor()
+__host__ __device__ static constexpr auto make_b_lds_block_descriptor_3d_pad()
 {
     using namespace ck;
 

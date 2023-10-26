@@ -28,29 +28,19 @@ int main(int argc, char* argv[])
     using OaccDataType        = float;
     using ODataType           = ck::half_t;
 
-    ck::index_t Batch       = 64;
-    ck::index_t M0          = 4096;
-    ck::index_t N0          = 4096;
-    ck::index_t K0          = 128;
-    ck::index_t N1          = 128;
-    ck::index_t init_method = 1;
-    ck::index_t time_kernel = 0;
+    ck::index_t Batch = 16;
+    ck::index_t M0    = 3328;
+    ck::index_t N0    = 4096;
+    ck::index_t K0    = 128;
+    ck::index_t N1    = 128;
 
-    if(argc == 3)
+    if(argc == 6)
     {
-        init_method = std::stoi(argv[1]);
-        time_kernel = std::stoi(argv[2]);
-    }
-
-    if(argc == 8)
-    {
-        init_method = std::stoi(argv[1]);
-        time_kernel = std::stoi(argv[2]);
-        Batch       = std::stoi(argv[3]);
-        M0          = std::stoi(argv[4]);
-        N0          = std::stoi(argv[5]);
-        K0          = std::stoi(argv[6]);
-        N1          = std::stoi(argv[7]);
+        Batch = std::stoi(argv[1]);
+        M0    = std::stoi(argv[2]);
+        N0    = std::stoi(argv[3]);
+        K0    = std::stoi(argv[4]);
+        N1    = std::stoi(argv[5]);
     }
 
     std::array<ck::index_t, 3> q_lengths{Batch, M0, K0};
@@ -80,102 +70,15 @@ int main(int argc, char* argv[])
     Tensor<ODataType> o_host_ref(o_lengths, o_strides);
     Tensor<ODataType> o_host_dev(o_lengths, o_strides);
 
-    switch(init_method)
-    {
-    case 0: break;
-    case 1:
-        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
-        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
-        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
-        break;
-    case 2:
-        ck::utils::FillUniformDistribution<QDataType>{-3.f, 3.f}(q_host);
-        ck::utils::FillUniformDistribution<KDataType>{-3.f, 3.f}(k_host);
-        ck::utils::FillUniformDistribution<VDataType>{-3.f, 3.f}(v_host);
-        break;
-    case 3:
-        ck::utils::FillConstant<QDataType>{1.f}(q_host);
-        ck::utils::FillConstant<KDataType>{1.f}(k_host);
-        ck::utils::FillConstant<VDataType>{1.f}(v_host);
-        break;
-    case 4:
-        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
-        ck::utils::FillConstant<KDataType>{1.f}(k_host);
-        ck::utils::FillConstant<VDataType>{1.f}(v_host);
-        break;
-    case 5:
-        ck::utils::FillConstant<QDataType>{1.f}(q_host);
-        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
-        ck::utils::FillConstant<VDataType>{1.f}(v_host);
-        break;
-    case 6:
-        ck::utils::FillConstant<QDataType>{1.f}(q_host);
-        ck::utils::FillConstant<KDataType>{1.f}(k_host);
-        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
-        break;
-    case 7:
-        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
-        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
-        ck::utils::FillConstant<VDataType>{1.f}(v_host);
-        break;
-    case 8:
-        ck::utils::FillConstant<QDataType>{1.f}(q_host);
-        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
-        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
-        break;
-    case 9:
-        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
-        ck::utils::FillConstant<KDataType>{1.f}(k_host);
-        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
-        break;
-    default:
-        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
-        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f}(k_host);
-        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
-    }
 #if 0
-    std::cout<<"Print Q matrix"<<std::endl;
-    for (int im = 0; im < M0; im++)
-    {
-        for (int ik = 0; ik < K0; ik++)
-        {
-            printf("%04x ",*(reinterpret_cast<const uint16_t*>(&(q_host(0, im, ik)))));
-            if (ik % 8 == 7)
-            {
-                printf("|");
-            }
-        }
-        printf("\n");
-    }
+    ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
+    ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
+    ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
+#else
+    ck::utils::FillUniformDistribution<QDataType>{-3.f, 3.f}(q_host);
+    ck::utils::FillUniformDistribution<KDataType>{-3.f, 3.f}(k_host);
+    ck::utils::FillUniformDistribution<VDataType>{-3.f, 3.f}(v_host);
 #endif
-
-#if 0
-    std::cout<<"Print V matrix"<<std::endl;
-    for (int in = 0; in < N1; in++)
-    {
-        for (int ik = 0; ik < N0; ik++)
-        {
-            printf("%04x ",*(reinterpret_cast<const uint16_t*>(&(v_host(0, in, ik)))));
-            if (ik % 8 == 7)
-            {
-                printf("|");
-            }
-        }
-        printf("\n");
-    }
-#endif
-
-    /*
-    #if 0
-        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-3.f, 3.f}(q_host);
-        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-3.f, 3.f}(k_host);
-        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-3.f, 3.f}(v_host);
-    #else
-        ck::utils::FillUniformDistribution<QDataType>{-3.f, 3.f}(q_host);
-        ck::utils::FillUniformDistribution<KDataType>{-3.f, 3.f}(k_host);
-        ck::utils::FillUniformDistribution<VDataType>{-3.f, 3.f}(v_host);
-    #endif
-    */
 
     // reference
     reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
@@ -198,88 +101,51 @@ int main(int argc, char* argv[])
     constexpr ck::index_t kN0PerBlock = 128;
     constexpr ck::index_t kK0PerBlock = 32;
     constexpr ck::index_t kN1PerBlock = 128;
-    constexpr ck::index_t kK1PerBlock = 32;
 
     constexpr ck::index_t kBlockSize = 256;
-    constexpr ck::index_t kHeadDim   = 128;
+    ck::index_t kGridSize            = Batch * (M0 / kM0PerBlock) * (N1 / kN1PerBlock);
 
-    ck::index_t kGridSize = Batch * (M0 / kM0PerBlock) * (N1 / kN1PerBlock);
-
-#if 0
-    std::cout<<"Print K matrix"<<std::endl;
-    for (int in = 0; in < N0; in++)
-    {
-        if(in == kN0PerBlock) printf("---------------iN0=1----------------\n");
-        for (int ik = 0; ik < K0; ik++)
-        {
-            printf("%04x ",*(reinterpret_cast<const uint16_t*>(&(k_host(0, in, ik)))));
-            if (ik % 8 == 7)
-            {
-                printf("|");
-            }
-        }
-        printf("\n");
-    }
-#endif
-
-#if 0
-    std::cout << "Print S matrix" << std::endl;
-    for(int im = 0; im < M0; im++)
-    {
-        for(int in = 0; in < N0; in++)
-        {
-            printf("%.0lf ", s_host_ref(0, im, in));
-            if(in % 8 == 7)
-            {
-                printf("|");
-            }
-        }
-        printf("\n");
-    }
-#endif
     std::cout << "grid size " << kGridSize << std::endl;
 
     constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
     constexpr ck::index_t kWarpPerBlock = kBlockSize / warpSize;
     constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
 
-    float ave_time = launch_kernel<kBlockSize, kBlockPerCu>(
-        StreamConfig{nullptr, static_cast<bool>(time_kernel)},
-        BatchedGemmSoftmaxGemm<QDataType,
-                               KDataType,
-                               VDataType,
-                               SaccDataType,
-                               SMPLComputeDataType,
-                               PDataType,
-                               OaccDataType,
-                               ODataType,
-                               kBlockSize,
-                               kHeadDim,
-                               kM0PerBlock,
-                               kN0PerBlock,
-                               kK0PerBlock,
-                               kN1PerBlock,
-                               kK1PerBlock>{},
-        kGridSize,
-        kBlockSize,
-        0,
-        static_cast<QDataType*>(q_buf.GetDeviceBuffer()),
-        static_cast<KDataType*>(k_buf.GetDeviceBuffer()),
-        static_cast<VDataType*>(v_buf.GetDeviceBuffer()),
-        static_cast<ODataType*>(o_buf.GetDeviceBuffer()),
-        M0,
-        N0,
-        K0,
-        N1,
-        Batch,
-        K0,       // StrideQ
-        K0,       // StrideK
-        N0,       // StrideV
-        N1,       // StrideO
-        M0 * K0,  // BatchStrideQ
-        N0 * K0,  // BatchStrideK
-        N1 * N0,  // BatchStrideV
-        M0 * N1); // BatchStrideO
+    float ave_time =
+        launch_kernel<kBlockSize, kBlockPerCu>(StreamConfig{nullptr, true},
+                                               BatchedGemmSoftmaxGemm<QDataType,
+                                                                      KDataType,
+                                                                      VDataType,
+                                                                      SaccDataType,
+                                                                      SMPLComputeDataType,
+                                                                      PDataType,
+                                                                      OaccDataType,
+                                                                      ODataType,
+                                                                      kBlockSize,
+                                                                      kM0PerBlock,
+                                                                      kN0PerBlock,
+                                                                      kK0PerBlock,
+                                                                      kN1PerBlock>{},
+                                               kGridSize,
+                                               kBlockSize,
+                                               0,
+                                               static_cast<QDataType*>(q_buf.GetDeviceBuffer()),
+                                               static_cast<KDataType*>(k_buf.GetDeviceBuffer()),
+                                               static_cast<VDataType*>(v_buf.GetDeviceBuffer()),
+                                               static_cast<ODataType*>(o_buf.GetDeviceBuffer()),
+                                               M0,
+                                               N0,
+                                               K0,
+                                               N1,
+                                               Batch,
+                                               K0,       // StrideQ
+                                               K0,       // StrideK
+                                               N0,       // StrideV
+                                               N1,       // StrideO
+                                               M0 * K0,  // BatchStrideQ
+                                               N0 * K0,  // BatchStrideK
+                                               N1 * N0,  // BatchStrideV
+                                               M0 * N1); // BatchStrideO
 
     o_buf.FromDevice(o_host_dev.mData.data());
 

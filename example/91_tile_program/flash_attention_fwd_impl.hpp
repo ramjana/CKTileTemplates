@@ -41,21 +41,23 @@ struct FlashAttentionFwdImpl
 {
     // block gemm0 pipeline
     using BlockGemm0Problem = ck::tile_program::block::BlockGemmPipelineProblem<
-            QDataType,
-            KDataType,
-            SaccDataType,
-            kBlockSize,
-            ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>;
-    
-    using BlockGemm0Policy = ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPersistentQRegCachePolicy<kHeadDim>;
-    
-    using BlockGemm0Pipeline = ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<
-        BlockGemm0Problem,
-        BlockGemm0Policy>;
+        QDataType,
+        KDataType,
+        SaccDataType,
+        kBlockSize,
+        ck::tile_program::TileGemmShape<kM0PerBlock, kN0PerBlock, kK0PerBlock>>;
+
+    using BlockGemm0Policy =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPersistentQRegCachePolicy<
+            kHeadDim>;
+
+    using BlockGemm0Pipeline =
+        ck::tile_program::block::BlockGemmPipelineAGmemBGmemCRegV2<BlockGemm0Problem,
+                                                                   BlockGemm0Policy>;
 
     // block gemm1
     using BlockGemm1 = ck::tile_program::block::BlockGemmARegBSmemCRegV1<
-        ck::tile_program::block::BlockGemmARegBSmemCRegV1Problem<
+        ck::tile_program::block::BlockGemmARegBSmemCRegProblem<
             PDataType,
             VDataType,
             OaccDataType,
@@ -63,53 +65,6 @@ struct FlashAttentionFwdImpl
             ck::tile_program::TileGemmShape<kM0PerBlock, kN1PerBlock, kK1PerBlock>>,
         ck::tile_program::block::BlockGemmARegBSmemCRegV1DefaultPolicy>;
 
-#if 0
-    // 2d
-    __device__ static constexpr auto MakeVLdsBlockDescriptor()
-    {
-        using namespace ck;
-
-        constexpr index_t kNPerBlock = kN1PerBlock;
-        constexpr index_t kKPerBlock = kN0PerBlock;
-
-        constexpr auto b_lds_desc =
-            make_naive_tensor_descriptor_packed(make_tuple(kNPerBlock, kKPerBlock), Number<32>{});
-
-        return b_lds_desc;
-    }
-#elif 0
-    // fake XOR
-    __device__ static constexpr auto MakeVLdsBlockDescriptor()
-    {
-        using namespace ck;
-
-        using BDataType = VDataType;
-
-        constexpr index_t kNPerBlock = kN1PerBlock;
-        constexpr index_t kKPerBlock = kN0PerBlock;
-
-        constexpr auto b_lds_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
-            make_tuple(kNPerBlock / 2, 2, kKPerBlock), Number<kKPerBlock>{});
-
-        constexpr index_t kK1 = 16 / sizeof(BDataType);
-
-        constexpr auto b_lds_desc_d4_d5_d6 = transform_tensor_descriptor(
-            b_lds_desc_d1_d2_d3,
-            make_tuple(make_xor_transform(make_tuple(kNPerBlock / 2, kKPerBlock), kK1),
-                       make_pass_through_transform(2)),
-            make_tuple(Sequence<0, 2>{}, Sequence<1>{}),
-            make_tuple(Sequence<0, 2>{}, Sequence<1>{}));
-
-        constexpr auto b_lds_desc_n_k = transform_tensor_descriptor(
-            b_lds_desc_d4_d5_d6,
-            make_tuple(make_merge_transform(make_tuple(kNPerBlock / 2, 2)),
-                       make_pass_through_transform(kKPerBlock)),
-            make_tuple(Sequence<0, 1>{}, Sequence<2>{}),
-            make_tuple(Sequence<0>{}, Sequence<1>{}));
-
-        return b_lds_desc_n_k;
-    }
-#else
     // 3d, with padding
     __device__ static constexpr auto MakeVLdsBlockDescriptor()
     {
@@ -209,15 +164,11 @@ struct FlashAttentionFwdImpl
         const auto v_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             v_ptr, make_tuple(N1, N0), make_tuple(StrideV, 1), Number<32>{}, Number<1>{});
 
-        auto q_dram_window =
-            make_tile_window(q_dram,
-                             make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}),
-                             {iM0, 0});
+        auto q_dram_window = make_tile_window(
+            q_dram, make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}), {iM0, 0});
 
-        auto k_dram_window =
-            make_tile_window(k_dram,
-                             make_tuple(Number<kN0PerBlock>{}, Number<kK0PerBlock>{}),
-                             {0, 0});
+        auto k_dram_window = make_tile_window(
+            k_dram, make_tuple(Number<kN0PerBlock>{}, Number<kK0PerBlock>{}), {0, 0});
 
         auto v_dram_window =
             make_tile_window(v_dram,
@@ -239,15 +190,15 @@ struct FlashAttentionFwdImpl
 
         // Block GEMM0 pipeline and Block GEMM1
         constexpr auto gemm0_pipeline = BlockGemm0Pipeline{};
-        constexpr auto gemm1 = BlockGemm1{};
+        constexpr auto gemm1          = BlockGemm1{};
 
         // reduction function for softmax
         const auto f_max = [](auto e0, auto e1) { return max(e0, e1); };
         const auto f_sum = [](auto e0, auto e1) { return e0 + e1; };
 
         // infer Sacc, S, P, M, L, Oacc type
-        using SaccBlockTileType = decltype(gemm0_pipeline(
-            q_dram_window, k_dram_window, q_reg_tensor, nullptr));
+        using SaccBlockTileType =
+            decltype(gemm0_pipeline(q_dram_window, k_dram_window, q_reg_tensor, nullptr));
 
         using SBlockTileType = decltype(tile_elementwise_in(
             type_convert<SMPLComputeDataType, SaccDataType>, SaccBlockTileType{}));
@@ -275,18 +226,16 @@ struct FlashAttentionFwdImpl
         tile_elementwise_inout([](auto& e) { e = 0; }, l);
 
         // loop over Column of S (J loop)
-        index_t iN0                = 0;
-        
+        index_t iN0 = 0;
+
         // Cold Q_Reg_Cache
-        s_acc = gemm0_pipeline(
-            q_dram_window, k_dram_window, q_reg_tensor, smem_ptr);
+        s_acc = gemm0_pipeline(q_dram_window, k_dram_window, q_reg_tensor, smem_ptr);
         do
         {
             // Hot Q_Reg_Cache
             if(iN0 > 0)
             {
-                s_acc = gemm0_pipeline(
-                    k_dram_window, q_reg_tensor, smem_ptr);
+                s_acc = gemm0_pipeline(k_dram_window, q_reg_tensor, smem_ptr);
             }
             // S{j}
             const auto s =

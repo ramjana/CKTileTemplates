@@ -218,13 +218,15 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
 //  B Tile Window: global memory
 //  C Distributed tensor: register
 template <typename Problem, index_t kHeadDim>
-struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPersistentQRegCachePolicy<kHeadDim>>
+struct BlockGemmPipelineAGmemBGmemCRegV2<
+    Problem,
+    BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPersistentQRegCachePolicy<kHeadDim>>
 {
     using ADataType      = remove_cvref_t<typename Problem::ADataType>;
     using BDataType      = remove_cvref_t<typename Problem::BDataType>;
     using CDataType      = remove_cvref_t<typename Problem::CDataType>;
     using BlockGemmShape = remove_cvref_t<typename Problem::BlockGemmShape>;
-    using Policy         = BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPersistentQRegCachePolicy<kHeadDim>;
+    using Policy = BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPersistentQRegCachePolicy<kHeadDim>;
 
     static constexpr index_t kBlockSize = Problem::kBlockSize;
 
@@ -263,7 +265,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
                           kNPerBlock == BDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kKPerBlock == ADramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}],
                       "wrong!");
-        
+
         ignore = a_element_func;
         ignore = b_element_func;
 
@@ -314,9 +316,9 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
         constexpr auto block_gemm = Policy::template GetBlockGemm<Problem>();
 
         // Acc register tile
-        auto c_block_tile = decltype(block_gemm(get_slice_tile(a_copy_reg_tensor,
-                                     Sequence<0, 0>{},
-                                     Sequence<kMPerBlock, kKPerBlock>{}), b_lds_gemm_window)){};
+        auto c_block_tile = decltype(block_gemm(
+            get_slice_tile(a_copy_reg_tensor, Sequence<0, 0>{}, Sequence<kMPerBlock, kKPerBlock>{}),
+            b_lds_gemm_window)){};
 
         auto a_block_tile = load_tile(a_copy_dram_window);
         auto b_block_tile = load_tile(b_copy_dram_window);
@@ -326,8 +328,10 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
 
             tile_elementwise_inout([](auto& c) { c = 0; }, c_block_tile);
 
-            set_slice_tile(
-                a_copy_reg_tensor, a_block_tile, Sequence<0, 0>{}, Sequence<kMPerBlock, kKPerBlock>{});
+            set_slice_tile(a_copy_reg_tensor,
+                           a_block_tile,
+                           Sequence<0, 0>{},
+                           Sequence<kMPerBlock, kKPerBlock>{});
             a_block_tile = load_tile(a_copy_dram_window);
 
             store_tile(b_copy_lds_window, b_block_tile);
@@ -339,10 +343,10 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
                 block_sync_lds();
 
                 block_gemm(c_block_tile,
-                      get_slice_tile(a_copy_reg_tensor,
-                                     Sequence<0, (i_k0)*kKPerBlock>{},
-                                     Sequence<kMPerBlock, (i_k0 + 1) * kKPerBlock>{}),
-                      b_copy_lds_window);
+                           get_slice_tile(a_copy_reg_tensor,
+                                          Sequence<0, (i_k0)*kKPerBlock>{},
+                                          Sequence<kMPerBlock, (i_k0 + 1) * kKPerBlock>{}),
+                           b_copy_lds_window);
 
                 block_sync_lds();
 
@@ -365,10 +369,10 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
             block_sync_lds();
 
             block_gemm(c_block_tile,
-                  get_slice_tile(a_copy_reg_tensor,
-                                 Sequence<0, (k_loops - 2) * kKPerBlock>{},
-                                 Sequence<kMPerBlock, (k_loops - 1) * kKPerBlock>{}),
-                  b_copy_lds_window);
+                       get_slice_tile(a_copy_reg_tensor,
+                                      Sequence<0, (k_loops - 2) * kKPerBlock>{},
+                                      Sequence<kMPerBlock, (k_loops - 1) * kKPerBlock>{}),
+                       b_copy_lds_window);
 
             block_sync_lds();
 
@@ -382,10 +386,10 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
             block_sync_lds();
 
             block_gemm(c_block_tile,
-                  get_slice_tile(a_copy_reg_tensor,
-                                 Sequence<0, (k_loops - 1) * kKPerBlock>{},
-                                 Sequence<kMPerBlock, (k_loops)*kKPerBlock>{}),
-                  b_copy_lds_window);
+                       get_slice_tile(a_copy_reg_tensor,
+                                      Sequence<0, (k_loops - 1) * kKPerBlock>{},
+                                      Sequence<kMPerBlock, (k_loops)*kKPerBlock>{}),
+                       b_copy_lds_window);
         }
 
         store_tile(a_reg_block_tensor_tmp, a_copy_reg_tensor);
@@ -394,30 +398,26 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
     }
 
     // Hot A Register Cache
-    template <typename BDramBlockWindowTmp,
-              typename BElementFunction,
-              typename ARegBlockTensorTmp>
+    template <typename BDramBlockWindowTmp, typename BElementFunction, typename ARegBlockTensorTmp>
     __host__ __device__ auto operator()(const BDramBlockWindowTmp& b_dram_block_window_tmp,
                                         const BElementFunction& b_element_func,
                                         const ARegBlockTensorTmp& a_reg_block_tensor_tmp,
                                         void* p_smem) const
     {
-        static_assert(
-                is_same_v<BDataType, remove_cvref_t<typename BDramBlockWindowTmp::DataType>>,
-            "wrong!");
+        static_assert(is_same_v<BDataType, remove_cvref_t<typename BDramBlockWindowTmp::DataType>>,
+                      "wrong!");
 
-        static_assert(
-                          kNPerBlock == BDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
+        static_assert(kNPerBlock == BDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kKPerBlock == BDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}],
                       "wrong!");
-        
+
         ignore = b_element_func;
 
         // A tile in Reg，blockTensor
         // This tensor distribution used to construct both distributed tensor for local buffer store
         // and read. without buffer address info
         constexpr auto a_reg_block_dstr = Policy::template MakeARegBlockDescriptor<Problem>();
-        
+
         // A Reg tensor for store, also used for block GEMM
         auto a_copy_reg_tensor = make_static_distributed_tensor<ADataType>(a_reg_block_dstr);
         store_tile(a_copy_reg_tensor, a_reg_block_tensor_tmp);
@@ -454,9 +454,9 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
         constexpr auto block_gemm = Policy::template GetBlockGemm<Problem>();
 
         // Acc register tile
-        auto c_block_tile = decltype(block_gemm(get_slice_tile(a_copy_reg_tensor,
-                                     Sequence<0, 0>{},
-                                     Sequence<kMPerBlock, kKPerBlock>{}), b_lds_gemm_window)){};
+        auto c_block_tile = decltype(block_gemm(
+            get_slice_tile(a_copy_reg_tensor, Sequence<0, 0>{}, Sequence<kMPerBlock, kKPerBlock>{}),
+            b_lds_gemm_window)){};
 
         auto b_block_tile = load_tile(b_copy_dram_window);
         {
@@ -473,10 +473,10 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
                 block_sync_lds();
 
                 block_gemm(c_block_tile,
-                      get_slice_tile(a_copy_reg_tensor,
-                                     Sequence<0, (i_k0)*kKPerBlock>{},
-                                     Sequence<kMPerBlock, (i_k0 + 1) * kKPerBlock>{}),
-                      b_copy_lds_window);
+                           get_slice_tile(a_copy_reg_tensor,
+                                          Sequence<0, (i_k0)*kKPerBlock>{},
+                                          Sequence<kMPerBlock, (i_k0 + 1) * kKPerBlock>{}),
+                           b_copy_lds_window);
 
                 block_sync_lds();
 
@@ -492,10 +492,10 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
             block_sync_lds();
 
             block_gemm(c_block_tile,
-                  get_slice_tile(a_copy_reg_tensor,
-                                 Sequence<0, (k_loops - 2) * kKPerBlock>{},
-                                 Sequence<kMPerBlock, (k_loops - 1) * kKPerBlock>{}),
-                  b_copy_lds_window);
+                       get_slice_tile(a_copy_reg_tensor,
+                                      Sequence<0, (k_loops - 2) * kKPerBlock>{},
+                                      Sequence<kMPerBlock, (k_loops - 1) * kKPerBlock>{}),
+                       b_copy_lds_window);
 
             block_sync_lds();
 
@@ -504,16 +504,18 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
             block_sync_lds();
 
             block_gemm(c_block_tile,
-                  get_slice_tile(a_copy_reg_tensor,
-                                 Sequence<0, (k_loops - 1) * kKPerBlock>{},
-                                 Sequence<kMPerBlock, (k_loops)*kKPerBlock>{}),
-                  b_copy_lds_window);
+                       get_slice_tile(a_copy_reg_tensor,
+                                      Sequence<0, (k_loops - 1) * kKPerBlock>{},
+                                      Sequence<kMPerBlock, (k_loops)*kKPerBlock>{}),
+                       b_copy_lds_window);
         }
 
         return c_block_tile;
     }
 
-    template <typename ADramBlockWindowTmp, typename BDramBlockWindowTmp, typename ARegBlockTensorTmp>
+    template <typename ADramBlockWindowTmp,
+              typename BDramBlockWindowTmp,
+              typename ARegBlockTensorTmp>
     __device__ auto operator()(const ADramBlockWindowTmp& a_dram_block_window_tmp,
                                const BDramBlockWindowTmp& b_dram_block_window_tmp,
                                ARegBlockTensorTmp& a_reg_block_tensor_tmp,
@@ -540,7 +542,6 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
             p_smem);
     }
 };
-
 
 } // namespace block
 } // namespace tile_program

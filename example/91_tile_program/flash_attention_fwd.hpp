@@ -17,7 +17,7 @@
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile/block_reduce.hpp"
 
-#include "gemm_softmax_gemm_impl.hpp"
+#include "flash_attention_fwd_impl.hpp"
 
 // S[M0, N0] = Q[M0, K0] * K[N0, K0]
 // P[M0, N0] = Softmax(S[M0, N0])
@@ -31,11 +31,13 @@ template <typename QDataType,
           typename OaccDataType,
           typename ODataType,
           ck::index_t kBlockSize,
+          ck::index_t kHeadDim,
           ck::index_t kM0PerBlock,
           ck::index_t kN0PerBlock,
           ck::index_t kK0PerBlock,
-          ck::index_t kN1PerBlock>
-struct BatchedGemmSoftmaxGemm
+          ck::index_t kN1PerBlock,
+          ck::index_t kK1PerBlock>
+struct FlashAttentionFwd
 {
     __device__ void operator()(const QDataType* q_ptr,
                                const KDataType* k_ptr,
@@ -77,19 +79,21 @@ struct BatchedGemmSoftmaxGemm
         const index_t iM0    = __builtin_amdgcn_readfirstlane(id_tile_m * kM0PerBlock);
         const index_t iN1    = __builtin_amdgcn_readfirstlane(id_tile_n * kN1PerBlock);
 
-        const auto kernel_impl = GemmSoftmaxGemmImpl<QDataType,
-                                                     KDataType,
-                                                     VDataType,
-                                                     SaccDataType,
-                                                     SMPLComputeDataType,
-                                                     PDataType,
-                                                     OaccDataType,
-                                                     ODataType,
-                                                     kBlockSize,
-                                                     kM0PerBlock,
-                                                     kN0PerBlock,
-                                                     kK0PerBlock,
-                                                     kN1PerBlock>{};
+        const auto kernel_impl = FlashAttentionFwdImpl<QDataType,
+                                                       KDataType,
+                                                       VDataType,
+                                                       SaccDataType,
+                                                       SMPLComputeDataType,
+                                                       PDataType,
+                                                       OaccDataType,
+                                                       ODataType,
+                                                       kBlockSize,
+                                                       kHeadDim,
+                                                       kM0PerBlock,
+                                                       kN0PerBlock,
+                                                       kK0PerBlock,
+                                                       kN1PerBlock,
+                                                       kK1PerBlock>{};
 
         kernel_impl(q_ptr + iBatch * BatchStrideQ,
                     k_ptr + iBatch * BatchStrideK,

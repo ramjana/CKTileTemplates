@@ -25,7 +25,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeBLdsBlockDescriptor()
     {
-        return policy_impl::make_b_lds_block_descriptor<Problem>();
+        return policy_impl::make_b_lds_block_descriptor_3d_pad<Problem>();
     }
 
     template <typename Problem>
