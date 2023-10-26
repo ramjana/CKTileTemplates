@@ -92,7 +92,6 @@ struct FlashAttentionFwdImpl
 
         return b_lds_block_desc;
     }
-#endif
 
     __device__ static constexpr auto MakeVDramTileDistribution()
     {
