@@ -19,13 +19,13 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy
         constexpr auto blockgemm = GetBlockGemm<Problem>();
         using BlockGemm          = ck::remove_cvref_t<decltype(blockgemm)>;
 
-        return policy_impl::MakeARegBlockDescriptor<Problem, BlockGemm>();
+        return policy_impl::make_a_reg_block_descriptor<Problem, BlockGemm>();
     }
 
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeBLdsBlockDescriptor()
     {
-        return policy_impl::MakeBLdsBlockDescriptor<Problem>();
+        return policy_impl::make_b_lds_block_descriptor<Problem>();
     }
 
     template <typename Problem>
@@ -34,13 +34,13 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy
         constexpr auto blockgemm = GetBlockGemm<Problem>();
         using BlockGemm          = ck::remove_cvref_t<decltype(blockgemm)>;
 
-        return policy_impl::MakeADramTileDistribution_ASkipLDS<Problem, BlockGemm>();
+        return policy_impl::make_a_dram_tile_distribution_skip_lds<Problem, BlockGemm>();
     }
 
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeBDramTileDistribution()
     {
-        return policy_impl::MakeBDramTileDistribution<Problem>();
+        return policy_impl::make_b_dram_tile_distribution<Problem>();
     }
 
     template <typename Problem>
@@ -52,10 +52,13 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy
     }
 };
 
+template <index_t AKDim_>
 struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPersistentQRegCachePolicy
     : BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy
 {
-    template <typename Problem, index_t kHeadDim>
+    static constexpr index_t AKDim = AKDim_;
+
+    template <typename Problem>
     __host__ __device__ static constexpr auto MakeARegBlockDescriptor()
     {
         using namespace ck;
@@ -64,7 +67,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPersistentQRegCachePolicy
         using BlockGemm          = ck::remove_cvref_t<decltype(blockgemm)>;
 
         constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
-        constexpr index_t kKPerBlock = kHeadDim;
+        constexpr index_t kKPerBlock = AKDim;
 
         constexpr auto config =
             BlockGemm::BlockGemmPolicy::template GetWarpGemmMWarpNWarp<Problem>();

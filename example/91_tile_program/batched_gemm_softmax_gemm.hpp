@@ -18,6 +18,7 @@
 #include "ck/tile_program/block_tile/block_reduce.hpp"
 
 #include "gemm_softmax_gemm_impl.hpp"
+#include "flash_attention_fwd_impl.hpp"
 
 // S[M0, N0] = Q[M0, K0] * K[N0, K0]
 // P[M0, N0] = Softmax(S[M0, N0])
@@ -79,7 +80,7 @@ struct BatchedGemmSoftmaxGemm
         const index_t iM0    = __builtin_amdgcn_readfirstlane(id_tile_m * kM0PerBlock);
         const index_t iN1    = __builtin_amdgcn_readfirstlane(id_tile_n * kN1PerBlock);
 
-        const auto kernel_impl = GemmSoftmaxGemmImpl<QDataType,
+        const auto kernel_impl = FlashAttentionFwdImpl<QDataType,
                                                      KDataType,
                                                      VDataType,
                                                      SaccDataType,

@@ -14,7 +14,7 @@ namespace block {
 namespace policy_impl {
 // 3d + padding
 template <typename Problem>
-__host__ __device__ static constexpr auto MakeALdsBlockDescriptor()
+__host__ __device__ static constexpr auto make_a_lds_block_descriptor()
 {
     using namespace ck;
 
@@ -39,7 +39,7 @@ __host__ __device__ static constexpr auto MakeALdsBlockDescriptor()
 
 // 3d + padding
 template <typename Problem>
-__host__ __device__ static constexpr auto MakeBLdsBlockDescriptor()
+__host__ __device__ static constexpr auto make_b_lds_block_descriptor()
 {
     using namespace ck;
 
@@ -63,7 +63,7 @@ __host__ __device__ static constexpr auto MakeBLdsBlockDescriptor()
 }
 
 template <typename Problem, typename BlockGemm>
-__host__ __device__ static constexpr auto MakeARegBlockDescriptor()
+__host__ __device__ static constexpr auto make_a_reg_block_descriptor()
 {
     using namespace ck;
 
@@ -97,7 +97,7 @@ __host__ __device__ static constexpr auto MakeARegBlockDescriptor()
 }
 
 template <typename Problem>
-__host__ __device__ static constexpr auto MakeADramTileDistribution()
+__host__ __device__ static constexpr auto make_a_dram_tile_distribution()
 {
     using ADataType = remove_cvref_t<typename Problem::ADataType>;
 
@@ -123,7 +123,7 @@ __host__ __device__ static constexpr auto MakeADramTileDistribution()
 }
 
 template <typename Problem, typename BlockGemm>
-__host__ __device__ static constexpr auto MakeADramTileDistribution_ASkipLDS()
+__host__ __device__ static constexpr auto make_a_dram_tile_distribution_skip_lds()
 {
     constexpr auto config = BlockGemm::BlockGemmPolicy::template GetWarpGemmMWarpNWarp<Problem>();
 
@@ -154,7 +154,7 @@ __host__ __device__ static constexpr auto MakeADramTileDistribution_ASkipLDS()
 }
 
 template <typename Problem>
-__host__ __device__ static constexpr auto MakeBDramTileDistribution()
+__host__ __device__ static constexpr auto make_b_dram_tile_distribution()
 {
     using BDataType = remove_cvref_t<typename Problem::BDataType>;
 
@@ -180,7 +180,7 @@ __host__ __device__ static constexpr auto MakeBDramTileDistribution()
 }
 
 template <typename Problem>
-__host__ __device__ static constexpr auto GetBlockGemm()
+__host__ __device__ static constexpr auto get_block_gemm()
 {
     using BlockGemmPolicy = BlockGemmASmemBSmemCRegV1DefaultPolicy;
 
