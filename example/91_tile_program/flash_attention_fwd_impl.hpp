@@ -75,7 +75,8 @@ struct FlashAttentionFwdImpl
         constexpr index_t kNPerBlock = kN1PerBlock;
         constexpr index_t kKPerBlock = kK1PerBlock;
         constexpr index_t kPad       = 1;
-        constexpr index_t kK1        = 8;
+        // 2% faster than use kK1 = 8
+        constexpr index_t kK1        = 4;
 
         constexpr auto b_lds_block_desc_0 = make_naive_tensor_descriptor(
             make_tuple(Number<kKPerBlock / kK1>{}, Number<kNPerBlock>{}, Number<kK1>{}),
