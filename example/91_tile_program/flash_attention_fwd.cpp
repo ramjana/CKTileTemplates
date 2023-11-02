@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
     std::array<ck::index_t, 3> k_strides{N0 * K0, K0, 1};
 
     std::array<ck::index_t, 3> v_lengths{Batch, N1, N0};
-    std::array<ck::index_t, 3> v_strides{N1 * N0, N0, 1};
+    std::array<ck::index_t, 3> v_strides{N1 * N0, 1, N1};
 
     std::array<ck::index_t, 3> s_lengths{Batch, M0, N0};
     std::array<ck::index_t, 3> s_strides{M0 * N0, N0, 1};
@@ -199,7 +199,7 @@ int main(int argc, char* argv[])
         Batch,
         K0,       // StrideQ
         K0,       // StrideK
-        N0,       // StrideV
+        N1,       // StrideV
         N1,       // StrideO
         M0 * K0,  // BatchStrideQ
         N0 * K0,  // BatchStrideK

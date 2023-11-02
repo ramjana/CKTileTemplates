@@ -12,6 +12,7 @@
 #include "ck/tile_program/tile/tile_elementwise.hpp"
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/tile/slice_tile.hpp"
+#include "ck/tile_program/tile/shuffle_distributed_tensor.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2_askiplds.hpp"
@@ -96,27 +97,54 @@ struct FlashAttentionFwdImpl
 
     __device__ static constexpr auto MakeVDramTileDistribution()
     {
+        // LastDim: N
         using namespace ck;
         using namespace ck::tile_program;
 
-        using BDataType = VDataType;
+        // using BDataType = VDataType;
 
         constexpr index_t kNPerBlock = kN1PerBlock;
         constexpr index_t kKPerBlock = kK1PerBlock;
 
-        constexpr index_t K1 = 16 / sizeof(BDataType);
-        constexpr index_t K0 = kKPerBlock / K1;
-        constexpr index_t N2 = get_warp_size() / K0;
-        constexpr index_t N1 = kBlockSize / get_warp_size();
-        constexpr index_t N0 = kNPerBlock / (N2 * N1);
+        constexpr index_t N1 = 4;
+        constexpr index_t N0 = kNPerBlock / N1;
+        constexpr index_t K0 = kBlockSize / get_warp_size();
+        constexpr index_t K1 = get_warp_size() / N0;
+        constexpr index_t K2 = kKPerBlock / (K0*K1);
 
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<N0, N1, N2>, Sequence<K0, K1>>,
-                                           Tuple<Sequence<1>, Sequence<1, 2>>,
-                                           Tuple<Sequence<1>, Sequence<2, 0>>,
+                                           Tuple<Sequence<N0, N1>, Sequence<K0, K1, K2>>,
+                                           Tuple<Sequence<2>, Sequence<2, 1>>,
+                                           Tuple<Sequence<0>, Sequence<1, 0>>,
+                                           Sequence<2, 1>,
+                                           Sequence<2, 1>>{});
+    }
+
+    __device__ static constexpr auto MakeVRegTransposeTensor()
+    {
+        // LastDim: N
+        using namespace ck;
+        using namespace ck::tile_program;
+
+        // using BDataType = VDataType;
+
+        constexpr index_t kNPerBlock = kN1PerBlock;
+        constexpr index_t kKPerBlock = kK1PerBlock;
+
+        constexpr index_t N1 = 4;
+        constexpr index_t N0 = kNPerBlock / N1;
+        constexpr index_t K0 = kBlockSize / get_warp_size();
+        constexpr index_t K1 = get_warp_size() / N0;
+        constexpr index_t K2 = kKPerBlock / (K0*K1);
+
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<N0, N1>, Sequence<K0, K1, K2>>,
+                                           Tuple<Sequence<2>, Sequence<2, 1>>,
+                                           Tuple<Sequence<0>, Sequence<1, 0>>,
                                            Sequence<1, 2>,
-                                           Sequence<0, 1>>{});
+                                           Sequence<1, 2>>{});
     }
 
     __device__ static constexpr ck::index_t GetStaticLdsSize()
@@ -161,8 +189,15 @@ struct FlashAttentionFwdImpl
         const auto k_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             k_ptr, make_tuple(N0, K0), make_tuple(StrideK, 1), Number<32>{}, Number<1>{});
 
-        const auto v_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            v_ptr, make_tuple(N1, N0), make_tuple(StrideV, 1), Number<32>{}, Number<1>{});
+        // Always assume dimension in stride-descend order
+        const auto v_dram_tmp = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            v_ptr, make_tuple(N0, N1), make_tuple(StrideV, 1), Number<32>{}, Number<1>{});
+        
+        const auto v_dram = transform_tensor_view(
+                    v_dram_tmp,
+                    make_tuple(make_pass_through_transform(N1), make_pass_through_transform(N0)),
+                    make_tuple(Sequence<1>{}, Sequence<0>{}),
+                    make_tuple(Sequence<0>{}, Sequence<1>{}));
 
         auto q_dram_window = make_tile_window(
             q_dram, make_tuple(Number<kM0PerBlock>{}, Number<kK0PerBlock>{}), {iM0, 0});
@@ -187,6 +222,8 @@ struct FlashAttentionFwdImpl
 
         auto v_lds_window = make_tile_window(
             v_lds, make_tuple(Number<kN1PerBlock>{}, Number<kK1PerBlock>{}), {0, 0});
+        
+        auto v_reg_transpose_tensor = make_static_distributed_tensor<VDataType>(MakeVRegTransposeTensor());
 
         // Block GEMM0 pipeline and Block GEMM1
         constexpr auto gemm0_pipeline = BlockGemm0Pipeline{};
@@ -243,7 +280,6 @@ struct FlashAttentionFwdImpl
 
             // prefetch load v tile
             const auto v_prefetch = load_tile(v_dram_window);
-
             // m_local = rowmax(S{j})
             auto m_local = block_tile_reduce<SMPLComputeDataType>(
                 s, Sequence<1>{}, f_max, NumericLimits<SMPLComputeDataType>::Lowest());
@@ -298,7 +334,9 @@ struct FlashAttentionFwdImpl
             });
 
             block_sync_lds();
-            store_tile(v_lds_window, v_prefetch);
+
+            shuffle_distributed_tensor(v_reg_transpose_tensor, v_prefetch);
+            store_tile(v_lds_window, v_reg_transpose_tensor);
             move_tile_window(v_dram_window, {0, kK1PerBlock});
 
             // type cast Pcompute{j} into P{j}
@@ -319,7 +357,8 @@ struct FlashAttentionFwdImpl
                                          Sequence<kM0PerBlock, (i_k1 + 1) * kK1PerBlock>{}),
                           v_lds_window);
                     block_sync_lds();
-                    store_tile(v_lds_window, v);
+                    shuffle_distributed_tensor(v_reg_transpose_tensor, v);
+                    store_tile(v_lds_window, v_reg_transpose_tensor);
                     move_tile_window(v_dram_window, {0, kK1PerBlock});
                 });
             }
