@@ -146,6 +146,7 @@ struct BlockGemmARegBSmemCRegV1
         using CWarpDstr = typename WG::CWarpDstr;
 
         using AWarpTensor = typename WG::AWarpTensor;
+        using BWarpTensor = typename WG::BWarpTensor;
         using CWarpTensor = typename WG::CWarpTensor;
 
         constexpr auto a_warp_y_lengths = to_sequence(AWarpDstr{}.GetYs2DDescriptor().GetLengths());
@@ -153,6 +154,8 @@ struct BlockGemmARegBSmemCRegV1
 
         constexpr auto a_warp_y_index_zeros = uniform_sequence_gen_t<AWarpDstr::NDimY, 0>{};
         constexpr auto c_warp_y_index_zeros = uniform_sequence_gen_t<CWarpDstr::NDimY, 0>{};
+
+        StaticallyIndexedArray<BWarpTensor, NIterPerWarp> b_warp_tensors;
 
         // hot loop:
         static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
@@ -163,10 +166,13 @@ struct BlockGemmARegBSmemCRegV1
                 a_warp_tensor.GetThreadBuffer() = a_block_tensor.GetYSlicedThreadData(
                     merge_sequences(Sequence<mIter, kIter>{}, a_warp_y_index_zeros),
                     merge_sequences(Sequence<1, 1>{}, a_warp_y_lengths));
-
+                
                 static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
                     // read B warp tensor from B Block window
-                    const auto b_warp_tensor = load_tile(b_warp_windows(nIter)(kIter));
+                    b_warp_tensors(nIter) = load_tile(b_warp_windows(nIter)(kIter));
+                });
+                
+                static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
                     // read C warp tensor from C block tensor
                     CWarpTensor c_warp_tensor;
 
@@ -175,7 +181,7 @@ struct BlockGemmARegBSmemCRegV1
                         merge_sequences(Sequence<1, 1>{}, c_warp_y_lengths));
 
                     // warp GEMM
-                    WG{}(c_warp_tensor, a_warp_tensor, b_warp_tensor);
+                    WG{}(c_warp_tensor, a_warp_tensor, b_warp_tensors(nIter));
 
                     // write C warp tensor into C block tensor
                     c_block_tensor.SetYSlicedThreadData(
