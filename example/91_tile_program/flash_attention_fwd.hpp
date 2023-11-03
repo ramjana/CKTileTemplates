@@ -55,7 +55,8 @@ struct FlashAttentionFwd
                                const ck::index_t BatchStrideQ,
                                const ck::index_t BatchStrideK,
                                const ck::index_t BatchStrideV,
-                               const ck::index_t BatchStrideO) const
+                               const ck::index_t BatchStrideO,
+                               const float scale) const
     {
         using namespace ck;
 
@@ -108,6 +109,7 @@ struct FlashAttentionFwd
                     StrideV,
                     StrideO,
                     iM0,
-                    iN1);
+                    iN1,
+                    scale);
     }
 };

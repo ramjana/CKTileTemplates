@@ -35,22 +35,25 @@ int main(int argc, char* argv[])
     ck::index_t N1          = 128;
     ck::index_t init_method = 1;
     ck::index_t time_kernel = 0;
+    ck::index_t host_verify = 1;
 
-    if(argc == 3)
+    if(argc == 4)
     {
         init_method = std::stoi(argv[1]);
         time_kernel = std::stoi(argv[2]);
+        host_verify = std::stoi(argv[3]);
     }
 
-    if(argc == 8)
+    if(argc == 9)
     {
         init_method = std::stoi(argv[1]);
         time_kernel = std::stoi(argv[2]);
-        Batch       = std::stoi(argv[3]);
-        M0          = std::stoi(argv[4]);
-        N0          = std::stoi(argv[5]);
-        K0          = std::stoi(argv[6]);
-        N1          = std::stoi(argv[7]);
+        host_verify = std::stoi(argv[3]);
+        Batch       = std::stoi(argv[4]);
+        M0          = std::stoi(argv[5]);
+        N0          = std::stoi(argv[6]);
+        K0          = std::stoi(argv[7]);
+        N1          = std::stoi(argv[8]);
     }
 
     std::array<ck::index_t, 3> q_lengths{Batch, M0, K0};
@@ -71,13 +74,10 @@ int main(int argc, char* argv[])
     std::array<ck::index_t, 3> o_lengths{Batch, M0, N1};
     std::array<ck::index_t, 3> o_strides{M0 * N1, N1, 1};
 
-    // host verify
+    // Host Tensors
     Tensor<QDataType> q_host(q_lengths, q_strides);
     Tensor<KDataType> k_host(k_lengths, k_strides);
     Tensor<VDataType> v_host(v_lengths, v_strides);
-    Tensor<SMPLComputeDataType> s_host_ref(s_lengths, s_strides);
-    Tensor<PDataType> p_host_ref(p_lengths, p_strides);
-    Tensor<ODataType> o_host_ref(o_lengths, o_strides);
     Tensor<ODataType> o_host_dev(o_lengths, o_strides);
 
     switch(init_method)
@@ -134,18 +134,10 @@ int main(int argc, char* argv[])
         ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
     }
 
-    // reference
-    reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
-        q_host, k_host, s_host_ref);
-    reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
-                                                                                   p_host_ref);
-    reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
-        p_host_ref, v_host, o_host_ref);
-
     DeviceMem q_buf(sizeof(QDataType) * q_host.GetElementSpaceSize());
     DeviceMem k_buf(sizeof(KDataType) * k_host.GetElementSpaceSize());
     DeviceMem v_buf(sizeof(VDataType) * v_host.GetElementSpaceSize());
-    DeviceMem o_buf(sizeof(ODataType) * o_host_ref.GetElementSpaceSize());
+    DeviceMem o_buf(sizeof(ODataType) * o_host_dev.GetElementSpaceSize());
 
     q_buf.ToDevice(q_host.mData.data());
     k_buf.ToDevice(k_host.mData.data());
@@ -159,6 +151,7 @@ int main(int argc, char* argv[])
 
     constexpr ck::index_t kBlockSize = 256;
     constexpr ck::index_t kHeadDim   = 128;
+    const float scale = 1.0 / ck::math::sqrt(static_cast<float>(kHeadDim));
 
     ck::index_t kGridSize = Batch * (M0 / kM0PerBlock) * (N1 / kN1PerBlock);
 
@@ -204,9 +197,8 @@ int main(int argc, char* argv[])
         M0 * K0,  // BatchStrideQ
         N0 * K0,  // BatchStrideK
         N1 * N0,  // BatchStrideV
-        M0 * N1); // BatchStrideO
-
-    o_buf.FromDevice(o_host_dev.mData.data());
+        M0 * N1,   // BatchStrideO
+        scale); 
 
     std::size_t flop =
         std::size_t(2) * Batch * M0 * N0 * K0 + std::size_t(2) * Batch * M0 * N1 * N0;
@@ -221,5 +213,26 @@ int main(int argc, char* argv[])
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
 
-    return !ck::utils::check_err(o_host_dev, o_host_ref);
+    if(host_verify){
+        Tensor<SMPLComputeDataType> s_host_ref(s_lengths, s_strides);
+        Tensor<PDataType> p_host_ref(p_lengths, p_strides);
+        Tensor<ODataType> o_host_ref(o_lengths, o_strides);
+
+        // reference
+        reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
+            q_host, k_host, s_host_ref,
+            [](const QDataType& x) { return x; },
+            [](const KDataType& x) { return x; },
+            [&scale](const SaccDataType& x) { return scale * x; });
+        reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
+                                                                                       p_host_ref);
+        reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
+            p_host_ref, v_host, o_host_ref);
+
+        o_buf.FromDevice(o_host_dev.mData.data());
+
+        return !ck::utils::check_err(o_host_dev, o_host_ref);
+    }
+
+    return 0;
 }
