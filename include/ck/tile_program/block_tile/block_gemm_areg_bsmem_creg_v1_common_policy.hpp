@@ -17,25 +17,16 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
-struct BlockGemmARegBSmemCRegV1M32N32K16Policy
+// Default policy for BlockGemmARegBSmemCRegV1
+// Default policy class should not be templated, put template on member functions instead
+struct BlockGemmARegBSmemCRegV1M16N16K16Policy
 {
     template <typename Problem>
     __host__ __device__ static constexpr auto GetWarpGemmMWarpNWarp()
     {
         using namespace ck::tile_program::warp;
 
-        return make_tuple(WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution{}, 4, 1);
-    }
-};
-
-struct BlockGemmARegBSmemCRegV1M16N16K32Policy
-{
-    template <typename Problem>
-    __host__ __device__ static constexpr auto GetWarpGemmMWarpNWarp()
-    {
-        using namespace ck::tile_program::warp;
-
-        return make_tuple(WarpGemmMfmaF16F16F32M16N16K32TransposedCDistribution{}, 4, 1);
+        return make_tuple(WarpGemmMfmaF16F16F32M16N16K16TransposedCDistribution{}, 4, 1);
     }
 };
 

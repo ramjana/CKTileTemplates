@@ -15,6 +15,7 @@
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_problem.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1_default_policy.hpp"
+#include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1_common_policy.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1_iteratek_policy.hpp"
 
 namespace ck {

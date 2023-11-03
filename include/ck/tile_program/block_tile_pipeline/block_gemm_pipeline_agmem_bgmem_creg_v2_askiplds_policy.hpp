@@ -46,7 +46,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy
     template <typename Problem>
     __host__ __device__ static constexpr auto GetBlockGemm()
     {
-        using BlockGemmPolicy = BlockGemmARegBSmemCRegV1K8Policy;
+        using BlockGemmPolicy = BlockGemmARegBSmemCRegV1M32N32K16Policy;
 
         return BlockGemmARegBSmemCRegV1<Problem, BlockGemmPolicy>{};
     }
