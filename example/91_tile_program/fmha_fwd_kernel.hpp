@@ -169,12 +169,6 @@ struct FmhaFwdKernel
             }
         }();
 
-        make_naive_tensor_view<AddressSpaceEnum::Global>(v_ptr,
-                                                         make_tuple(kargs.hdim_v, kargs.seqlen_k),
-                                                         make_tuple(kargs.stride_v, 1),
-                                                         Number<32>{},
-                                                         Number<1>{});
-
         auto q_dram_window = make_tile_window(
             q_dram,
             [&]() {
