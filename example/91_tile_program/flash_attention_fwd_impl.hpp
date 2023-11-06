@@ -279,15 +279,16 @@ struct FlashAttentionFwdImpl
 
             block_tile_reduce_sync(rowsum_p, f_sum);
 
+            constexpr auto o_spans = decltype(o_acc)::GetDistributedSpans();
             // l{j}, Oacc{j}
-            sweep_tile_span(p_spans[I0], [&](auto idx0) {
+            sweep_tile_span(o_spans[I0], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
 
                 const auto tmp = math::exp(m_old[i_idx] - m[i_idx]);
 
                 l(i_idx) = tmp * l[i_idx] + rowsum_p[i_idx];
 
-                sweep_tile_span(p_spans[I1], [&](auto idx1) {
+                sweep_tile_span(o_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
                     // FIXME: this use different equation from FA v2 paper,
