@@ -105,28 +105,42 @@ float invoker_fmha_kernel(const void* q_ptr,
     constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
     constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
 
+    constexpr bool is_v_rowmajor =
+        ck::is_same_v<typename FmhaKernel::VLayout, ck::tensor_layout::gemm::RowMajor>;
+
     // batch * nhead * seqlen * hdim or batch * seqlen * nhead * hdim
-    auto kargs = FmhaKernel::MakeKargs(q_ptr,
-                                       k_ptr,
-                                       v_ptr,
-                                       o_ptr,
-                                       seqlen_q, // seqlen_q
-                                       seqlen_k, // seqlen_k
-                                       hdim_q,   // hdim_q
-                                       hdim_v,   // hdim_v
-                                       scale,
-                                       i_perm ? hdim_q : nhead * hdim_q,      // stride_q
-                                       i_perm ? hdim_q : nhead * hdim_q,      // stride_k
-                                       i_perm ? seqlen_k : nhead * seqlen_k,  // stride_v
-                                       o_perm ? hdim_v : nhead * hdim_v,      // stride_o
-                                       i_perm ? seqlen_q * hdim_q : hdim_q,   // nhead_stride_q
-                                       i_perm ? seqlen_k * hdim_q : hdim_q,   // nhead_stride_k
-                                       i_perm ? hdim_v * seqlen_k : seqlen_k, // nhead_stride_v
-                                       o_perm ? seqlen_q * hdim_v : hdim_v,   // nhead_stride_o
-                                       nhead * seqlen_q * hdim_q,             // batch_stride_q
-                                       nhead * seqlen_k * hdim_q,             // batch_stride_k
-                                       nhead * hdim_v * seqlen_k,             // batch_stride_v
-                                       nhead * seqlen_q * hdim_v);            // batch_stride_o
+    auto kargs = FmhaKernel::MakeKargs(
+        q_ptr,
+        k_ptr,
+        v_ptr,
+        o_ptr,
+        seqlen_q, // seqlen_q
+        seqlen_k, // seqlen_k
+        hdim_q,   // hdim_q
+        hdim_v,   // hdim_v
+        scale,
+        i_perm ? hdim_q : nhead * hdim_q, // stride_q
+        i_perm ? hdim_q : nhead * hdim_q, // stride_k
+        [&]() {
+            if constexpr(is_v_rowmajor)
+                return i_perm ? hdim_v : nhead * hdim_v;
+            else
+                return i_perm ? seqlen_k : nhead * seqlen_k;
+        }(),                                 // stride_v
+        o_perm ? hdim_v : nhead * hdim_v,    // stride_o
+        i_perm ? seqlen_q * hdim_q : hdim_q, // nhead_stride_q
+        i_perm ? seqlen_k * hdim_q : hdim_q, // nhead_stride_k
+        [&]() {
+            if constexpr(is_v_rowmajor)
+                return i_perm ? seqlen_k * hdim_v : hdim_v;
+            else
+                return i_perm ? hdim_v * seqlen_k : seqlen_k;
+        }(),                                 // nhead_stride_v
+        o_perm ? seqlen_q * hdim_v : hdim_v, // nhead_stride_o
+        nhead * seqlen_q * hdim_q,           // batch_stride_q
+        nhead * seqlen_k * hdim_q,           // batch_stride_k
+        nhead * hdim_v * seqlen_k,           // batch_stride_v
+        nhead * seqlen_q * hdim_v);          // batch_stride_o
 
     float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
                                                               FmhaKernel{},
@@ -185,10 +199,14 @@ int main(int argc, char* argv[])
             return std::array<ck::index_t, 4>{b, s, h, d};
     };
 
+    constexpr bool is_v_rowmajor =
+        ck::is_same_v<typename FmhaKernelHDim64::VLayout, ck::tensor_layout::gemm::RowMajor>;
+
     // host verify
     Tensor<QDataType> q_host(get_lengths(i_perm, batch, nhead, seqlen_q, hdim_q));
     Tensor<KDataType> k_host(get_lengths(i_perm, batch, nhead, seqlen_k, hdim_q));
-    Tensor<VDataType> v_host(get_lengths(i_perm, batch, nhead, hdim_v, seqlen_k));
+    Tensor<VDataType> v_host(is_v_rowmajor ? get_lengths(i_perm, batch, nhead, seqlen_k, hdim_v)
+                                           : get_lengths(i_perm, batch, nhead, hdim_v, seqlen_k));
     Tensor<ODataType> o_host(get_lengths(o_perm, batch, nhead, seqlen_q, hdim_v));
 
 #if 0
@@ -269,7 +287,11 @@ int main(int argc, char* argv[])
     {
         Tensor<QDataType> q_host_ref({batch * nhead, seqlen_q, hdim_q});
         Tensor<KDataType> k_host_ref({batch * nhead, seqlen_k, hdim_q});
-        Tensor<VDataType> v_host_ref({batch * nhead, hdim_v, seqlen_k});
+        const auto v_lengths = std::array<ck::index_t, 3>{batch * nhead, hdim_v, seqlen_k};
+        const auto v_strides = is_v_rowmajor
+                                   ? std::array<ck::index_t, 3>{hdim_v * seqlen_k, 1, hdim_v}
+                                   : std::array<ck::index_t, 3>{hdim_v * seqlen_k, seqlen_k, 1};
+        Tensor<VDataType> v_host_ref(v_lengths, v_strides);
         Tensor<ODataType> o_host_ref({batch * nhead, seqlen_q, hdim_v});
         Tensor<ODataType> o_host_result_ref(get_lengths(o_perm, batch, nhead, seqlen_q, hdim_v));
 
@@ -284,8 +306,16 @@ int main(int argc, char* argv[])
         if(i_perm) k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
         else       k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
 
-        if(i_perm) v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
-        else       v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
+        if constexpr (is_v_rowmajor) {
+            //                              v_host ：b, h, s, d, v_host_ref : batch*hdim*seq
+            if(i_perm) v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[1], idx[3], idx[2]) = self(idx); });
+            //                              v_host : b, s, h, d, v_host_ref : batch*hdim*seq
+            else       v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[2], idx[3], idx[1]) = self(idx); });
+        }
+        else {
+            if(i_perm) v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
+            else       v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
+        }
 
         // reference
         reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
