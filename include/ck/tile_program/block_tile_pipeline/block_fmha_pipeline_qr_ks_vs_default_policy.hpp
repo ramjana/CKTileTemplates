@@ -99,6 +99,7 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeVLdsBlockDescriptor()
     {
+#if 1
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN1;
         constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
         constexpr index_t kPad       = 1;
@@ -118,6 +119,78 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
             make_tuple(Sequence<0>{}, Sequence<1>{}));
 
         return v_lds_block_desc;
+#elif 0
+        using VDataType                = remove_cvref_t<typename Problem::VDataType>;
+        constexpr index_t PixelsPerRow = 32 * 4 / sizeof(VDataType);
+        constexpr index_t KPack        = GetSmemKPackV<Problem>();
+        static_assert(PixelsPerRow % KPack == 0);
+        constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN1;
+        constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
+        constexpr index_t NumRows    = (kNPerBlock * kKPerBlock + PixelsPerRow - 1) /
+                                    PixelsPerRow; // TODO: not power of 2 block size?
+
+        constexpr auto v_lds_block_desc_0 =
+            make_naive_tensor_descriptor(make_tuple(Number<NumRows>{}, Number<PixelsPerRow>{}),
+                                         make_tuple(Number<PixelsPerRow + KPack>{}, Number<1>{}),
+                                         Number<KPack>{},
+                                         Number<1>{});
+
+        constexpr auto v_lds_block_desc_1 = transform_tensor_descriptor(
+            v_lds_block_desc_0,
+            make_tuple(make_merge_transform(make_tuple(Number<NumRows>{}, Number<PixelsPerRow>{}))),
+            make_tuple(Sequence<0, 1>{}),
+            make_tuple(Sequence<0>{}));
+
+        constexpr auto v_lds_block_desc_2 = transform_tensor_descriptor(
+            v_lds_block_desc_1,
+            make_tuple(make_unmerge_transform(
+                make_tuple(Number<kKPerBlock / KPack>{}, Number<kNPerBlock>{}, Number<KPack>{}))),
+            make_tuple(Sequence<0>{}),
+            make_tuple(Sequence<0, 1, 2>{}));
+
+        constexpr auto v_lds_block_desc = transform_tensor_descriptor(
+            v_lds_block_desc_2,
+            make_tuple(
+                make_pass_through_transform(kNPerBlock),
+                make_merge_transform(make_tuple(Number<kKPerBlock / KPack>{}, Number<KPack>{}))),
+            make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
+            make_tuple(Sequence<0>{}, Sequence<1>{}));
+
+        return v_lds_block_desc;
+#else
+        using VDataType                = remove_cvref_t<typename Problem::VDataType>;
+        constexpr index_t Banks        = 32;
+        constexpr index_t PixelsPerRow = Banks * 4 / sizeof(VDataType);
+        constexpr index_t KPack        = GetSmemKPackV<Problem>();
+        static_assert(PixelsPerRow % KPack == 0);
+        constexpr index_t NPerRow    = PixelsPerRow / KPack;
+        constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN1;
+        constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
+        static_assert(kNPerBlock % NPerRow == 0);
+        static_assert(kKPerBlock % KPack == 0);
+
+        constexpr auto v_lds_block_desc_0 = make_naive_tensor_descriptor(
+            make_tuple(Number<kKPerBlock / KPack>{},
+                       Number<kNPerBlock / NPerRow>{},
+                       Number<NPerRow>{},
+                       Number<KPack>{}),
+            make_tuple(Number<kNPerBlock / NPerRow*(PixelsPerRow + KPack)>{},
+                       Number<PixelsPerRow + KPack>{},
+                       Number<KPack>{},
+                       Number<1>{}),
+            Number<KPack>{},
+            Number<1>{});
+
+        constexpr auto v_lds_block_desc = transform_tensor_descriptor(
+            v_lds_block_desc_0,
+            make_tuple(
+                make_merge_transform(make_tuple(Number<kNPerBlock / NPerRow>{}, Number<NPerRow>{})),
+                make_merge_transform(make_tuple(Number<kKPerBlock / KPack>{}, Number<KPack>{}))),
+            make_tuple(Sequence<1, 2>{}, Sequence<0, 3>{}),
+            make_tuple(Sequence<0>{}, Sequence<1>{}));
+
+        return v_lds_block_desc;
+#endif
     }
 
     template <typename Problem>
@@ -244,8 +317,10 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
             return make_static_tile_distribution(
                 StaticTileDistributionEncoding<Sequence<1>,
                                                Tuple<Sequence<N0, N1>, Sequence<K0, K1, K2, K3>>,
-                                               Tuple<Sequence<2>, Sequence<2, 2, 1>>,
-                                               Tuple<Sequence<0>, Sequence<1, 2, 0>>,
+                                               // Tuple<Sequence<2>, Sequence<2, 2, 1>>,
+                                               // Tuple<Sequence<0>, Sequence<1, 2, 0>>,
+                                               Tuple<Sequence<2>, Sequence<2, 1, 2>>,
+                                               Tuple<Sequence<0>, Sequence<1, 0, 2>>,
                                                Sequence<2, 1>,
                                                Sequence<3, 1>>{});
         }
@@ -301,8 +376,10 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
                                            Tuple<Sequence<N0, N1>, Sequence<K0, K1, K2, K3>>,
-                                           Tuple<Sequence<2>, Sequence<2, 2, 1>>,
-                                           Tuple<Sequence<0>, Sequence<1, 2, 0>>,
+                                           // Tuple<Sequence<2>, Sequence<2, 2, 1>>,
+                                           // Tuple<Sequence<0>, Sequence<1, 2, 0>>,
+                                           Tuple<Sequence<2>, Sequence<2, 1, 2>>,
+                                           Tuple<Sequence<0>, Sequence<1, 0, 2>>,
                                            Sequence<1, 2>,
                                            Sequence<1, 3>>{});
     }
