@@ -53,6 +53,11 @@ struct FmhaFwdKernel
         ck::index_t batch_stride_k;
         ck::index_t batch_stride_v;
         ck::index_t batch_stride_o;
+
+        // attributes for group mode
+        const ck::index_t* seqstart_q_ptr = nullptr;
+        const ck::index_t* seqstart_k_ptr = nullptr;
+        const ck::index_t* seqlen_k_ptr = nullptr;
     };
 
     __host__ static constexpr Kargs MakeKargs(const void* q_ptr,
@@ -77,11 +82,36 @@ struct FmhaFwdKernel
                                               ck::index_t batch_stride_v,
                                               ck::index_t batch_stride_o)
     {
-        return Kargs{q_ptr,          k_ptr,          v_ptr,          o_ptr,          seqlen_q,
-                     seqlen_k,       hdim_q,         hdim_v,         scale,          stride_q,
-                     stride_k,       stride_v,       stride_o,       nhead_stride_q, nhead_stride_k,
-                     nhead_stride_v, nhead_stride_o, batch_stride_q, batch_stride_k, batch_stride_v,
-                     batch_stride_o};
+        Kargs kargs;
+
+        kargs.q_ptr = q_ptr;
+        kargs.k_ptr = k_ptr;
+        kargs.v_ptr = v_ptr;
+        kargs.o_ptr = o_ptr;
+
+        kargs.seqlen_q = seqlen_q;
+        kargs.seqlen_k = seqlen_k;
+        kargs.hdim_q = hdim_q;
+        kargs.hdim_v = hdim_v;
+
+        kargs.scale = scale;
+
+        kargs.stride_q = stride_q;
+        kargs.stride_k = stride_k;
+        kargs.stride_v = stride_v;
+        kargs.stride_o = stride_o;
+
+        kargs.nhead_stride_q = nhead_stride_q;
+        kargs.nhead_stride_k = nhead_stride_k;
+        kargs.nhead_stride_v = nhead_stride_v;
+        kargs.nhead_stride_o = nhead_stride_o;
+
+        kargs.batch_stride_q = batch_stride_q;
+        kargs.batch_stride_k = batch_stride_k;
+        kargs.batch_stride_v = batch_stride_v;
+        kargs.batch_stride_o = batch_stride_o;
+
+        return kargs;
     }
 
     __host__ static constexpr auto GridSize(ck::index_t batch_size_,
@@ -115,15 +145,22 @@ struct FmhaFwdKernel
         const index_t i_m0 = __builtin_amdgcn_readfirstlane(i_tile_m * FmhaPipeline::kM0);
         const index_t i_n1 = __builtin_amdgcn_readfirstlane(i_tile_n * FmhaPipeline::kN1);
 
+        const bool in_batch_mode = (kargs.seqstart_q_ptr == nullptr && kargs.seqstart_k_ptr == nullptr);
+
+        const index_t batch_offset_q = (in_batch_mode ? i_batch * kargs.batch_stride_q : kargs.seqstart_q_ptr[i_batch] * kargs.stride_q);
+        const index_t batch_offset_k = (in_batch_mode ? i_batch * kargs.batch_stride_k : kargs.seqstart_k_ptr[i_batch] * kargs.stride_k);
+        const index_t batch_offset_v = (in_batch_mode ? i_batch * kargs.batch_stride_v : kargs.seqstart_k_ptr[i_batch] * kargs.stride_v);
+        const index_t batch_offset_o = (in_batch_mode ? i_batch * kargs.batch_stride_o : kargs.seqstart_q_ptr[i_batch] * kargs.stride_o);
+
         // for simplicity, batch stride we just modify the pointer
         const QDataType* q_ptr = reinterpret_cast<const QDataType*>(kargs.q_ptr) +
-                                 i_nhead * kargs.nhead_stride_q + i_batch * kargs.batch_stride_q;
+                                 i_nhead * kargs.nhead_stride_q + batch_offset_q;
         const KDataType* k_ptr = reinterpret_cast<const KDataType*>(kargs.k_ptr) +
-                                 i_nhead * kargs.nhead_stride_k + i_batch * kargs.batch_stride_k;
+                                 i_nhead * kargs.nhead_stride_k + batch_offset_k;
         const VDataType* v_ptr = reinterpret_cast<const VDataType*>(kargs.v_ptr) +
-                                 i_nhead * kargs.nhead_stride_v + i_batch * kargs.batch_stride_v;
+                                 i_nhead * kargs.nhead_stride_v + batch_offset_v;
         ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
-                           i_nhead * kargs.nhead_stride_o + i_batch * kargs.batch_stride_o;
+                           i_nhead * kargs.nhead_stride_o + batch_offset_o;
 
         // Q/K/V DRAM and DRAM window
         // FIXME: assume layout Q[seqlen_q, hdim_q], K[seqlen_k, hdim_q], V[hdim_v, seqlen_k],
