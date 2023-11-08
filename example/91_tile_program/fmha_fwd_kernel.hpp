@@ -28,10 +28,11 @@ struct FmhaFwdKernel
 
     struct Kargs
     {
-        const void* q_ptr;
-        const void* k_ptr;
-        const void* v_ptr;
-        void* o_ptr;
+        const QDataType* q_ptr;
+        const KDataType* k_ptr;
+        const VDataType* v_ptr;
+        ODataType* o_ptr;
+
         ck::index_t seqlen_q;
         ck::index_t seqlen_k;
         ck::index_t hdim_q;
@@ -49,15 +50,16 @@ struct FmhaFwdKernel
         ck::index_t nhead_stride_v;
         ck::index_t nhead_stride_o;
 
-        ck::index_t batch_stride_q;
-        ck::index_t batch_stride_k;
-        ck::index_t batch_stride_v;
-        ck::index_t batch_stride_o;
+        // attributes for batch mode
+        ck::index_t batch_stride_q = 0;
+        ck::index_t batch_stride_k = 0;
+        ck::index_t batch_stride_v = 0;
+        ck::index_t batch_stride_o = 0;
 
         // attributes for group mode
         const ck::index_t* seqstart_q_ptr = nullptr;
         const ck::index_t* seqstart_k_ptr = nullptr;
-        const ck::index_t* seqlen_k_ptr = nullptr;
+        const ck::index_t* seqlen_k_ptr   = nullptr;
     };
 
     __host__ static constexpr Kargs MakeKargs(const void* q_ptr,
@@ -84,15 +86,15 @@ struct FmhaFwdKernel
     {
         Kargs kargs;
 
-        kargs.q_ptr = q_ptr;
-        kargs.k_ptr = k_ptr;
-        kargs.v_ptr = v_ptr;
-        kargs.o_ptr = o_ptr;
+        kargs.q_ptr = reinterpret_cast<const QDataType*>(q_ptr);
+        kargs.k_ptr = reinterpret_cast<const KDataType*>(k_ptr);
+        kargs.v_ptr = reinterpret_cast<const VDataType*>(v_ptr);
+        kargs.o_ptr = reinterpret_cast<ODataType*>(o_ptr);
 
         kargs.seqlen_q = seqlen_q;
         kargs.seqlen_k = seqlen_k;
-        kargs.hdim_q = hdim_q;
-        kargs.hdim_v = hdim_v;
+        kargs.hdim_q   = hdim_q;
+        kargs.hdim_v   = hdim_v;
 
         kargs.scale = scale;
 
@@ -110,6 +112,57 @@ struct FmhaFwdKernel
         kargs.batch_stride_k = batch_stride_k;
         kargs.batch_stride_v = batch_stride_v;
         kargs.batch_stride_o = batch_stride_o;
+
+        return kargs;
+    }
+
+    __host__ static constexpr Kargs MakeKargs(const void* q_ptr,
+                                              const void* k_ptr,
+                                              const void* v_ptr,
+                                              void* o_ptr,
+                                              const void* seqstart_q_ptr,
+                                              const void* seqstart_k_ptr,
+                                              const void* seqlen_k_ptr,
+                                              ck::index_t max_seqlen_q,
+                                              ck::index_t hdim_q,
+                                              ck::index_t hdim_v,
+                                              float scale,
+                                              ck::index_t stride_q,
+                                              ck::index_t stride_k,
+                                              ck::index_t stride_v,
+                                              ck::index_t stride_o,
+                                              ck::index_t nhead_stride_q,
+                                              ck::index_t nhead_stride_k,
+                                              ck::index_t nhead_stride_v,
+                                              ck::index_t nhead_stride_o)
+    {
+        Kargs kargs;
+
+        kargs.q_ptr = reinterpret_cast<const QDataType*>(q_ptr);
+        kargs.k_ptr = reinterpret_cast<const KDataType*>(k_ptr);
+        kargs.v_ptr = reinterpret_cast<const VDataType*>(v_ptr);
+        kargs.o_ptr = reinterpret_cast<ODataType*>(o_ptr);
+
+        kargs.seqlen_q = max_seqlen_q;
+        kargs.seqlen_k = 0; // will be set inside the kernel
+        kargs.hdim_q   = hdim_q;
+        kargs.hdim_v   = hdim_v;
+
+        kargs.scale = scale;
+
+        kargs.stride_q = stride_q;
+        kargs.stride_k = stride_k;
+        kargs.stride_v = stride_v;
+        kargs.stride_o = stride_o;
+
+        kargs.nhead_stride_q = nhead_stride_q;
+        kargs.nhead_stride_k = nhead_stride_k;
+        kargs.nhead_stride_v = nhead_stride_v;
+        kargs.nhead_stride_o = nhead_stride_o;
+
+        kargs.seqstart_q_ptr = reinterpret_cast<const ck::index_t*>(seqstart_q_ptr);
+        kargs.seqstart_k_ptr = reinterpret_cast<const ck::index_t*>(seqstart_k_ptr);
+        kargs.seqlen_k_ptr   = reinterpret_cast<const ck::index_t*>(seqlen_k_ptr);
 
         return kargs;
     }
@@ -145,22 +198,27 @@ struct FmhaFwdKernel
         const index_t i_m0 = __builtin_amdgcn_readfirstlane(i_tile_m * FmhaPipeline::kM0);
         const index_t i_n1 = __builtin_amdgcn_readfirstlane(i_tile_n * FmhaPipeline::kN1);
 
-        const bool in_batch_mode = (kargs.seqstart_q_ptr == nullptr && kargs.seqstart_k_ptr == nullptr);
+        const bool in_batch_mode =
+            (kargs.seqstart_q_ptr == nullptr || kargs.seqstart_k_ptr == nullptr);
 
-        const index_t batch_offset_q = (in_batch_mode ? i_batch * kargs.batch_stride_q : kargs.seqstart_q_ptr[i_batch] * kargs.stride_q);
-        const index_t batch_offset_k = (in_batch_mode ? i_batch * kargs.batch_stride_k : kargs.seqstart_k_ptr[i_batch] * kargs.stride_k);
-        const index_t batch_offset_v = (in_batch_mode ? i_batch * kargs.batch_stride_v : kargs.seqstart_k_ptr[i_batch] * kargs.stride_v);
-        const index_t batch_offset_o = (in_batch_mode ? i_batch * kargs.batch_stride_o : kargs.seqstart_q_ptr[i_batch] * kargs.stride_o);
+        const index_t batch_offset_q =
+            (in_batch_mode ? i_batch * kargs.batch_stride_q
+                           : kargs.seqstart_q_ptr[i_batch] * kargs.stride_q);
+        const index_t batch_offset_k =
+            (in_batch_mode ? i_batch * kargs.batch_stride_k
+                           : kargs.seqstart_k_ptr[i_batch] * kargs.stride_k);
+        const index_t batch_offset_v =
+            (in_batch_mode ? i_batch * kargs.batch_stride_v
+                           : kargs.seqstart_k_ptr[i_batch] * kargs.stride_v);
+        const index_t batch_offset_o =
+            (in_batch_mode ? i_batch * kargs.batch_stride_o
+                           : kargs.seqstart_q_ptr[i_batch] * kargs.stride_o);
 
         // for simplicity, batch stride we just modify the pointer
-        const QDataType* q_ptr = reinterpret_cast<const QDataType*>(kargs.q_ptr) +
-                                 i_nhead * kargs.nhead_stride_q + batch_offset_q;
-        const KDataType* k_ptr = reinterpret_cast<const KDataType*>(kargs.k_ptr) +
-                                 i_nhead * kargs.nhead_stride_k + batch_offset_k;
-        const VDataType* v_ptr = reinterpret_cast<const VDataType*>(kargs.v_ptr) +
-                                 i_nhead * kargs.nhead_stride_v + batch_offset_v;
-        ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
-                           i_nhead * kargs.nhead_stride_o + batch_offset_o;
+        const QDataType* q_ptr = kargs.q_ptr + i_nhead * kargs.nhead_stride_q + batch_offset_q;
+        const KDataType* k_ptr = kargs.k_ptr + i_nhead * kargs.nhead_stride_k + batch_offset_k;
+        const VDataType* v_ptr = kargs.v_ptr + i_nhead * kargs.nhead_stride_v + batch_offset_v;
+        ODataType* o_ptr       = kargs.o_ptr + i_nhead * kargs.nhead_stride_o + batch_offset_o;
 
         // Q/K/V DRAM and DRAM window
         // FIXME: assume layout Q[seqlen_q, hdim_q], K[seqlen_k, hdim_q], V[hdim_v, seqlen_k],
