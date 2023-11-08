@@ -99,7 +99,7 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeVLdsBlockDescriptor()
     {
-#if 1
+#if 0
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN1;
         constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
         constexpr index_t kPad       = 1;
@@ -115,44 +115,6 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
             v_lds_block_desc_0,
             make_tuple(make_pass_through_transform(kNPerBlock),
                        make_merge_transform(make_tuple(Number<kKPerBlock / kK1>{}, Number<kK1>{}))),
-            make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
-            make_tuple(Sequence<0>{}, Sequence<1>{}));
-
-        return v_lds_block_desc;
-#elif 0
-        using VDataType                = remove_cvref_t<typename Problem::VDataType>;
-        constexpr index_t PixelsPerRow = 32 * 4 / sizeof(VDataType);
-        constexpr index_t KPack        = GetSmemKPackV<Problem>();
-        static_assert(PixelsPerRow % KPack == 0);
-        constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN1;
-        constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
-        constexpr index_t NumRows    = (kNPerBlock * kKPerBlock + PixelsPerRow - 1) /
-                                    PixelsPerRow; // TODO: not power of 2 block size?
-
-        constexpr auto v_lds_block_desc_0 =
-            make_naive_tensor_descriptor(make_tuple(Number<NumRows>{}, Number<PixelsPerRow>{}),
-                                         make_tuple(Number<PixelsPerRow + KPack>{}, Number<1>{}),
-                                         Number<KPack>{},
-                                         Number<1>{});
-
-        constexpr auto v_lds_block_desc_1 = transform_tensor_descriptor(
-            v_lds_block_desc_0,
-            make_tuple(make_merge_transform(make_tuple(Number<NumRows>{}, Number<PixelsPerRow>{}))),
-            make_tuple(Sequence<0, 1>{}),
-            make_tuple(Sequence<0>{}));
-
-        constexpr auto v_lds_block_desc_2 = transform_tensor_descriptor(
-            v_lds_block_desc_1,
-            make_tuple(make_unmerge_transform(
-                make_tuple(Number<kKPerBlock / KPack>{}, Number<kNPerBlock>{}, Number<KPack>{}))),
-            make_tuple(Sequence<0>{}),
-            make_tuple(Sequence<0, 1, 2>{}));
-
-        constexpr auto v_lds_block_desc = transform_tensor_descriptor(
-            v_lds_block_desc_2,
-            make_tuple(
-                make_pass_through_transform(kNPerBlock),
-                make_merge_transform(make_tuple(Number<kKPerBlock / KPack>{}, Number<KPack>{}))),
             make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}));
 
@@ -174,7 +136,7 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
                        Number<kNPerBlock / NPerRow>{},
                        Number<NPerRow>{},
                        Number<KPack>{}),
-            make_tuple(Number<kNPerBlock / NPerRow*(PixelsPerRow + KPack)>{},
+            make_tuple(Number<(kNPerBlock / NPerRow) * (PixelsPerRow + KPack)>{},
                        Number<PixelsPerRow + KPack>{},
                        Number<KPack>{},
                        Number<1>{}),
@@ -292,9 +254,6 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
         {
             constexpr index_t N1 = 4;               // Y, TODO: vector load
             constexpr index_t N0 = kNPerBlock / N1; // P
-            // constexpr index_t K2 = get_warp_size() / N0;            // P
-            // constexpr index_t K1 = kBlockSize / get_warp_size();    // P
-            // constexpr index_t K0 = kKPerBlock / (K1 * K2);          // Y
 
             constexpr index_t total_pixels = kNPerBlock * kKPerBlock / kBlockSize;
             static_assert(total_pixels % N1 == 0);    // TODO: this is not always true?
@@ -304,16 +263,8 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
             constexpr index_t K2 = KPack / K3; // TODO: this dimention could be outside single wave
             constexpr index_t K1 = get_warp_size() / (K2 * N0);  // P
             constexpr index_t K0 = kBlockSize / get_warp_size(); // P
-
             static_assert(kKPerBlock == K0 * K1 * K2 * K3);
 
-            // return make_static_tile_distribution(
-            //     StaticTileDistributionEncoding<Sequence<1>,
-            //                                 Tuple<Sequence<N0, N1>, Sequence<K0, K1, K2>>,
-            //                                 Tuple<Sequence<2>, Sequence<2, 1>>,
-            //                                 Tuple<Sequence<1>, Sequence<2, 0>>,
-            //                                 Sequence<2, 1>,
-            //                                 Sequence<0, 1>>{});
             return make_static_tile_distribution(
                 StaticTileDistributionEncoding<Sequence<1>,
                                                Tuple<Sequence<N0, N1>, Sequence<K0, K1, K2, K3>>,
@@ -352,11 +303,8 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN1;
         constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
 
-        constexpr index_t N1 = 4;               // Y, TODO: vector load
-        constexpr index_t N0 = kNPerBlock / N1; // P
-        // constexpr index_t K2 = get_warp_size() / N0;        // P
-        // constexpr index_t K1 = kBlockSize / get_warp_size(); // P
-        // constexpr index_t K0 = kKPerBlock / (K1 * K2);          // Y
+        constexpr index_t N1           = 4;               // Y, TODO: vector load
+        constexpr index_t N0           = kNPerBlock / N1; // P
         constexpr index_t total_pixels = kNPerBlock * kKPerBlock / kBlockSize;
         static_assert(total_pixels % N1 == 0);       // TODO: this is not always true?
         constexpr index_t K3    = total_pixels / N1; //      kKPerBlock / (K0 * K1);          // Y
@@ -366,13 +314,6 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
         constexpr index_t K1 = get_warp_size() / (K2 * N0);  // P
         constexpr index_t K0 = kBlockSize / get_warp_size(); // P
 
-        // return make_static_tile_distribution(
-        //         StaticTileDistributionEncoding<Sequence<1>,
-        //                                     Tuple<Sequence<N0, N1>, Sequence<K0, K1, K2>>,
-        //                                     Tuple<Sequence<2>, Sequence<2, 1>>,
-        //                                     Tuple<Sequence<1>, Sequence<2, 0>>,
-        //                                     Sequence<1, 2>,
-        //                                     Sequence<1, 0>>{});
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
                                            Tuple<Sequence<N0, N1>, Sequence<K0, K1, K2, K3>>,

@@ -313,6 +313,9 @@ struct BlockFmhaPipelineQRKSVS
                     move_tile_window(v_dram_window, {0, kK1});
                 });
             }
+            // move K tile windows
+            move_tile_window(k_dram_block_window, {kN0, 0});
+            i_total_loops++;
             // tail
             {
                 block_sync_lds();
@@ -321,10 +324,6 @@ struct BlockFmhaPipelineQRKSVS
                        v_lds_window);
                 block_sync_lds();
             }
-            // move K tile windows
-            move_tile_window(k_dram_block_window, {kN0, 0});
-
-            i_total_loops++;
         } while(i_total_loops < num_total_loop);
 
         // finally, O
