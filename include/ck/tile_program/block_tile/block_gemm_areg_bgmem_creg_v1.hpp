@@ -26,9 +26,11 @@ namespace block {
 // This will:
 //   1. Load B from global memory into shared memory and then
 //   2. Call BlockGemmARegSGmemCRegV1
-template <typename Problem, typename Policy = BlockGemmARegBGmemCRegV1DefaultPolicy>
+template <typename Problem_, typename Policy_ = BlockGemmARegBGmemCRegV1DefaultPolicy>
 struct BlockGemmARegBGmemCRegV1
 {
+    using Problem        = remove_cvref_t<Problem_>;
+    using Policy         = remove_cvref_t<Policy_>;
     using ADataType      = remove_cvref_t<typename Problem::ADataType>;
     using BDataType      = remove_cvref_t<typename Problem::BDataType>;
     using CDataType      = remove_cvref_t<typename Problem::CDataType>;
