@@ -214,6 +214,23 @@ struct FmhaFwdKernel
             (in_batch_mode ? i_batch * kargs.batch_stride_o
                            : kargs.seqstart_q_ptr[i_batch] * kargs.stride_o);
 
+        // get real # queries & # keys under group mode
+        if(!in_batch_mode)
+        {
+            const auto adjusted_seqstart_q_ptr = kargs.seqstart_q_ptr + i_batch;
+            kargs.seqlen_q = adjusted_seqstart_q_ptr[1] - adjusted_seqstart_q_ptr[0];
+
+            if(kargs.seqlen_k_ptr != nullptr)
+            {
+                kargs.seqlen_k = kargs.seqlen_k_ptr[i_batch];
+            }
+            else
+            {
+                const auto adjusted_seqstart_k_ptr = kargs.seqstart_k_ptr + i_batch;
+                kargs.seqlen_k = adjusted_seqstart_k_ptr[1] - adjusted_seqstart_k_ptr[0];
+            }
+        }
+
         // for simplicity, batch stride we just modify the pointer
         const QDataType* q_ptr = kargs.q_ptr + i_nhead * kargs.nhead_stride_q + batch_offset_q;
         const KDataType* k_ptr = kargs.k_ptr + i_nhead * kargs.nhead_stride_k + batch_offset_k;
