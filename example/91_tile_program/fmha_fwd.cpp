@@ -39,14 +39,25 @@ using ODataType           = ck::half_t;
 //                                                 M0   N0  K0   N1  K1  K0L
 // using FmhaShape = ck::tile_program::TileFmhaShape<128,  64, 64, 128, 64>;
 // using FmhaShape = ck::tile_program::TileFmhaShape<128, 256, 32, 128, 32>;
+using VLayout = ck::tensor_layout::gemm::RowMajor; // (bs, nhead) seqlen * hdim
+// using VLayout = ck::tensor_layout::gemm::ColumnMajor; // (bs, nhead) hdim * seqlen
+
 using FmhaBlockTileHdim64  = ck::Sequence<128, 64, 32, 64, 32, 64>;
 using FmhaBlockTileHdim128 = ck::Sequence<128, 128, 32, 128, 32, 128>;
 using FmhaBlockWarps       = ck::Sequence<4, 1, 1>;
 using FmhaWarpTile         = ck::Sequence<32, 32, 16>;
-using FmhaShapeHDim64      = ck::tile_program::
-    TileFmhaShape<FmhaBlockTileHdim64, FmhaBlockWarps, FmhaWarpTile, FmhaBlockWarps, FmhaWarpTile>;
-using FmhaShapeHDim128 = ck::tile_program::
-    TileFmhaShape<FmhaBlockTileHdim128, FmhaBlockWarps, FmhaWarpTile, FmhaBlockWarps, FmhaWarpTile>;
+using FmhaShapeHDim64      = ck::tile_program::TileFmhaShape<FmhaBlockTileHdim64,
+                                                        FmhaBlockWarps,
+                                                        FmhaWarpTile,
+                                                        FmhaBlockWarps,
+                                                        FmhaWarpTile,
+                                                        VLayout>;
+using FmhaShapeHDim128     = ck::tile_program::TileFmhaShape<FmhaBlockTileHdim128,
+                                                         FmhaBlockWarps,
+                                                         FmhaWarpTile,
+                                                         FmhaBlockWarps,
+                                                         FmhaWarpTile,
+                                                         VLayout>;
 
 using FmhaTilePartitionerHDim64  = FmhaFwdTilePartitioner<FmhaShapeHDim64>;
 using FmhaTilePartitionerHDim128 = FmhaFwdTilePartitioner<FmhaShapeHDim128>;
@@ -230,8 +241,8 @@ int main(int argc, char* argv[])
 
     std::cout << "batch:" << batch << ", nhead:" << nhead << ", seqlen_q:" << seqlen_q
               << ", seqlen_k:" << seqlen_k << ", hdim_q:" << hdim_q << ", hdim_v:" << hdim_v
-              << ", scale:" << scale << ", i_perm:" << i_perm << ", o_perm:" << o_perm << std::flush
-              << std::endl;
+              << ", scale:" << scale << ", i_perm:" << i_perm << ", o_perm:" << o_perm
+              << ", v:" << std::string(FmhaKernelHDim64::VLayout::name) << std::flush << std::endl;
 
     float ave_time = 0;
     if(hdim_q == hdim_v && hdim_q == 64)
