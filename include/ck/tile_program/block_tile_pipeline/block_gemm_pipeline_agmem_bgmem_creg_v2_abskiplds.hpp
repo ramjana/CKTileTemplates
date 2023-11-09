@@ -125,12 +125,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
 
         do
         {
-            block_sync_lds();
-
             // GEMM i
             block_gemm(c_block_tile, a_copy_reg_tensor, b_copy_reg_tensor);
-
-            block_sync_lds();
 
             // move to i + 2
             move_tile_window(a_copy_dram_window, {0, kKPerBlock});
@@ -154,12 +150,8 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
 
         // tail
         {
-            block_sync_lds();
-
             // GEMM num_loop - 2
             block_gemm(c_block_tile, a_copy_reg_tensor, b_copy_reg_tensor);
-
-            block_sync_lds();
 
             // LDS write num_loop - 1
             const auto a_block_tile_tmp = tile_elementwise_in(a_element_func, a_block_tile);
@@ -167,8 +159,6 @@ struct BlockGemmPipelineAGmemBGmemCRegV2<Problem, BlockGemmPipelineAGmemBGmemCRe
 
             const auto b_block_tile_tmp = tile_elementwise_in(b_element_func, b_block_tile);
             store_tile(b_copy_reg_tensor, b_block_tile_tmp);
-
-            block_sync_lds();
 
             // GEMM num_loop - 1
             block_gemm(c_block_tile, a_copy_reg_tensor, b_copy_reg_tensor);
