@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "ck/utility/functional2.hpp"
+#include "ck/utility/remove_cvref.hpp"
 
 namespace ck {
 namespace tensor_operation {
@@ -20,7 +21,7 @@ void add_device_operation_instances(std::vector<std::unique_ptr<BaseOp>>& op_ins
     ck::static_for<0, std::tuple_size_v<NewOpInstances>, 1>{}([&](auto i) {
         const auto new_op_instance = std::get<i>(new_op_instances);
 
-        using NewOpInstance = std::remove_cvref_t<decltype(new_op_instance)>;
+        using NewOpInstance = remove_cvref_t<decltype(new_op_instance)>;
 
         static_assert(std::is_base_of_v<BaseOp, NewOpInstance>,
                       "wrong! NewOpInstance should be derived from BaseOp");
