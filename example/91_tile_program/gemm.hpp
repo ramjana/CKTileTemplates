@@ -15,6 +15,8 @@
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2.hpp"
+// #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2_askiplds.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v2_abskiplds.hpp"
 #include "ck/tile_program/grid/grid_gemm_problem.hpp"
 #include "ck/tile_program/grid/grid_gemm_v1.hpp"
 #include "ck/tile_program/grid/grid_gemm_v1_default_policy.hpp"
@@ -86,7 +88,7 @@ struct Gemm
 
             return BlockGemmPipelineAGmemBGmemCRegV2<
                 BlockGemmPipelineProblem_,
-                BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>{};
+                BlockGemmPipelineAGmemBGmemCRegV2SkipABLdsPolicy>{};
         }
     };
 

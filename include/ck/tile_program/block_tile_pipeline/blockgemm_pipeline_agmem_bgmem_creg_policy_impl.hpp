@@ -96,6 +96,40 @@ __host__ __device__ static constexpr auto make_a_reg_block_descriptor()
     return a_block_dstr;
 }
 
+template <typename Problem, typename BlockGemm>
+__host__ __device__ static constexpr auto make_b_reg_block_descriptor()
+{
+    using namespace ck;
+
+    constexpr index_t kNPerBlock = Problem::BlockGemmShape::kN;
+    constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
+
+    constexpr auto config = BlockGemm::BlockGemmPolicy::template GetWarpGemmMWarpNWarp<Problem>();
+
+    using WG = remove_cvref_t<decltype(config.template At<0>())>;
+
+    constexpr index_t MWarp = config.template At<1>();
+    constexpr index_t NWarp = config.template At<2>();
+
+    constexpr index_t NIterPerWarp = kNPerBlock / (NWarp * WG::kN);
+    constexpr index_t KIterPerWarp = kKPerBlock / WG::kK;
+
+    constexpr auto b_block_outer_dstr_encoding =
+        StaticTileDistributionEncoding<Sequence<MWarp>,
+                                       Tuple<Sequence<NIterPerWarp, NWarp>, Sequence<KIterPerWarp>>,
+                                       Tuple<Sequence<0, 1>>,
+                                       Tuple<Sequence<0, 1>>,
+                                       Sequence<1, 2>,
+                                       Sequence<0, 0>>{};
+
+    constexpr auto b_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
+        b_block_outer_dstr_encoding, typename WG::BWarpDstrEncoding{});
+
+    constexpr auto b_block_dstr = make_static_tile_distribution(b_block_dstr_encode);
+
+    return b_block_dstr;
+}
+
 template <typename Problem>
 __host__ __device__ static constexpr auto make_a_dram_tile_distribution()
 {
@@ -130,6 +164,7 @@ __host__ __device__ static constexpr auto make_a_dram_tile_distribution_skip_lds
     using WG = remove_cvref_t<decltype(config.template At<0>())>;
 
     constexpr index_t MWarp = config.template At<1>();
+    constexpr index_t NWarp = config.template At<2>();
 
     constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
     constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
@@ -145,11 +180,11 @@ __host__ __device__ static constexpr auto make_a_dram_tile_distribution_skip_lds
     constexpr index_t M0 = kMPerBlock / (M2 * M1);
 
     return make_static_tile_distribution(
-        StaticTileDistributionEncoding<Sequence<1>,
+        StaticTileDistributionEncoding<Sequence<NWarp>,
                                        Tuple<Sequence<M0, M1, M2>, Sequence<K0, K1, K2>>,
-                                       Tuple<Sequence<1>, Sequence<2, 1>>,
-                                       Tuple<Sequence<1>, Sequence<1, 2>>,
-                                       Sequence<2, 1, 2>,
+                                       Tuple<Sequence<1, 0>, Sequence<2, 1>>,
+                                       Tuple<Sequence<1, 0>, Sequence<1, 2>>,
+                                       Sequence<1, 2, 2>,
                                        Sequence<0, 0, 2>>{});
 }
 
@@ -177,6 +212,38 @@ __host__ __device__ static constexpr auto make_b_dram_tile_distribution()
                                        Tuple<Sequence<1>, Sequence<2, 0>>,
                                        Sequence<1, 2>,
                                        Sequence<0, 1>>{});
+}
+
+template <typename Problem, typename BlockGemm>
+__host__ __device__ static constexpr auto make_b_dram_tile_distribution_skip_lds()
+{
+    constexpr auto config = BlockGemm::BlockGemmPolicy::template GetWarpGemmMWarpNWarp<Problem>();
+
+    using WG = remove_cvref_t<decltype(config.template At<0>())>;
+
+    constexpr index_t MWarp = config.template At<1>();
+    constexpr index_t NWarp = config.template At<2>();
+
+    constexpr index_t kNPerBlock = Problem::BlockGemmShape::kN;
+    constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
+
+    constexpr index_t K2 =
+        WG::kK / WG::WarpGemmAttribute::Impl::kABKLane; // WG::WarpGemmAttribute::Impl::kABKPerLane;
+                                                        // // 16 / sizeof(ADataType);
+    constexpr index_t K1 = WG::WarpGemmAttribute::Impl::kABKLane;
+    constexpr index_t K0 = kKPerBlock / (K1 * K2);
+
+    constexpr index_t N2 = WG::WarpGemmAttribute::Impl::kBNLane;
+    constexpr index_t N1 = NWarp;
+    constexpr index_t N0 = kNPerBlock / (N2 * N1);
+
+    return make_static_tile_distribution(
+        StaticTileDistributionEncoding<Sequence<MWarp>,
+                                       Tuple<Sequence<N0, N1, N2>, Sequence<K0, K1, K2>>,
+                                       Tuple<Sequence<0, 1>, Sequence<2, 1>>,
+                                       Tuple<Sequence<0, 1>, Sequence<1, 2>>,
+                                       Sequence<1, 2, 2>,
+                                       Sequence<0, 0, 2>>{});
 }
 
 template <typename Problem>

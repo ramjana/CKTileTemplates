@@ -55,15 +55,29 @@ int main(int argc, char* argv[])
     using BLayout = ck::tensor_layout::gemm::ColumnMajor;
     using CLayout = ck::tensor_layout::gemm::RowMajor;
 
+    ck::index_t do_debug = 0;
+    ck::index_t do_verification = 1;
+    ck::index_t time_kernel = 1;
+    ck::index_t initial_method =1;
+
     ck::index_t M = 3328;
     ck::index_t N = 4096;
     ck::index_t K = 4096;
 
-    if(argc == 4)
+   if(argc == 4){
+        do_verification = std::stoi(argv[1]);
+        time_kernel = std::stoi(argv[2]);
+        initial_method = std::stoi(argv[3]);
+    }
+    else if(argc == 8)
     {
-        M = std::stoi(argv[1]);
-        N = std::stoi(argv[2]);
-        K = std::stoi(argv[3]);
+        do_verification = std::stoi(argv[1]);
+        time_kernel = std::stoi(argv[2]);
+        initial_method = std::stoi(argv[3]);
+        M = std::stoi(argv[4]);
+        N = std::stoi(argv[5]);
+        K = std::stoi(argv[6]);
+        do_debug = std::stoi(argv[7]);
     }
 
     const ck::index_t Lda = std::is_same_v<ALayout, ck::tensor_layout::gemm::RowMajor> ? K : M;
@@ -88,15 +102,65 @@ int main(int argc, char* argv[])
     // host verify
     Tensor<ADataType> a_host(a_lengths, a_strides);
     Tensor<BDataType> b_host(b_lengths, b_strides);
-    Tensor<CDataType> c_host_ref(c_lengths, c_strides);
     Tensor<CDataType> c_host_dev(c_lengths, c_strides);
 
-    ck::utils::FillUniformDistributionIntegerValue<ADataType>{-5.f, 5.f}(a_host);
-    ck::utils::FillUniformDistributionIntegerValue<BDataType>{-5.f, 5.f}(b_host);
+    switch(initial_method)
+    {
+    case 0: break;
+    case 1:
+        printf("Initialization, A: RandomInt ; B: RandomInt\n");
+        ck::utils::FillUniformDistributionIntegerValue<ADataType>{-3.f, 3.f}(a_host);
+        ck::utils::FillUniformDistributionIntegerValue<BDataType>{-3.f, 3.f}(b_host);
+        break;
+    case 2:
+        printf("Initialization, A: RandomFloat ; B: RandomFloat\n");
+        ck::utils::FillUniformDistribution<ADataType>{-3.f, 3.f}(a_host);
+        ck::utils::FillUniformDistribution<BDataType>{-3.f, 3.f}(b_host);
+        break;
+    case 3:
+        printf("Initialization, A: Constant ; B: Constant\n");
+        ck::utils::FillConstant<ADataType>{1.f}(a_host);
+        ck::utils::FillConstant<BDataType>{1.f}(b_host);
+        break;
+    case 4:
+        printf("Initialization, A: RandomInt ; B: Constant\n");
+        ck::utils::FillUniformDistributionIntegerValue<ADataType>{-3.f, 3.f}(a_host);
+        ck::utils::FillConstant<BDataType>{1.f}(b_host);
+        break;
+    case 5:
+        printf("Initialization, A: Constant ; B: RandomInt\n");
+        ck::utils::FillConstant<ADataType>{1.f}(a_host);
+        ck::utils::FillUniformDistributionIntegerValue<BDataType>{-3.f, 3.f}(b_host);
+        break;
+    default:
+        ck::utils::FillUniformDistributionIntegerValue<ADataType>{-2.f, 2.f}(a_host);
+        ck::utils::FillUniformDistributionIntegerValue<BDataType>{-2.f, 2.f}(b_host);
+    }
 
-    // reference gemm
-    reference_gemm<ADataType, ADataType, AccDataType, CDataType>(a_host, b_host, c_host_ref);
-
+    if(do_debug){
+#if 0
+        printf("Print A matrix\n");
+        for (int im = 0; im < M; im++)
+        {
+            for (int ik = 0; ik < K; ik++)
+            {
+                printf("%04x ", *(reinterpret_cast<uint16_t*>(&(a_host(im,ik)))));
+                if(ik%8==7) printf("|");
+            }
+            printf("\n");
+        }
+#endif
+        printf("Print B matrix\n");
+        for (int in = 0; in < N; in++)
+        {
+            for (int ik = 0; ik < K; ik++)
+            {
+                printf("%04x ", *(reinterpret_cast<uint16_t*>(&(b_host(in,ik)))));
+                if(ik%8==7) printf("|");
+            }
+            printf("\n");
+        }
+    }
     DeviceMem a_buf(sizeof(ADataType) * a_host.GetElementSpaceSize());
     DeviceMem b_buf(sizeof(BDataType) * b_host.GetElementSpaceSize());
     DeviceMem c_buf(sizeof(CDataType) * c_host_dev.GetElementSpaceSize());
@@ -111,9 +175,10 @@ int main(int argc, char* argv[])
 
     constexpr ck::index_t kBlockSize = 256;
 
-    constexpr ck::index_t kGemmMPerBlock = 256;
+    constexpr ck::index_t kGemmMPerBlock = 128;
     constexpr ck::index_t kGemmNPerBlock = 128;
     constexpr ck::index_t kGemmKPerBlock = 32;
+    //Tuning parameter, MMA tile, MMA type, Warp tile, split-k, data type, layout
 
     ck::index_t kGridSize = (M / kGemmMPerBlock) * (N / kGemmNPerBlock);
 
@@ -142,7 +207,7 @@ int main(int argc, char* argv[])
                                   kGemmKPerBlock>{};
 
     float ave_time =
-        launch_kernel<kBlockSize, kBlockPerCu>(StreamConfig{nullptr, true},
+        launch_kernel<kBlockSize, kBlockPerCu>(StreamConfig{nullptr, static_cast<bool>( time_kernel)},
                                                gemm_kernel,
                                                kGridSize,
                                                kBlockSize,
@@ -160,8 +225,6 @@ int main(int argc, char* argv[])
                                                BElementFunction{},
                                                CElementFunction{});
 
-    c_buf.FromDevice(c_host_dev.mData.data());
-
     std::size_t flop = std::size_t(2) * M * N * K;
     std::size_t num_btype =
         sizeof(ADataType) * M * K + sizeof(BDataType) * K * N + sizeof(CDataType) * M * N;
@@ -173,5 +236,16 @@ int main(int argc, char* argv[])
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
 
-    return !ck::utils::check_err(c_host_dev, c_host_ref);
+    if(do_verification || do_debug){
+        printf("Verfication: ON\n");
+        Tensor<CDataType> c_host_ref(c_lengths, c_strides);
+        // reference gemm
+        reference_gemm<ADataType, ADataType, AccDataType, CDataType>(a_host, b_host, c_host_ref);
+
+        c_buf.FromDevice(c_host_dev.mData.data());
+
+        return !ck::utils::check_err(c_host_dev, c_host_ref);
+    }
+    printf("Verfication: OFF\n");
+    return 0;
 }

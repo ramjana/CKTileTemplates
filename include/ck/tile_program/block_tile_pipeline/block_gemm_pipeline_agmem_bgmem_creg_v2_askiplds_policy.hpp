@@ -5,6 +5,8 @@
 
 #include "ck/tile_program/block_tile_pipeline/blockgemm_pipeline_agmem_bgmem_creg_policy_impl.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_gemm_pipeline_agmem_bgmem_creg_v1.hpp"
+#include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1.hpp"
+
 
 namespace ck {
 namespace tile_program {
@@ -46,7 +48,7 @@ struct BlockGemmPipelineAGmemBGmemCRegV2SkipALdsPolicy
     template <typename Problem>
     __host__ __device__ static constexpr auto GetBlockGemm()
     {
-        using BlockGemmPolicy = BlockGemmARegBSmemCRegV1K8Policy;
+        using BlockGemmPolicy = BlockGemmARegBSmemCRegV1M32N32K8Policy;
 
         return BlockGemmARegBSmemCRegV1<Problem, BlockGemmPolicy>{};
     }

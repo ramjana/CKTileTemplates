@@ -17,14 +17,31 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
-struct BlockGemmARegBSmemCRegV1K8Policy
+struct BlockGemmARegBSmemCRegV1M32N32K8Policy
 {
     template <typename Problem>
     __host__ __device__ static constexpr auto GetWarpGemmMWarpNWarp()
     {
         using namespace ck::tile_program::warp;
 
-        return make_tuple(WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution{}, 4, 1);
+        constexpr index_t MWarps = Problem::kBlockSize/get_warp_size();
+        constexpr index_t NWarps = 1;
+
+        return make_tuple(WarpGemmMfmaF16F16F32M32N32K16TransposedCDistribution{}, MWarps, NWarps);
+    }
+};
+
+struct BlockGemmARegBSmemCRegV1M16N16K16Policy
+{
+    template <typename Problem>
+    __host__ __device__ static constexpr auto GetWarpGemmMWarpNWarp()
+    {
+        using namespace ck::tile_program::warp;
+
+        constexpr index_t MWarps = Problem::kBlockSize/get_warp_size();
+        constexpr index_t NWarps = 1;
+
+        return make_tuple(WarpGemmMfmaF16F16F32M16N16K16TransposedCDistribution{}, MWarps, NWarps);
     }
 };
 
