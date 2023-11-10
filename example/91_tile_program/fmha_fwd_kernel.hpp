@@ -171,6 +171,8 @@ struct FmhaFwdKernel
                                          k_dram_window,
                                          v_dram_window,
                                          kargs.scale,
+                                         kargs.seqlen_q,
+                                         kargs.seqlen_k,
                                          kargs.seqlen_k / FmhaPipeline::kN0,
                                          kargs.hdim_q / FmhaPipeline::kK0,
                                          smem_ptr);

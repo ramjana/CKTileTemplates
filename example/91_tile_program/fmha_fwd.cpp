@@ -19,6 +19,7 @@
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qr_ks_vs.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qr_ks_vs_default_policy.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_problem.hpp"
+#include "ck/tile_program/block_tile/block_masking_specialization.hpp"
 #include "ck/tile_program/tile/tile_fmha_shape.hpp"
 
 #include "reference_batched_gemm.hpp"
@@ -45,6 +46,8 @@ using FmhaWarpTile   = ck::Sequence<32, 32, 16>;
 using FmhaShape      = ck::tile_program::
     TileFmhaShape<FmhaBlockTile, FmhaBlockWarps, FmhaWarpTile, FmhaBlockWarps, FmhaWarpTile>;
 
+using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
+
 using FmhaTilePartitioner = FmhaFwdTilePartitioner<FmhaShape>;
 using FmhaPipelineProblem = ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
                                                                               KDataType,
@@ -55,7 +58,8 @@ using FmhaPipelineProblem = ck::tile_program::block::BlockFmhaPipelineProblem<QD
                                                                               OaccDataType,
                                                                               ODataType,
                                                                               256, // BlockSize
-                                                                              FmhaShape>;
+                                                                              FmhaShape,
+                                                                              FmhaMask>;
 // using FmhaPipeline        = ck::tile_program::block::BlockFmhaPipelineQKVS<FmhaPipelineProblem>;
 using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblem>;
 
@@ -136,6 +140,7 @@ int main(int argc, char* argv[])
     v_buf.ToDevice(v_host.mData.data());
 
     dim3 kGridSize            = FmhaKernel::GridSize(batch, nhead, seqlen_q, hdim_v);
+    //printf("kGridSize is %d, %d, %d \n", kGridSize.x, kGridSize.y, kGridSize.z);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
     std::cout << "batch:" << batch << ", nhead:" << nhead << ", seqlen_q:" << seqlen_q

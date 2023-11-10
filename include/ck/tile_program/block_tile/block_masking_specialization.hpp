@@ -4,8 +4,8 @@
 #pragma once
 
 namespace ck {
-namespace tensor_operation {
-namespace device {
+namespace tile_program {
+namespace block {
 
 enum struct MaskingSpecialization
 {
@@ -86,7 +86,7 @@ struct MaskUpperTriangleFromBottomRightPredicate
 template <typename MaskOutPredicate>
 struct C0MatrixMask_impl
 {
-    C0MatrixMask_impl(index_t MRaw, index_t NRaw) : NRaw_(NRaw), predicate_(MaskOutPredicate{})
+    __host__ __device__ C0MatrixMask_impl(index_t MRaw, index_t NRaw) : NRaw_(NRaw), predicate_(MaskOutPredicate{})
     {
         if constexpr(std::is_same<MaskOutPredicate,
                                   MaskUpperTriangleFromBottomRightPredicate>::value)
