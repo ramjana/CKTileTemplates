@@ -6,8 +6,13 @@
 #include "ck/utility/common_header.hpp"
 #include "ck/library/utility/host_tensor.hpp"
 
-template <typename ADataType, typename AccDataType, typename BDataType>
-void reference_batched_softmax(const Tensor<ADataType>& a_b_m_n, Tensor<BDataType>& b_b_m_n)
+template <typename ADataType,
+          typename AccDataType,
+          typename BDataType,
+          typename AContainer,
+          typename BContainer>
+void reference_batched_softmax(const TensorView<ADataType, AContainer>& a_b_m_n,
+                               TensorView<BDataType, BContainer>& b_b_m_n)
 {
     const int N = a_b_m_n.mDesc.GetLengths()[2];
 

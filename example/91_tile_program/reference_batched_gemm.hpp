@@ -12,10 +12,13 @@ template <typename ADataType,
           typename CDataType,
           typename AElementOp,
           typename BElementOp,
-          typename ACCElementOp>
-void reference_batched_gemm(const Tensor<ADataType>& a_b_m_k,
-                            const Tensor<BDataType>& b_b_n_k,
-                            Tensor<CDataType>& c_b_m_n,
+          typename ACCElementOp,
+          typename AContainer,
+          typename BContainer,
+          typename CContainer>
+void reference_batched_gemm(const TensorView<ADataType, AContainer>& a_b_m_k,
+                            const TensorView<BDataType, BContainer>& b_b_n_k,
+                            TensorView<CDataType, CContainer>& c_b_m_n,
                             const AElementOp& a_element_op,
                             const BElementOp& b_element_op,
                             const ACCElementOp& acc_element_op)

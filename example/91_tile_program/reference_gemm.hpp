@@ -6,10 +6,16 @@
 #include "ck/utility/common_header.hpp"
 #include "ck/library/utility/host_tensor.hpp"
 
-template <typename ADataType, typename BDataType, typename AccDataType, typename CDataType>
-void reference_gemm(const Tensor<ADataType>& a_m_k,
-                    const Tensor<BDataType>& b_n_k,
-                    Tensor<CDataType>& c_m_n)
+template <typename ADataType,
+          typename BDataType,
+          typename AccDataType,
+          typename CDataType,
+          typename AContainer,
+          typename BContainer,
+          typename CContainer>
+void reference_gemm(const TensorView<ADataType, AContainer>& a_m_k,
+                    const TensorView<BDataType, BContainer>& b_n_k,
+                    TensorView<CDataType, CContainer>& c_m_n)
 {
     const int N = b_n_k.mDesc.GetLengths()[0];
     const int K = b_n_k.mDesc.GetLengths()[1];
