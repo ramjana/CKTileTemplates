@@ -245,40 +245,39 @@ auto make_ParallelTensorFunctor(F f, Xs... xs)
     return ParallelTensorFunctor<F, Xs...>(f, xs...);
 }
 
-template <typename T>
-struct Tensor
+template <typename T, typename Data = ck::span<T>>
+struct TensorView
 {
     using Descriptor = HostTensorDescriptor;
-    using Data       = std::vector<T>;
 
     template <typename X>
-    Tensor(std::initializer_list<X> lens) : mDesc(lens), mData(mDesc.GetElementSpaceSize())
+    TensorView(std::initializer_list<X> lens) : mDesc(lens), mData(mDesc.GetElementSpaceSize())
     {
     }
 
     template <typename X, typename Y>
-    Tensor(std::initializer_list<X> lens, std::initializer_list<Y> strides)
+    TensorView(std::initializer_list<X> lens, std::initializer_list<Y> strides)
         : mDesc(lens, strides), mData(mDesc.GetElementSpaceSize())
     {
     }
 
     template <typename Lengths>
-    Tensor(const Lengths& lens) : mDesc(lens), mData(mDesc.GetElementSpaceSize())
+    TensorView(const Lengths& lens) : mDesc(lens), mData(mDesc.GetElementSpaceSize())
     {
     }
 
     template <typename Lengths, typename Strides>
-    Tensor(const Lengths& lens, const Strides& strides)
+    TensorView(const Lengths& lens, const Strides& strides)
         : mDesc(lens, strides), mData(GetElementSpaceSize())
     {
     }
 
-    Tensor(const Descriptor& desc) : mDesc(desc), mData(mDesc.GetElementSpaceSize()) {}
+    TensorView(const Descriptor& desc) : mDesc(desc), mData(mDesc.GetElementSpaceSize()) {}
 
-    template <typename OutT>
-    Tensor<OutT> CopyAsType() const
+    template <typename OutT, typename OutData = Data>
+    TensorView<OutT, OutData> CopyAsType() const
     {
-        Tensor<OutT> ret(mDesc);
+        TensorView<OutT, OutData> ret(mDesc);
 
         ck::ranges::transform(
             mData, ret.mData.begin(), [](auto value) { return ck::type_convert<OutT>(value); });
@@ -286,17 +285,17 @@ struct Tensor
         return ret;
     }
 
-    Tensor()              = delete;
-    Tensor(const Tensor&) = default;
-    Tensor(Tensor&&)      = default;
+    TensorView()                  = delete;
+    TensorView(const TensorView&) = default;
+    TensorView(TensorView&&)      = default;
 
-    ~Tensor() = default;
+    ~TensorView() = default;
 
-    Tensor& operator=(const Tensor&) = default;
-    Tensor& operator=(Tensor&&) = default;
+    TensorView& operator=(const TensorView&) = default;
+    TensorView& operator=(TensorView&&) = default;
 
     template <typename FromT>
-    explicit Tensor(const Tensor<FromT>& other) : Tensor(other.template CopyAsType<T>())
+    explicit TensorView(const TensorView<FromT>& other) : TensorView(other.template CopyAsType<T>())
     {
     }
 
@@ -486,3 +485,6 @@ struct Tensor
     Descriptor mDesc;
     Data mData;
 };
+
+template <typename T>
+using Tensor = TensorView<T, std::vector<T>>;
