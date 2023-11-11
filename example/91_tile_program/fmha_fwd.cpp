@@ -1,4 +1,5 @@
 #include <cstring>
+#include <cstdlib>
 #include <ostream>
 
 #include "ck/utility/common_header.hpp"
@@ -193,49 +194,47 @@ int main(int argc, char* argv[])
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
 
-    if(do_validation)
+    if(!do_validation)
     {
-        Tensor<QDataType> q_host_ref({batch * nhead, seqlen_q, hdim_q});
-        Tensor<KDataType> k_host_ref({batch * nhead, seqlen_k, hdim_q});
-        Tensor<VDataType> v_host_ref({batch * nhead, hdim_v, seqlen_k});
-        Tensor<ODataType> o_host_ref({batch * nhead, seqlen_q, hdim_v});
-        Tensor<ODataType> o_host_result_ref(get_lengths(o_perm, batch, nhead, seqlen_q, hdim_v));
-
-        Tensor<SMPLComputeDataType> s_host_ref({batch * nhead, seqlen_q, seqlen_k});
-        Tensor<PDataType> p_host_ref({batch * nhead, seqlen_q, seqlen_k});
-
-        // clang-format off
-        // permute
-        if(i_perm) q_host.ForEach([&](auto& self, auto idx) { q_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
-        else       q_host.ForEach([&](auto& self, auto idx) { q_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
-
-        if(i_perm) k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
-        else       k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
-
-        if(i_perm) v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
-        else       v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
-
-        // reference
-        reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
-            q_host_ref, k_host_ref, s_host_ref,
-            [](const QDataType& x) { return x; },
-            [](const KDataType& x) { return x; },
-            [&scale](const SaccDataType& x) { return scale * x; });
-        reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
-                                                                                       p_host_ref);
-        reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
-            p_host_ref, v_host_ref, o_host_ref);
-
-        // permute
-        if(o_perm) o_host_result_ref.ForEach([&](auto& self, auto idx) { self(idx) = o_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]); });
-        else       o_host_result_ref.ForEach([&](auto& self, auto idx) { self(idx) = o_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]); });
-        // clang-format on
-
-        o_buf.FromDevice(o_host.mData.data());
-        return !ck::utils::check_err(o_host, o_host_result_ref);
+        return EXIT_SUCCESS;
     }
-    else
-    {
-        return 0;
-    }
+
+    Tensor<QDataType> q_host_ref({batch * nhead, seqlen_q, hdim_q});
+    Tensor<KDataType> k_host_ref({batch * nhead, seqlen_k, hdim_q});
+    Tensor<VDataType> v_host_ref({batch * nhead, hdim_v, seqlen_k});
+    Tensor<ODataType> o_host_ref({batch * nhead, seqlen_q, hdim_v});
+    Tensor<ODataType> o_host_result_ref(get_lengths(o_perm, batch, nhead, seqlen_q, hdim_v));
+
+    Tensor<SMPLComputeDataType> s_host_ref({batch * nhead, seqlen_q, seqlen_k});
+    Tensor<PDataType> p_host_ref({batch * nhead, seqlen_q, seqlen_k});
+
+    // clang-format off
+    // permute
+    if(i_perm) q_host.ForEach([&](auto& self, auto idx) { q_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
+    else       q_host.ForEach([&](auto& self, auto idx) { q_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
+
+    if(i_perm) k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
+    else       k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
+
+    if(i_perm) v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
+    else       v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
+
+    // reference
+    reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
+        q_host_ref, k_host_ref, s_host_ref,
+        [](const QDataType& x) { return x; },
+        [](const KDataType& x) { return x; },
+        [&scale](const SaccDataType& x) { return scale * x; });
+    reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
+                                                                                p_host_ref);
+    reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
+        p_host_ref, v_host_ref, o_host_ref);
+
+    // permute
+    if(o_perm) o_host_result_ref.ForEach([&](auto& self, auto idx) { self(idx) = o_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]); });
+    else       o_host_result_ref.ForEach([&](auto& self, auto idx) { self(idx) = o_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]); });
+    // clang-format on
+
+    o_buf.FromDevice(o_host.mData.data());
+    return !ck::utils::check_err(o_host, o_host_result_ref);
 }
