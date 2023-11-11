@@ -234,6 +234,10 @@ struct BlockFmhaPipelineQRKSVS
                        k_lds_window);
             }
 
+            //add mask
+            
+            //end mask
+
             // STAGE 2, scale softmax
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
 
@@ -317,8 +321,8 @@ struct BlockFmhaPipelineQRKSVS
             // move K tile windows
             move_tile_window(k_dram_block_window, {kN0, 0});
 
-            i_total_loops++;
-        } while(i_total_loops < num_total_loop);
+            //i_total_loops++;
+        } while(++i_total_loops < num_total_loop);
 
         // finally, O
         constexpr auto o_spans = decltype(o_acc)::GetDistributedSpans();
