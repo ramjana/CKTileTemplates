@@ -23,6 +23,7 @@
 #include "ck/tile_program/tile/tile_fmha_shape.hpp"
 
 #include "reference_batched_gemm.hpp"
+#include "reference_batched_masking.hpp"
 #include "reference_batched_softmax.hpp"
 #include "fmha_fwd_kernel.hpp"
 #include "fmha_fwd_tile_partitioner.hpp"
@@ -46,7 +47,7 @@ using FmhaWarpTile   = ck::Sequence<32, 32, 16>;
 using FmhaShape      = ck::tile_program::
     TileFmhaShape<FmhaBlockTile, FmhaBlockWarps, FmhaWarpTile, FmhaBlockWarps, FmhaWarpTile>;
 
-using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
+using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromTopLeftPredicate;
 
 using FmhaTilePartitioner = FmhaFwdTilePartitioner<FmhaShape>;
 using FmhaPipelineProblem = ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
@@ -226,6 +227,9 @@ int main(int argc, char* argv[])
             [](const QDataType& x) { return x; },
             [](const KDataType& x) { return x; },
             [&scale](const SaccDataType& x) { return scale * x; });
+
+        reference_batched_masking(s_host_ref);
+
         reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
                                                                                        p_host_ref);
         reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
