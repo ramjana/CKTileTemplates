@@ -18,15 +18,21 @@ namespace utils {
 template <typename T>
 struct FillUniformDistribution
 {
-    float a_{-5.f};
-    float b_{5.f};
+    mutable std::mt19937 engine_;
+
+    float lower_bound_;
+    float upper_bound_;
+
+    FillUniformDistribution(float lower_bound = -5.f, float upper_bound = 5.f)
+        : engine_(11939), lower_bound_(lower_bound), upper_bound_(upper_bound)
+    {
+    }
 
     template <typename ForwardIter>
     void operator()(ForwardIter first, ForwardIter last) const
     {
-        std::mt19937 gen(11939);
-        std::uniform_real_distribution<float> dis(a_, b_);
-        std::generate(first, last, [&dis, &gen]() { return ck::type_convert<T>(dis(gen)); });
+        std::uniform_real_distribution<float> dis(lower_bound_, upper_bound_);
+        std::generate(first, last, [&dis, this]() { return ck::type_convert<T>(dis(engine_)); });
     }
 
     template <typename ForwardRange>
