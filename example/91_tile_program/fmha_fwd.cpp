@@ -126,10 +126,10 @@ int main(int argc, char* argv[])
     ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_host);
 #endif
 
-    DeviceMem q_buf(sizeof(QDataType) * q_host.GetElementSpaceSize());
-    DeviceMem k_buf(sizeof(KDataType) * k_host.GetElementSpaceSize());
-    DeviceMem v_buf(sizeof(VDataType) * v_host.GetElementSpaceSize());
-    DeviceMem o_buf(sizeof(ODataType) * o_host.GetElementSpaceSize());
+    DeviceMem q_buf(q_host.GetElementSpaceSizeInBytes());
+    DeviceMem k_buf(k_host.GetElementSpaceSizeInBytes());
+    DeviceMem v_buf(v_host.GetElementSpaceSizeInBytes());
+    DeviceMem o_buf(o_host.GetElementSpaceSizeInBytes());
 
     q_buf.ToDevice(q_host.mData.data());
     k_buf.ToDevice(k_host.mData.data());
