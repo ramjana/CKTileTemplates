@@ -23,8 +23,9 @@ struct FillUniformDistribution
     float lower_bound_;
     float upper_bound_;
 
-    FillUniformDistribution(float lower_bound = -5.f, float upper_bound = 5.f)
-        : engine_(11939), lower_bound_(lower_bound), upper_bound_(upper_bound)
+    explicit FillUniformDistribution(
+        float lower_bound = -5.f, float upper_bound = 5.f, unsigned seed = 11939)
+        : engine_(seed), lower_bound_(lower_bound), upper_bound_(upper_bound)
     {
     }
 
@@ -36,8 +37,8 @@ struct FillUniformDistribution
     }
 
     template <typename ForwardRange>
-    auto operator()(ForwardRange&& range) const
-        -> std::void_t<decltype(std::declval<const FillUniformDistribution&>()(
+    auto operator()(ForwardRange&& range)
+        const->std::void_t<decltype(std::declval<const FillUniformDistribution&>()(
             std::begin(std::forward<ForwardRange>(range)),
             std::end(std::forward<ForwardRange>(range))))>
     {
