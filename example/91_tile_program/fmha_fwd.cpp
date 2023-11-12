@@ -109,6 +109,21 @@ struct Options
     }
 };
 
+template <ck::index_t Dim>
+using TensorShape = std::array<ck::index_t, Dim>;
+
+TensorShape<4> get_shape(bool permute,
+                         ck::index_t b /*batch*/,
+                         ck::index_t h /*nhead*/,
+                         ck::index_t s /*seqlen*/,
+                         ck::index_t d /*hdim*/)
+{
+    if(permute)
+        return TensorShape<4>{b, h, s, d};
+    else
+        return TensorShape<4>{b, s, h, d};
+}
+
 int main(int argc, char* argv[])
 {
     Options options;
@@ -118,26 +133,20 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    auto get_lengths = [&](bool permute,
-                           ck::index_t b /*batch*/,
-                           ck::index_t h /*nhead*/,
-                           ck::index_t s /*seqlen*/,
-                           ck::index_t d /*hdim*/) {
-        if(permute)
-            return std::array<ck::index_t, 4>{b, h, s, d};
-        else
-            return std::array<ck::index_t, 4>{b, s, h, d};
-    };
+    const auto q_shape =
+        get_shape(options.i_perm, options.batch, options.nhead, options.seqlen_q, options.hdim_q);
+    const auto k_shape =
+        get_shape(options.i_perm, options.batch, options.nhead, options.seqlen_k, options.hdim_q);
+    const auto v_shape =
+        get_shape(options.i_perm, options.batch, options.nhead, options.hdim_v, options.seqlen_k);
+    const auto o_shape =
+        get_shape(options.o_perm, options.batch, options.nhead, options.seqlen_q, options.hdim_v);
 
     // host verify
-    Tensor<QDataType> q_host(get_lengths(
-        options.i_perm, options.batch, options.nhead, options.seqlen_q, options.hdim_q));
-    Tensor<KDataType> k_host(get_lengths(
-        options.i_perm, options.batch, options.nhead, options.seqlen_k, options.hdim_q));
-    Tensor<VDataType> v_host(get_lengths(
-        options.i_perm, options.batch, options.nhead, options.hdim_v, options.seqlen_k));
-    Tensor<ODataType> o_host(get_lengths(
-        options.o_perm, options.batch, options.nhead, options.seqlen_q, options.hdim_v));
+    Tensor<QDataType> q_host(q_shape);
+    Tensor<KDataType> k_host(k_shape);
+    Tensor<VDataType> v_host(v_shape);
+    Tensor<ODataType> o_host(o_shape);
 
 #if 0
     ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
