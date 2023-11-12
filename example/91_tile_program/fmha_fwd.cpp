@@ -107,6 +107,10 @@ struct Options
 
         return true;
     }
+
+    bool is_batch_mode() const noexcept { return 1 < batch; }
+
+    ck::index_t problem_count() const noexcept { return batch * nhead; }
 };
 
 template <std::size_t Dim>
