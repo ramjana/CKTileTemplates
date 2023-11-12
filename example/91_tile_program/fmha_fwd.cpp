@@ -262,13 +262,13 @@ int main(int argc, char* argv[])
             // clang-format off
             // permute
             if(options.i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, h, idx[0], idx[1]); });
-            else       q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[1], h, idx[1]); });
+            else               q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[0], h, idx[1]); });
 
             if(options.i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, h, idx[0], idx[1]); });
-            else       k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], h, idx[1]); });
+            else               k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], h, idx[1]); });
 
             if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, h, idx[0], idx[1]); });
-            else       v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], h, idx[1]); });
+            else               v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], h, idx[1]); });
 
             // reference
             reference_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
@@ -283,7 +283,7 @@ int main(int argc, char* argv[])
             Tensor<ODataType> o_host_per_head({options.seqlen_q, options.hdim_v});
             // permute
             if(options.o_perm) o_host_per_head.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, h, idx[0], idx[1]); });
-            else       o_host_per_head.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], h, idx[1]); });
+            else               o_host_per_head.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], h, idx[1]); });
             // clang-format on
 
             if(!ck::utils::check_err(o_host_per_head, o_host_ref))
