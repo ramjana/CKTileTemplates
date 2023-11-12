@@ -209,21 +209,20 @@ int main(int argc, char* argv[])
             Tensor<KDataType> k_host_ref({seqlen_k, hdim_q});
             Tensor<VDataType> v_host_ref({hdim_v, seqlen_k});
             Tensor<ODataType> o_host_ref({seqlen_q, hdim_v});
-            Tensor<ODataType> o_host_per_head({seqlen_q, hdim_v});
 
             Tensor<SMPLComputeDataType> s_host_ref({seqlen_q, seqlen_k});
             Tensor<PDataType> p_host_ref({seqlen_q, seqlen_k});
 
             // clang-format off
             // permute
-            if(i_perm) q_host.ForEach([&](auto& self, auto idx) { q_host_ref(idx[2], idx[3]) = self(b, h, idx[2], idx[3]); });
-            else       q_host.ForEach([&](auto& self, auto idx) { q_host_ref(idx[1], idx[3]) = self(b, idx[1], h, idx[3]); });
+            if(i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, h, idx[0], idx[1]); });
+            else       q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[1], h, idx[1]); });
 
-            if(i_perm) k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[2], idx[3]) = self(b, h, idx[2], idx[3]); });
-            else       k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[1], idx[3]) = self(b, idx[1], h, idx[3]); });
+            if(i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, h, idx[0], idx[1]); });
+            else       k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], h, idx[1]); });
 
-            if(i_perm) v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[2], idx[3]) = self(b, h, idx[2], idx[3]); });
-            else       v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[1], idx[3]) = self(b, idx[1], h, idx[3]); });
+            if(i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, h, idx[0], idx[1]); });
+            else       v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], h, idx[1]); });
 
             // reference
             reference_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
@@ -235,6 +234,7 @@ int main(int argc, char* argv[])
             reference_gemm<PDataType, VDataType, OaccDataType, ODataType>(
                 p_host_ref, v_host_ref, o_host_ref);
 
+            Tensor<ODataType> o_host_per_head({seqlen_q, hdim_v});
             // permute
             if(o_perm) o_host_per_head.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, h, idx[0], idx[1]); });
             else       o_host_per_head.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], h, idx[1]); });
