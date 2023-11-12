@@ -1,5 +1,6 @@
 #include <cstring>
 #include <cstdlib>
+#include <iomanip>
 #include <ostream>
 
 #include "ck/utility/common_header.hpp"
@@ -161,12 +162,12 @@ int main(int argc, char* argv[])
         FmhaKernel::GridSize(options.batch, options.nhead, options.seqlen_q, options.hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
-    std::cout << "batch:" << options.batch << ", nhead:" << options.nhead
-              << ", seqlen_q:" << options.seqlen_q << ", seqlen_k:" << options.seqlen_k
-              << ", hdim_q:" << options.hdim_q << ", hdim_v:" << options.hdim_v
-              << ", scale:" << options.scale << ", i_perm:" << options.i_perm
-              << ", o_perm:" << options.o_perm << ", grid_size " << kGridSize.x << "x"
-              << kGridSize.y << "x" << kGridSize.z << std::endl;
+    std::cout << "batch: " << options.batch << ", nhead: " << options.nhead
+              << ", seqlen_q: " << options.seqlen_q << ", seqlen_k: " << options.seqlen_k
+              << ", hdim_q: " << options.hdim_q << ", hdim_v: " << options.hdim_v
+              << ", scale: " << options.scale << ", i_perm: " << std::boolalpha << options.i_perm
+              << ", o_perm: " << std::boolalpha << options.o_perm << ", grid_size: " << kGridSize.x
+              << "x" << kGridSize.y << "x" << kGridSize.z << std::endl;
 
     constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
     constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
