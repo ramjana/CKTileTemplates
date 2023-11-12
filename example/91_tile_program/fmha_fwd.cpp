@@ -109,7 +109,7 @@ struct Options
     }
 };
 
-template <ck::index_t Dim>
+template <std::size_t Dim>
 using TensorShape = std::array<ck::index_t, Dim>;
 
 TensorShape<4> get_shape(bool permute,
@@ -122,6 +122,15 @@ TensorShape<4> get_shape(bool permute,
         return TensorShape<4>{b, h, s, d};
     else
         return TensorShape<4>{b, s, h, d};
+}
+
+template <std::size_t Dim>
+ck::index_t get_stride(const TensorShape<Dim>& shape, ck::index_t axis)
+{
+    return std::accumulate(std::rbegin(shape),
+                           std::next(std::rbegin(shape), Dim - axis - 1),
+                           static_cast<ck::index_t>(1),
+                           std::multiplies<ck::index_t>{});
 }
 
 int main(int argc, char* argv[])
