@@ -191,29 +191,30 @@ int main(int argc, char* argv[])
     constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
     constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
 
-    // batch * nhead * seqlen * hdim or batch * seqlen * nhead * hdim
-    auto kargs = FmhaKernel::MakeKargs(
-        q_buf.GetDeviceBuffer(),
-        k_buf.GetDeviceBuffer(),
-        v_buf.GetDeviceBuffer(),
-        o_buf.GetDeviceBuffer(),
-        options.seqlen_q, // seqlen_q
-        options.seqlen_k, // seqlen_k
-        options.hdim_q,   // hdim_q
-        options.hdim_v,   // hdim_v
-        options.scale,
-        options.i_perm ? options.hdim_q : options.nhead * options.hdim_q,      // stride_q
-        options.i_perm ? options.hdim_q : options.nhead * options.hdim_q,      // stride_k
-        options.i_perm ? options.seqlen_k : options.nhead * options.seqlen_k,  // stride_v
-        options.o_perm ? options.hdim_v : options.nhead * options.hdim_v,      // stride_o
-        options.i_perm ? options.seqlen_q * options.hdim_q : options.hdim_q,   // nhead_stride_q
-        options.i_perm ? options.seqlen_k * options.hdim_q : options.hdim_q,   // nhead_stride_k
-        options.i_perm ? options.hdim_v * options.seqlen_k : options.seqlen_k, // nhead_stride_v
-        options.o_perm ? options.seqlen_q * options.hdim_v : options.hdim_v,   // nhead_stride_o
-        options.nhead * options.seqlen_q * options.hdim_q,                     // batch_stride_q
-        options.nhead * options.seqlen_k * options.hdim_q,                     // batch_stride_k
-        options.nhead * options.hdim_v * options.seqlen_k,                     // batch_stride_v
-        options.nhead * options.seqlen_q * options.hdim_v);                    // batch_stride_o
+    // if value of i_perm/o_perm is true, the tensor shape is [batch, nhead, seqlen, hdim];
+    // otherwise, shape is [batch, seqlen, nhead, hdim]. which means we are choosing
+    // stride/nhead_stride base on the axis of seqlen/nhead (axis=1 or axis=2)
+    auto kargs = FmhaKernel::MakeKargs(q_buf.GetDeviceBuffer(),
+                                       k_buf.GetDeviceBuffer(),
+                                       v_buf.GetDeviceBuffer(),
+                                       o_buf.GetDeviceBuffer(),
+                                       options.seqlen_q, // seqlen_q
+                                       options.seqlen_k, // seqlen_k
+                                       options.hdim_q,   // hdim_q
+                                       options.hdim_v,   // hdim_v
+                                       options.scale,
+                                       get_stride(q_shape, 1 + options.i_perm),  // stride_q
+                                       get_stride(k_shape, 1 + options.i_perm),  // stride_k
+                                       get_stride(v_shape, 1 + options.i_perm),  // stride_v
+                                       get_stride(o_shape, 1 + options.o_perm),  // stride_o
+                                       get_stride(q_shape, 1 + !options.i_perm), // nhead_stride_q
+                                       get_stride(k_shape, 1 + !options.i_perm), // nhead_stride_k
+                                       get_stride(v_shape, 1 + !options.i_perm), // nhead_stride_v
+                                       get_stride(o_shape, 1 + !options.o_perm), // nhead_stride_o
+                                       get_stride(q_shape, 0),                   // batch_stride_q
+                                       get_stride(k_shape, 0),                   // batch_stride_k
+                                       get_stride(v_shape, 0),                   // batch_stride_v
+                                       get_stride(o_shape, 0));                  // batch_stride_o
 
     float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
                                                               FmhaKernel{},
