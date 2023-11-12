@@ -63,9 +63,9 @@ using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipeli
 using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
 using FmhaKernel   = FmhaFwdKernel<FmhaTilePartitioner, FmhaPipeline, FmhaEpilogue>;
 
-int main(int argc, char* argv[])
+struct Options
 {
-    int do_validation    = 1;
+    bool do_validation   = true;
     ck::index_t batch    = 2;
     ck::index_t nhead    = 8;
     ck::index_t seqlen_q = 3328;
@@ -75,30 +75,47 @@ int main(int argc, char* argv[])
 
     float scale = .0f;
 
-    bool i_perm = true; // if true, will be batch * nhead * seqlen * hdim
-    bool o_perm = true; // if false, will be batch * seqlen * nhead * hdim
+    // for following flag values, if their value is true, the shape input/output tensor will be
+    // [batch, nhead, seqlen, hdim]; otherwise: [batch, seqlen, nhead, hdim]
+    bool i_perm = true;
+    bool o_perm = true;
 
-    if(argc >= 2)
-        do_validation = std::stoi(argv[1]);
-
-    if(argc >= 8)
+    bool parse(int argc, char* argv[])
     {
-        batch    = std::stoi(argv[2]);
-        nhead    = std::stoi(argv[3]);
-        seqlen_q = std::stoi(argv[4]);
-        seqlen_k = std::stoi(argv[5]);
-        hdim_q   = std::stoi(argv[6]);
-        hdim_v   = std::stoi(argv[7]);
-    }
-    if(argc >= 9)
-        scale = std::stof(argv[8]);
-    if(argc >= 10)
-        i_perm = static_cast<bool>(std::stoi(argv[9]));
-    if(argc >= 11)
-        o_perm = static_cast<bool>(std::stoi(argv[10]));
+        if(argc >= 2)
+            do_validation = static_cast<bool>(std::stoi(argv[1]));
 
-    if(scale == .0f)
-        scale = 1.0 / ck::math::sqrt(static_cast<float>(hdim_q)); // TODO: q ? v ?
+        if(argc >= 8)
+        {
+            batch    = std::stoi(argv[2]);
+            nhead    = std::stoi(argv[3]);
+            seqlen_q = std::stoi(argv[4]);
+            seqlen_k = std::stoi(argv[5]);
+            hdim_q   = std::stoi(argv[6]);
+            hdim_v   = std::stoi(argv[7]);
+        }
+        if(argc >= 9)
+            scale = std::stof(argv[8]);
+        if(argc >= 10)
+            i_perm = static_cast<bool>(std::stoi(argv[9]));
+        if(argc >= 11)
+            o_perm = static_cast<bool>(std::stoi(argv[10]));
+
+        if(scale == .0f)
+            scale = 1.0 / ck::math::sqrt(static_cast<float>(hdim_q)); // TODO: q ? v ?
+
+        return true;
+    }
+};
+
+int main(int argc, char* argv[])
+{
+    Options options;
+    if(!options.parse(argc, argv))
+    {
+        std::cerr << "failed to parse command line arguments" << std::endl;
+        return EXIT_FAILURE;
+    }
 
     auto get_lengths = [&](bool permute,
                            ck::index_t b /*batch*/,
@@ -112,10 +129,14 @@ int main(int argc, char* argv[])
     };
 
     // host verify
-    Tensor<QDataType> q_host(get_lengths(i_perm, batch, nhead, seqlen_q, hdim_q));
-    Tensor<KDataType> k_host(get_lengths(i_perm, batch, nhead, seqlen_k, hdim_q));
-    Tensor<VDataType> v_host(get_lengths(i_perm, batch, nhead, hdim_v, seqlen_k));
-    Tensor<ODataType> o_host(get_lengths(o_perm, batch, nhead, seqlen_q, hdim_v));
+    Tensor<QDataType> q_host(get_lengths(
+        options.i_perm, options.batch, options.nhead, options.seqlen_q, options.hdim_q));
+    Tensor<KDataType> k_host(get_lengths(
+        options.i_perm, options.batch, options.nhead, options.seqlen_k, options.hdim_q));
+    Tensor<VDataType> v_host(get_lengths(
+        options.i_perm, options.batch, options.nhead, options.hdim_v, options.seqlen_k));
+    Tensor<ODataType> o_host(get_lengths(
+        options.o_perm, options.batch, options.nhead, options.seqlen_q, options.hdim_v));
 
 #if 0
     ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
@@ -136,41 +157,44 @@ int main(int argc, char* argv[])
     k_buf.ToDevice(k_host.mData.data());
     v_buf.ToDevice(v_host.mData.data());
 
-    dim3 kGridSize            = FmhaKernel::GridSize(batch, nhead, seqlen_q, hdim_v);
+    dim3 kGridSize =
+        FmhaKernel::GridSize(options.batch, options.nhead, options.seqlen_q, options.hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
-    std::cout << "batch:" << batch << ", nhead:" << nhead << ", seqlen_q:" << seqlen_q
-              << ", seqlen_k:" << seqlen_k << ", hdim_q:" << hdim_q << ", hdim_v:" << hdim_v
-              << ", scale:" << scale << ", i_perm:" << i_perm << ", o_perm:" << o_perm
-              << ", grid_size " << kGridSize.x << "x" << kGridSize.y << "x" << kGridSize.z
-              << std::flush << std::endl;
+    std::cout << "batch:" << options.batch << ", nhead:" << options.nhead
+              << ", seqlen_q:" << options.seqlen_q << ", seqlen_k:" << options.seqlen_k
+              << ", hdim_q:" << options.hdim_q << ", hdim_v:" << options.hdim_v
+              << ", scale:" << options.scale << ", i_perm:" << options.i_perm
+              << ", o_perm:" << options.o_perm << ", grid_size " << kGridSize.x << "x"
+              << kGridSize.y << "x" << kGridSize.z << std::endl;
 
     constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
     constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
     constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
 
     // batch * nhead * seqlen * hdim or batch * seqlen * nhead * hdim
-    auto kargs = FmhaKernel::MakeKargs(q_buf.GetDeviceBuffer(),
-                                       k_buf.GetDeviceBuffer(),
-                                       v_buf.GetDeviceBuffer(),
-                                       o_buf.GetDeviceBuffer(),
-                                       seqlen_q, // seqlen_q
-                                       seqlen_k, // seqlen_k
-                                       hdim_q,   // hdim_q
-                                       hdim_v,   // hdim_v
-                                       scale,
-                                       i_perm ? hdim_q : nhead * hdim_q,      // stride_q
-                                       i_perm ? hdim_q : nhead * hdim_q,      // stride_k
-                                       i_perm ? seqlen_k : nhead * seqlen_k,  // stride_v
-                                       o_perm ? hdim_v : nhead * hdim_v,      // stride_o
-                                       i_perm ? seqlen_q * hdim_q : hdim_q,   // nhead_stride_q
-                                       i_perm ? seqlen_k * hdim_q : hdim_q,   // nhead_stride_k
-                                       i_perm ? hdim_v * seqlen_k : seqlen_k, // nhead_stride_v
-                                       o_perm ? seqlen_q * hdim_v : hdim_v,   // nhead_stride_o
-                                       nhead * seqlen_q * hdim_q,             // batch_stride_q
-                                       nhead * seqlen_k * hdim_q,             // batch_stride_k
-                                       nhead * hdim_v * seqlen_k,             // batch_stride_v
-                                       nhead * seqlen_q * hdim_v);            // batch_stride_o
+    auto kargs = FmhaKernel::MakeKargs(
+        q_buf.GetDeviceBuffer(),
+        k_buf.GetDeviceBuffer(),
+        v_buf.GetDeviceBuffer(),
+        o_buf.GetDeviceBuffer(),
+        options.seqlen_q, // seqlen_q
+        options.seqlen_k, // seqlen_k
+        options.hdim_q,   // hdim_q
+        options.hdim_v,   // hdim_v
+        options.scale,
+        options.i_perm ? options.hdim_q : options.nhead * options.hdim_q,      // stride_q
+        options.i_perm ? options.hdim_q : options.nhead * options.hdim_q,      // stride_k
+        options.i_perm ? options.seqlen_k : options.nhead * options.seqlen_k,  // stride_v
+        options.o_perm ? options.hdim_v : options.nhead * options.hdim_v,      // stride_o
+        options.i_perm ? options.seqlen_q * options.hdim_q : options.hdim_q,   // nhead_stride_q
+        options.i_perm ? options.seqlen_k * options.hdim_q : options.hdim_q,   // nhead_stride_k
+        options.i_perm ? options.hdim_v * options.seqlen_k : options.seqlen_k, // nhead_stride_v
+        options.o_perm ? options.seqlen_q * options.hdim_v : options.hdim_v,   // nhead_stride_o
+        options.nhead * options.seqlen_q * options.hdim_q,                     // batch_stride_q
+        options.nhead * options.seqlen_k * options.hdim_q,                     // batch_stride_k
+        options.nhead * options.hdim_v * options.seqlen_k,                     // batch_stride_v
+        options.nhead * options.seqlen_q * options.hdim_v);                    // batch_stride_o
 
     float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
                                                               FmhaKernel{},
@@ -179,13 +203,16 @@ int main(int argc, char* argv[])
                                                               0,
                                                               kargs); // BatchStrideO
 
-    std::size_t flop = std::size_t(2) * batch * nhead * seqlen_q * seqlen_k * hdim_q +
-                       std::size_t(2) * batch * nhead * seqlen_q * hdim_v * seqlen_k;
+    std::size_t flop = std::size_t(2) * options.batch * options.nhead * options.seqlen_q *
+                           options.seqlen_k * options.hdim_q +
+                       std::size_t(2) * options.batch * options.nhead * options.seqlen_q *
+                           options.hdim_v * options.seqlen_k;
 
-    std::size_t num_btype = sizeof(QDataType) * batch * nhead * seqlen_q * hdim_q +
-                            sizeof(KDataType) * batch * nhead * seqlen_k * hdim_q +
-                            sizeof(VDataType) * batch * nhead * hdim_v * seqlen_k +
-                            sizeof(ODataType) * batch * nhead * seqlen_q * hdim_v;
+    std::size_t num_btype =
+        sizeof(QDataType) * options.batch * options.nhead * options.seqlen_q * options.hdim_q +
+        sizeof(KDataType) * options.batch * options.nhead * options.seqlen_k * options.hdim_q +
+        sizeof(VDataType) * options.batch * options.nhead * options.hdim_v * options.seqlen_k +
+        sizeof(ODataType) * options.batch * options.nhead * options.seqlen_q * options.hdim_v;
 
     float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
 
@@ -194,49 +221,49 @@ int main(int argc, char* argv[])
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
 
-    if(!do_validation)
+    if(!options.do_validation)
     {
         return EXIT_SUCCESS;
     }
 
     o_buf.FromDevice(o_host.mData.data());
 
-    for(ck::index_t b = 0; b < batch; ++b)
+    for(ck::index_t b = 0; b < options.batch; ++b)
     {
-        for(ck::index_t h = 0; h < nhead; ++h)
+        for(ck::index_t h = 0; h < options.nhead; ++h)
         {
-            Tensor<QDataType> q_host_ref({seqlen_q, hdim_q});
-            Tensor<KDataType> k_host_ref({seqlen_k, hdim_q});
-            Tensor<VDataType> v_host_ref({hdim_v, seqlen_k});
-            Tensor<ODataType> o_host_ref({seqlen_q, hdim_v});
+            Tensor<QDataType> q_host_ref({options.seqlen_q, options.hdim_q});
+            Tensor<KDataType> k_host_ref({options.seqlen_k, options.hdim_q});
+            Tensor<VDataType> v_host_ref({options.hdim_v, options.seqlen_k});
+            Tensor<ODataType> o_host_ref({options.seqlen_q, options.hdim_v});
 
-            Tensor<SMPLComputeDataType> s_host_ref({seqlen_q, seqlen_k});
-            Tensor<PDataType> p_host_ref({seqlen_q, seqlen_k});
+            Tensor<SMPLComputeDataType> s_host_ref({options.seqlen_q, options.seqlen_k});
+            Tensor<PDataType> p_host_ref({options.seqlen_q, options.seqlen_k});
 
             // clang-format off
             // permute
-            if(i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, h, idx[0], idx[1]); });
+            if(options.i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, h, idx[0], idx[1]); });
             else       q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[1], h, idx[1]); });
 
-            if(i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, h, idx[0], idx[1]); });
+            if(options.i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, h, idx[0], idx[1]); });
             else       k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], h, idx[1]); });
 
-            if(i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, h, idx[0], idx[1]); });
+            if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, h, idx[0], idx[1]); });
             else       v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], h, idx[1]); });
 
             // reference
             reference_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
                 q_host_ref, k_host_ref, s_host_ref,
                 ck::identity{}, ck::identity{},
-                [&scale](const SaccDataType& x) { return scale * x; });
+                [scale=options.scale](const SaccDataType& x) { return scale * x; });
             reference_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
                                                                                    p_host_ref);
             reference_gemm<PDataType, VDataType, OaccDataType, ODataType>(
                 p_host_ref, v_host_ref, o_host_ref);
 
-            Tensor<ODataType> o_host_per_head({seqlen_q, hdim_v});
+            Tensor<ODataType> o_host_per_head({options.seqlen_q, options.hdim_v});
             // permute
-            if(o_perm) o_host_per_head.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, h, idx[0], idx[1]); });
+            if(options.o_perm) o_host_per_head.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, h, idx[0], idx[1]); });
             else       o_host_per_head.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], h, idx[1]); });
             // clang-format on
 
