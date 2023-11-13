@@ -108,8 +108,6 @@ struct Options
         return true;
     }
 
-    bool is_batch_mode() const noexcept { return 1 < batch; }
-
     ck::index_t problem_count() const noexcept { return batch * nhead; }
 };
 
@@ -155,11 +153,53 @@ int main(int argc, char* argv[])
     const auto o_shape =
         get_shape(options.o_perm, options.batch, options.nhead, options.seqlen_q, options.hdim_v);
 
+    int64_t num_elem_q = 0;
+    int64_t num_elem_k = 0;
+    int64_t num_elem_v = 0;
+    int64_t num_elem_o = 0;
+
+    std::vector<ck::index_t> seqstart_q_host;
+    std::vector<ck::index_t> seqstart_k_host;
+
+    {
+        ck::index_t next_seqstart_q = 0;
+        ck::index_t next_seqstart_k = 0;
+
+        seqstart_q_host.push_back(next_seqstart_q);
+        seqstart_k_host.push_back(next_seqstart_k);
+
+        for(ck::index_t b = 0; b < options.batch; ++b)
+        {
+            for(ck::index_t h = 0; h < options.nhead; ++h)
+            {
+                /// TODO: randomize value in grouped mode
+                ck::index_t real_seqlen_q = options.seqlen_q;
+                ck::index_t real_seqlen_k = options.seqlen_k;
+
+                num_elem_q += real_seqlen_q * options.hdim_q;
+                num_elem_k += real_seqlen_k * options.hdim_q;
+                num_elem_v += options.hdim_v * real_seqlen_k;
+                num_elem_o += real_seqlen_q * options.hdim_v;
+
+                next_seqstart_q += real_seqlen_q;
+                next_seqstart_k += real_seqlen_k;
+
+                seqstart_q_host.push_back(next_seqstart_q);
+                seqstart_k_host.push_back(next_seqstart_k);
+            }
+        }
+    }
+
+    std::vector<QDataType> q_block(num_elem_q);
+    std::vector<KDataType> k_block(num_elem_k);
+    std::vector<VDataType> v_block(num_elem_v);
+    std::vector<ODataType> o_block(num_elem_o);
+
     // host verify
-    Tensor<QDataType> q_host(q_shape);
-    Tensor<KDataType> k_host(k_shape);
-    Tensor<VDataType> v_host(v_shape);
-    Tensor<ODataType> o_host(o_shape);
+    TensorView<QDataType> q_host(q_block.data(), q_shape);
+    TensorView<KDataType> k_host(k_block.data(), k_shape);
+    TensorView<VDataType> v_host(v_block.data(), v_shape);
+    TensorView<ODataType> o_host(o_block.data(), o_shape);
 
 #if 0
     ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
