@@ -63,6 +63,7 @@ struct FmhaFwdKernel
         const ck::index_t* seqlen_k_ptr   = nullptr;
     };
 
+    // initialize kernel arguments for batch mode
     __host__ static constexpr Kargs MakeKargs(const void* q_ptr,
                                               const void* k_ptr,
                                               const void* v_ptr,
@@ -117,6 +118,7 @@ struct FmhaFwdKernel
         return kargs;
     }
 
+    // initialize kernel arguments for group mode
     __host__ static constexpr Kargs MakeKargs(const void* q_ptr,
                                               const void* k_ptr,
                                               const void* v_ptr,
