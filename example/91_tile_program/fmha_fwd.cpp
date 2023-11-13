@@ -137,6 +137,21 @@ struct Options
 template <std::size_t Dim>
 using TensorShape = std::array<ck::index_t, Dim>;
 
+template <std::size_t Dim>
+std::ostream& operator<<(std::ostream& stream, const TensorShape<Dim>& shape)
+{
+    stream << "[";
+    if(!shape.empty())
+    {
+        stream << shape[0];
+        for(std::size_t idx = 1; idx < shape.size(); ++idx)
+        {
+            stream << ", " << shape[idx];
+        }
+    }
+    return stream << "]";
+}
+
 TensorShape<4> get_shape(bool permute,
                          ck::index_t b /*batch*/,
                          ck::index_t h /*nhead*/,
