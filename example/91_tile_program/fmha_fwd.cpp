@@ -215,10 +215,14 @@ int main(int argc, char* argv[])
     DeviceMem k_buf(k_host.GetElementSpaceSizeInBytes());
     DeviceMem v_buf(v_host.GetElementSpaceSizeInBytes());
     DeviceMem o_buf(o_host.GetElementSpaceSizeInBytes());
+    DeviceMem seqstart_q(seqstart_q_host.size() * sizeof(ck::index_t));
+    DeviceMem seqstart_k(seqstart_k_host.size() * sizeof(ck::index_t));
 
     q_buf.ToDevice(q_host.mData.data());
     k_buf.ToDevice(k_host.mData.data());
     v_buf.ToDevice(v_host.mData.data());
+    seqstart_q.ToDevice(seqstart_q_host.data());
+    seqstart_k.ToDevice(seqstart_k_host.data());
 
     dim3 kGridSize =
         FmhaKernel::GridSize(options.batch, options.nhead, options.seqlen_q, options.hdim_v);
@@ -238,6 +242,7 @@ int main(int argc, char* argv[])
     // if value of i_perm/o_perm is true, the tensor shape is [batch, nhead, seqlen, hdim];
     // otherwise, shape is [batch, seqlen, nhead, hdim]. which means we are choosing
     // stride/nhead_stride base on the axis of seqlen/nhead (axis=1 or axis=2)
+#if 0
     auto kargs = FmhaKernel::MakeKargs(q_buf.GetDeviceBuffer(),
                                        k_buf.GetDeviceBuffer(),
                                        v_buf.GetDeviceBuffer(),
@@ -259,7 +264,27 @@ int main(int argc, char* argv[])
                                        get_stride(k_shape, 0),                   // batch_stride_k
                                        get_stride(v_shape, 0),                   // batch_stride_v
                                        get_stride(o_shape, 0));                  // batch_stride_o
-
+#else
+    auto kargs = FmhaKernel::MakeKargs(q_buf.GetDeviceBuffer(),
+                                       k_buf.GetDeviceBuffer(),
+                                       v_buf.GetDeviceBuffer(),
+                                       o_buf.GetDeviceBuffer(),
+                                       seqstart_q.GetDeviceBuffer(),
+                                       seqstart_k.GetDeviceBuffer(),
+                                       nullptr,
+                                       options.seqlen_q, // seqlen_q
+                                       options.hdim_q,   // hdim_q
+                                       options.hdim_v,   // hdim_v
+                                       options.scale,
+                                       get_stride(q_shape, 1 + options.i_perm),   // stride_q
+                                       get_stride(k_shape, 1 + options.i_perm),   // stride_k
+                                       get_stride(v_shape, 1 + options.i_perm),   // stride_v
+                                       get_stride(o_shape, 1 + options.o_perm),   // stride_o
+                                       get_stride(q_shape, 1 + !options.i_perm),  // nhead_stride_q
+                                       get_stride(k_shape, 1 + !options.i_perm),  // nhead_stride_k
+                                       get_stride(v_shape, 1 + !options.i_perm),  // nhead_stride_v
+                                       get_stride(o_shape, 1 + !options.o_perm)); // nhead_stride_o
+#endif
     float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
                                                               FmhaKernel{},
                                                               kGridSize,
