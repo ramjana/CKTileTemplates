@@ -430,8 +430,8 @@ int main(int argc, char* argv[])
         }
         else
         { // options.mode == Mode::Group
-            const ck::index_t q_start = seqstart_q_host[b];
-            const ck::index_t k_start = seqstart_k_host[b];
+            const ck::index_t query_start = seqstart_q_host[b];
+            const ck::index_t key_start   = seqstart_k_host[b];
 
             Tensor<QDataType> q_host_ref({options.nhead, real_seqlen_q, options.hdim_q});
             Tensor<KDataType> k_host_ref({options.nhead, real_seqlen_k, options.hdim_q});
@@ -443,9 +443,9 @@ int main(int argc, char* argv[])
 
             // clang-format off
             // permute
-            q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(0, idx[1] + q_start, idx[0], idx[2]); });
-            k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(0, idx[1] + k_start, idx[0], idx[2]); });
-            v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(0, idx[1], idx[0], idx[2] + k_start); });
+            q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(0, idx[1] + query_start, idx[0], idx[2]); });
+            k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(0, idx[1] + key_start, idx[0], idx[2]); });
+            v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(0, idx[1], idx[0], idx[2] + key_start); });
 
             // reference
             reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
@@ -459,7 +459,7 @@ int main(int argc, char* argv[])
 
             Tensor<ODataType> o_host_result({options.nhead, real_seqlen_q, options.hdim_v});
             // permute
-            o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(0, idx[1] + q_start, idx[0], idx[2]); });
+            o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(0, idx[1] + query_start, idx[0], idx[2]); });
             // clang-format on
 
             if(!ck::utils::check_err(o_host_result, o_host_ref))
