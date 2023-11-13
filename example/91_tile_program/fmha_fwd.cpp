@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstring>
 #include <cstdlib>
 #include <iomanip>
@@ -64,9 +65,16 @@ using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipeli
 using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
 using FmhaKernel   = FmhaFwdKernel<FmhaTilePartitioner, FmhaPipeline, FmhaEpilogue>;
 
+enum class Mode : unsigned
+{
+    Batch,
+    Group
+};
+
 struct Options
 {
     bool do_validation   = true;
+    Mode mode            = Mode::Batch;
     ck::index_t batch    = 2;
     ck::index_t nhead    = 8;
     ck::index_t seqlen_q = 3328;
@@ -85,30 +93,36 @@ struct Options
     {
         if(argc >= 2)
             do_validation = static_cast<bool>(std::stoi(argv[1]));
+        if(argc >= 3)
+            mode = static_cast<Mode>(std::min(1ul, std::max(0ul, std::stoul(argv[2]))));
 
-        if(argc >= 8)
-        {
-            batch    = std::stoi(argv[2]);
-            nhead    = std::stoi(argv[3]);
-            seqlen_q = std::stoi(argv[4]);
-            seqlen_k = std::stoi(argv[5]);
-            hdim_q   = std::stoi(argv[6]);
-            hdim_v   = std::stoi(argv[7]);
-        }
         if(argc >= 9)
-            scale = std::stof(argv[8]);
+        {
+            batch    = std::stoi(argv[3]);
+            nhead    = std::stoi(argv[4]);
+            seqlen_q = std::stoi(argv[5]);
+            seqlen_k = std::stoi(argv[6]);
+            hdim_q   = std::stoi(argv[7]);
+            hdim_v   = std::stoi(argv[8]);
+        }
         if(argc >= 10)
-            i_perm = static_cast<bool>(std::stoi(argv[9]));
+            scale = std::stof(argv[9]);
         if(argc >= 11)
-            o_perm = static_cast<bool>(std::stoi(argv[10]));
+            i_perm = static_cast<bool>(std::stoi(argv[10]));
+        if(argc >= 12)
+            o_perm = static_cast<bool>(std::stoi(argv[11]));
 
         if(scale == .0f)
             scale = 1.0 / ck::math::sqrt(static_cast<float>(hdim_q)); // TODO: q ? v ?
 
+        // group mode is only available if i_perm=false & o_perm=false
+        if(mode == Mode::Group && !(!i_perm && !o_perm))
+        {
+            mode = Mode::Batch;
+        }
+
         return true;
     }
-
-    bool is_batch_mode() const noexcept { return 1 < batch; }
 };
 
 template <std::size_t Dim>
@@ -254,7 +268,7 @@ int main(int argc, char* argv[])
         const ck::index_t nhead_stride_v = get_stride(v_shape, 1 + !options.i_perm);
         const ck::index_t nhead_stride_o = get_stride(o_shape, 1 + !options.o_perm);
 
-        if(options.is_batch_mode())
+        if(options.mode == Mode::Batch)
         {
             const ck::index_t batch_stride_q = get_stride(q_shape, 0);
             const ck::index_t batch_stride_k = get_stride(k_shape, 0);
