@@ -448,6 +448,15 @@ struct TensorView
         return ck::span<Element>{reinterpret_cast<Element*>(data()), size() * FromSize / ToSize};
     }
 
+    // convert from TensorView<T> to TensorView<const T>
+    template <
+        typename U,
+        typename = std::enable_if_t<!std::is_const_v<T> && std::is_same_v<std::add_const_t<T>, U>>>
+    operator TensorView<U>() const
+    {
+        return TensorView<U>(mData.data(), mDesc);
+    }
+
     Descriptor mDesc;
     Data mData;
 };
@@ -455,6 +464,8 @@ struct TensorView
 template <typename T>
 struct Tensor
 {
+    static_assert(!std::is_const_v<T>);
+
     using Descriptor = HostTensorDescriptor;
     using Data       = std::vector<T>;
 
@@ -692,7 +703,10 @@ struct Tensor
 
     operator TensorView<T>() { return TensorView<T>(mData.data(), mDesc); }
 
-    operator TensorView<const T>() const { return TensorView<const T>(mData.data(), mDesc); }
+    operator TensorView<std::add_const_t<T>>() const
+    {
+        return TensorView<std::add_const_t<T>>(mData.data(), mDesc);
+    }
 
     Descriptor mDesc;
     Data mData;
