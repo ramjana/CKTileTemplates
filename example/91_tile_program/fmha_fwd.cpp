@@ -71,6 +71,11 @@ enum class Mode : unsigned
     Group
 };
 
+inline std::ostream& operator<<(std::ostream& stream, Mode mode)
+{
+    return stream << (mode == Mode::Batch ? "batch" : "group");
+}
+
 struct Options
 {
     bool do_validation         = true;
@@ -248,12 +253,13 @@ int main(int argc, char* argv[])
         FmhaKernel::GridSize(options.work_batch(), options.nhead, options.seqlen_q, options.hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
-    std::cout << "batch: " << options.original_batch << ", nhead: " << options.nhead
-              << ", seqlen_q: " << options.seqlen_q << ", seqlen_k: " << options.seqlen_k
-              << ", hdim_q: " << options.hdim_q << ", hdim_v: " << options.hdim_v
-              << ", scale: " << options.scale << ", i_perm: " << std::boolalpha << options.i_perm
-              << ", o_perm: " << std::boolalpha << options.o_perm << ", grid_size: " << kGridSize.x
-              << "x" << kGridSize.y << "x" << kGridSize.z << std::endl;
+    std::cout << "mode: " << options.mode << ", batch: " << options.original_batch
+              << ", nhead: " << options.nhead << ", seqlen_q: " << options.seqlen_q
+              << ", seqlen_k: " << options.seqlen_k << ", hdim_q: " << options.hdim_q
+              << ", hdim_v: " << options.hdim_v << ", scale: " << options.scale
+              << ", i_perm: " << std::boolalpha << options.i_perm << ", o_perm: " << std::boolalpha
+              << options.o_perm << ", grid_size: " << kGridSize.x << "x" << kGridSize.y << "x"
+              << kGridSize.z << std::endl;
 
     constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
     constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
@@ -331,12 +337,13 @@ int main(int argc, char* argv[])
                                                               kBlockSize,
                                                               0,
                                                               kargs); // BatchStrideO
-
+    /// TODO: use precise formula for group mode
     std::size_t flop = std::size_t(2) * options.shape_batch() * options.nhead * options.seqlen_q *
                            options.seqlen_k * options.hdim_q +
                        std::size_t(2) * options.shape_batch() * options.nhead * options.seqlen_q *
                            options.hdim_v * options.seqlen_k;
 
+    /// TODO: use precise formula for group mode
     std::size_t num_btype = sizeof(QDataType) * options.shape_batch() * options.nhead *
                                 options.seqlen_q * options.hdim_q +
                             sizeof(KDataType) * options.shape_batch() * options.nhead *
