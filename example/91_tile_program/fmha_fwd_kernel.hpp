@@ -203,6 +203,7 @@ struct FmhaFwdKernel
         const bool in_batch_mode =
             (kargs.seqstart_q_ptr == nullptr || kargs.seqstart_k_ptr == nullptr);
 
+        // get starting offset for each work batch
         const index_t query_start = (in_batch_mode ? 0 : kargs.seqstart_q_ptr[i_batch]);
         const index_t key_start   = (in_batch_mode ? 0 : kargs.seqstart_k_ptr[i_batch]);
 
