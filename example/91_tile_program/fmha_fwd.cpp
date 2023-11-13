@@ -239,22 +239,22 @@ int main(int argc, char* argv[])
     std::vector<VDataType> v_block(num_elements_v);
     std::vector<ODataType> o_block(num_elements_o);
 
-    // view for easy access the tensors
-    TensorView<QDataType> q_host(q_block.data(), q_shape);
-    TensorView<KDataType> k_host(k_block.data(), k_shape);
-    TensorView<VDataType> v_host(v_block.data(), v_shape);
-    TensorView<ODataType> o_host(o_block.data(), o_shape);
-
     // intialize tensors
 #if 0
-    ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
-    ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f}(k_host);
-    ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
+    ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_block);
+    ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f}(k_block);
+    ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_block);
 #else
-    ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_host);
-    ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_host);
-    ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_host);
+    ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_block);
+    ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_block);
+    ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_block);
 #endif
+
+    // view for easy access the tensors
+    TensorView<const QDataType> q_host(q_block.data(), q_shape);
+    TensorView<const KDataType> k_host(k_block.data(), k_shape);
+    TensorView<const VDataType> v_host(v_block.data(), v_shape);
+    TensorView<ODataType> o_host(o_block.data(), o_shape);
 
     DeviceMem q_buf(q_host.GetElementSpaceSizeInBytes());
     DeviceMem k_buf(k_host.GetElementSpaceSizeInBytes());
