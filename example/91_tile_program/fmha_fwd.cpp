@@ -66,6 +66,8 @@ using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipeli
 using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
 using FmhaKernel   = FmhaFwdKernel<FmhaTilePartitioner, FmhaPipeline, FmhaEpilogue>;
 
+static constexpr ck::index_t seqlen_alignment = 128;
+
 enum class Mode : unsigned
 {
     Batch,
@@ -127,6 +129,11 @@ struct Options
             mode = Mode::Batch;
         }
 
+        if(seqlen_q % seqlen_alignment || seqlen_k % seqlen_alignment)
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -179,7 +186,7 @@ int main(int argc, char* argv[])
     Options options;
     if(!options.parse(argc, argv))
     {
-        std::cerr << "failed to parse command line arguments" << std::endl;
+        std::cerr << "get invalid command line arguments" << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -199,8 +206,10 @@ int main(int argc, char* argv[])
         seqstart_k_host.push_back(next_seqstart_k);
 
         std::mt19937 random_engine(0);
-        std::uniform_int_distribution<ck::index_t> gen_seqlen_q(1, options.seqlen_q);
-        std::uniform_int_distribution<ck::index_t> gen_seqlen_k(1, options.seqlen_k);
+        std::uniform_int_distribution<ck::index_t> gen_seqlen_q_factor(
+            1, options.seqlen_q / seqlen_alignment);
+        std::uniform_int_distribution<ck::index_t> gen_seqlen_k_factor(
+            1, options.seqlen_k / seqlen_alignment);
 
         for(ck::index_t b = 0; b < options.work_batch(); ++b)
         {
@@ -211,7 +220,8 @@ int main(int argc, char* argv[])
                 }
                 else
                 {
-                    ck::index_t next_seqlen_q = gen_seqlen_q(random_engine);
+                    ck::index_t next_seqlen_q =
+                        gen_seqlen_q_factor(random_engine) * seqlen_alignment;
 
                     // only randomize seqlen_k if it was set to a different value than seqlen_q
                     // originally
@@ -221,7 +231,8 @@ int main(int argc, char* argv[])
                     }
                     else
                     {
-                        ck::index_t next_seqlen_k = gen_seqlen_k(random_engine);
+                        ck::index_t next_seqlen_k =
+                            gen_seqlen_k_factor(random_engine) * seqlen_alignment;
 
                         return std::make_tuple(next_seqlen_q, next_seqlen_k);
                     }
