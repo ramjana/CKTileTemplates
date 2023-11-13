@@ -300,11 +300,6 @@ int main(int argc, char* argv[])
 
         if(options.mode == Mode::Batch)
         {
-            const ck::index_t batch_stride_q = get_stride(q_shape, 0);
-            const ck::index_t batch_stride_k = get_stride(k_shape, 0);
-            const ck::index_t batch_stride_v = get_stride(v_shape, 0);
-            const ck::index_t batch_stride_o = get_stride(o_shape, 0);
-
             return FmhaKernel::MakeKargs(q_buf.GetDeviceBuffer(),
                                          k_buf.GetDeviceBuffer(),
                                          v_buf.GetDeviceBuffer(),
@@ -322,10 +317,10 @@ int main(int argc, char* argv[])
                                          nhead_stride_k,
                                          nhead_stride_v,
                                          nhead_stride_o,
-                                         batch_stride_q,
-                                         batch_stride_k,
-                                         batch_stride_v,
-                                         batch_stride_o);
+                                         get_stride(q_shape, 0),  // batch_stride_q
+                                         get_stride(k_shape, 0),  // batch_stride_k
+                                         get_stride(v_shape, 0),  // batch_stride_v
+                                         get_stride(o_shape, 0)); // batch_stride_o
         }
         else
         {
