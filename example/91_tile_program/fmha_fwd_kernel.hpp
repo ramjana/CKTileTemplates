@@ -202,13 +202,16 @@ struct FmhaFwdKernel
         const bool in_batch_mode =
             (kargs.seqstart_q_ptr == nullptr || kargs.seqstart_k_ptr == nullptr);
 
-        const index_t batch_offset_q = (in_batch_mode ? i_batch * kargs.batch_stride_q : 0);
-        const index_t batch_offset_k = (in_batch_mode ? i_batch * kargs.batch_stride_k : 0);
-        const index_t batch_offset_v = (in_batch_mode ? i_batch * kargs.batch_stride_v : 0);
-        const index_t batch_offset_o = (in_batch_mode ? i_batch * kargs.batch_stride_o : 0);
+        const index_t query_start = (in_batch_mode ? 0 : kargs.seqstart_q_ptr[i_batch]);
+        const index_t key_start   = (in_batch_mode ? 0 : kargs.seqstart_k_ptr[i_batch]);
 
-        const index_t q_start = (in_batch_mode ? 0 : kargs.seqstart_q_ptr[i_batch]);
-        const index_t k_start = (in_batch_mode ? 0 : kargs.seqstart_k_ptr[i_batch]);
+        const index_t batch_offset_q =
+            (in_batch_mode ? i_batch * kargs.batch_stride_q : query_start * kargs.stride_q);
+        const index_t batch_offset_k =
+            (in_batch_mode ? i_batch * kargs.batch_stride_k : key_start * kargs.stride_k);
+        const index_t batch_offset_v = (in_batch_mode ? i_batch * kargs.batch_stride_v : 0);
+        const index_t batch_offset_o =
+            (in_batch_mode ? i_batch * kargs.batch_stride_o : query_start * kargs.stride_o);
 
         // get real # queries & # keys under group mode
         if(!in_batch_mode)
@@ -230,8 +233,9 @@ struct FmhaFwdKernel
         // for simplicity, batch stride we just modify the pointer
         const QDataType* q_ptr = kargs.q_ptr + i_nhead * kargs.nhead_stride_q + batch_offset_q;
         const KDataType* k_ptr = kargs.k_ptr + i_nhead * kargs.nhead_stride_k + batch_offset_k;
-        const VDataType* v_ptr = kargs.v_ptr + i_nhead * kargs.nhead_stride_v + batch_offset_v;
-        ODataType* o_ptr       = kargs.o_ptr + i_nhead * kargs.nhead_stride_o + batch_offset_o;
+        const VDataType* v_ptr =
+            kargs.v_ptr + i_nhead * kargs.nhead_stride_v + key_start + batch_offset_v;
+        ODataType* o_ptr = kargs.o_ptr + i_nhead * kargs.nhead_stride_o + batch_offset_o;
 
         // Q/K/V DRAM and DRAM window
         // FIXME: assume layout Q[seqlen_q, hdim_q], K[seqlen_k, hdim_q], V[hdim_v, seqlen_k],
@@ -265,17 +269,15 @@ struct FmhaFwdKernel
                 else
                     return make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kK0>{});
             }(),
-            {i_m0 + q_start, 0});
+            {i_m0, 0});
 
-        auto k_dram_window =
-            make_tile_window(k_dram,
-                             make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kK0>{}),
-                             {k_start, 0});
+        auto k_dram_window = make_tile_window(
+            k_dram, make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kK0>{}), {0, 0});
 
         auto v_dram_window =
             make_tile_window(v_dram,
                              make_tuple(Number<FmhaPipeline::kN1>{}, Number<FmhaPipeline::kK1>{}),
-                             {i_n1 + k_start, 0});
+                             {i_n1, 0});
 
         auto o_acc_tile = FmhaPipeline{}(q_dram_window,
                                          k_dram_window,
@@ -296,7 +298,7 @@ struct FmhaFwdKernel
         auto o_dram_window =
             make_tile_window(o_dram,
                              make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kN1>{}),
-                             {i_m0 + q_start, i_n1});
+                             {i_m0, i_n1});
 
         EpiloguePipeline{}(o_dram_window, o_acc_tile);
     }
