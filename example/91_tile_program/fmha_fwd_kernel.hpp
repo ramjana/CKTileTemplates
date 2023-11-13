@@ -56,7 +56,7 @@ struct FmhaFwdKernel
         ck::index_t batch_stride_v = 0;
         ck::index_t batch_stride_o = 0;
 
-        // attributes for group mode. only support batch=1 & shape=[1, seqlen, nhead, hdim] in group
+        // attributes for group mode. only support shape=[1, seqlen, nhead, hdim] in group
         // mode
         const ck::index_t* seqstart_q_ptr = nullptr;
         const ck::index_t* seqstart_k_ptr = nullptr;
