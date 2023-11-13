@@ -357,7 +357,6 @@ int main(int argc, char* argv[])
                        std::size_t(2) * options.shape_batch() * options.nhead * shape_seqlen_q *
                            options.hdim_v * shape_seqlen_k;
 
-    /// TODO: use precise formula for group mode
     std::size_t num_btype =
         sizeof(QDataType) * options.shape_batch() * options.nhead * shape_seqlen_q *
             options.hdim_q +
