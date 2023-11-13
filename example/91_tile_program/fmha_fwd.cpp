@@ -73,14 +73,14 @@ enum class Mode : unsigned
 
 struct Options
 {
-    bool do_validation   = true;
-    Mode mode            = Mode::Batch;
-    ck::index_t batch    = 2;
-    ck::index_t nhead    = 8;
-    ck::index_t seqlen_q = 3328;
-    ck::index_t seqlen_k = 4096;
-    ck::index_t hdim_q   = 128;
-    ck::index_t hdim_v   = 128;
+    bool do_validation         = true;
+    Mode mode                  = Mode::Batch;
+    ck::index_t original_batch = 2;
+    ck::index_t nhead          = 8;
+    ck::index_t seqlen_q       = 3328;
+    ck::index_t seqlen_k       = 4096;
+    ck::index_t hdim_q         = 128;
+    ck::index_t hdim_v         = 128;
 
     float scale = .0f;
 
@@ -98,12 +98,12 @@ struct Options
 
         if(argc >= 9)
         {
-            batch    = std::stoi(argv[3]);
-            nhead    = std::stoi(argv[4]);
-            seqlen_q = std::stoi(argv[5]);
-            seqlen_k = std::stoi(argv[6]);
-            hdim_q   = std::stoi(argv[7]);
-            hdim_v   = std::stoi(argv[8]);
+            original_batch = std::stoi(argv[3]);
+            nhead          = std::stoi(argv[4]);
+            seqlen_q       = std::stoi(argv[5]);
+            seqlen_k       = std::stoi(argv[6]);
+            hdim_q         = std::stoi(argv[7]);
+            hdim_v         = std::stoi(argv[8]);
         }
         if(argc >= 10)
             scale = std::stof(argv[9]);
@@ -123,6 +123,10 @@ struct Options
 
         return true;
     }
+
+    ck::index_t shape_batch() const noexcept { return mode == Mode::Batch ? original_batch : 1; }
+
+    ck::index_t work_batch() const noexcept { return original_batch; }
 };
 
 template <std::size_t Dim>
@@ -158,14 +162,14 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    const auto q_shape =
-        get_shape(options.i_perm, options.batch, options.nhead, options.seqlen_q, options.hdim_q);
-    const auto k_shape =
-        get_shape(options.i_perm, options.batch, options.nhead, options.seqlen_k, options.hdim_q);
-    const auto v_shape =
-        get_shape(options.i_perm, options.batch, options.nhead, options.hdim_v, options.seqlen_k);
-    const auto o_shape =
-        get_shape(options.o_perm, options.batch, options.nhead, options.seqlen_q, options.hdim_v);
+    const auto q_shape = get_shape(
+        options.i_perm, options.shape_batch(), options.nhead, options.seqlen_q, options.hdim_q);
+    const auto k_shape = get_shape(
+        options.i_perm, options.shape_batch(), options.nhead, options.seqlen_k, options.hdim_q);
+    const auto v_shape = get_shape(
+        options.i_perm, options.shape_batch(), options.nhead, options.hdim_v, options.seqlen_k);
+    const auto o_shape = get_shape(
+        options.o_perm, options.shape_batch(), options.nhead, options.seqlen_q, options.hdim_v);
 
     // decide tensor size & prepare group mode kernel arguments
     ck::index_t num_elem_q = 0;
@@ -182,7 +186,7 @@ int main(int argc, char* argv[])
         seqstart_q_host.push_back(next_seqstart_q);
         seqstart_k_host.push_back(next_seqstart_k);
 
-        for(ck::index_t b = 0; b < options.batch; ++b)
+        for(ck::index_t b = 0; b < options.work_batch(); ++b)
         {
             /// TODO: randomize value in grouped mode
             ck::index_t real_seqlen_q = options.seqlen_q;
@@ -241,10 +245,10 @@ int main(int argc, char* argv[])
     seqstart_k.ToDevice(seqstart_k_host.data());
 
     dim3 kGridSize =
-        FmhaKernel::GridSize(options.batch, options.nhead, options.seqlen_q, options.hdim_v);
+        FmhaKernel::GridSize(options.work_batch(), options.nhead, options.seqlen_q, options.hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
-    std::cout << "batch: " << options.batch << ", nhead: " << options.nhead
+    std::cout << "batch: " << options.original_batch << ", nhead: " << options.nhead
               << ", seqlen_q: " << options.seqlen_q << ", seqlen_k: " << options.seqlen_k
               << ", hdim_q: " << options.hdim_q << ", hdim_v: " << options.hdim_v
               << ", scale: " << options.scale << ", i_perm: " << std::boolalpha << options.i_perm
@@ -328,16 +332,19 @@ int main(int argc, char* argv[])
                                                               0,
                                                               kargs); // BatchStrideO
 
-    std::size_t flop = std::size_t(2) * options.batch * options.nhead * options.seqlen_q *
+    std::size_t flop = std::size_t(2) * options.shape_batch() * options.nhead * options.seqlen_q *
                            options.seqlen_k * options.hdim_q +
-                       std::size_t(2) * options.batch * options.nhead * options.seqlen_q *
+                       std::size_t(2) * options.shape_batch() * options.nhead * options.seqlen_q *
                            options.hdim_v * options.seqlen_k;
 
-    std::size_t num_btype =
-        sizeof(QDataType) * options.batch * options.nhead * options.seqlen_q * options.hdim_q +
-        sizeof(KDataType) * options.batch * options.nhead * options.seqlen_k * options.hdim_q +
-        sizeof(VDataType) * options.batch * options.nhead * options.hdim_v * options.seqlen_k +
-        sizeof(ODataType) * options.batch * options.nhead * options.seqlen_q * options.hdim_v;
+    std::size_t num_btype = sizeof(QDataType) * options.shape_batch() * options.nhead *
+                                options.seqlen_q * options.hdim_q +
+                            sizeof(KDataType) * options.shape_batch() * options.nhead *
+                                options.seqlen_k * options.hdim_q +
+                            sizeof(VDataType) * options.shape_batch() * options.nhead *
+                                options.hdim_v * options.seqlen_k +
+                            sizeof(ODataType) * options.shape_batch() * options.nhead *
+                                options.seqlen_q * options.hdim_v;
 
     float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
 
@@ -353,7 +360,7 @@ int main(int argc, char* argv[])
 
     o_buf.FromDevice(o_host.mData.data());
 
-    for(ck::index_t b = 0; b < options.batch; ++b)
+    for(ck::index_t b = 0; b < options.work_batch(); ++b)
     {
         const ck::index_t real_seqlen_q = seqstart_q_host[b + 1] - seqstart_q_host[b];
         const ck::index_t real_seqlen_k = seqstart_k_host[b + 1] - seqstart_k_host[b];
