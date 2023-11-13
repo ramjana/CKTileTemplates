@@ -167,15 +167,6 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    const auto q_shape = get_shape(
-        options.i_perm, options.shape_batch(), options.nhead, options.seqlen_q, options.hdim_q);
-    const auto k_shape = get_shape(
-        options.i_perm, options.shape_batch(), options.nhead, options.seqlen_k, options.hdim_q);
-    const auto v_shape = get_shape(
-        options.i_perm, options.shape_batch(), options.nhead, options.hdim_v, options.seqlen_k);
-    const auto o_shape = get_shape(
-        options.o_perm, options.shape_batch(), options.nhead, options.seqlen_q, options.hdim_v);
-
     // decide tensor size & prepare group mode kernel arguments
     ck::index_t num_elem_q = 0;
     ck::index_t num_elem_k = 0;
@@ -212,6 +203,20 @@ int main(int argc, char* argv[])
             }
         }
     }
+
+    const ck::index_t shape_seqlen_q =
+        (options.mode == Mode::Batch ? options.seqlen_q : seqstart_q_host.back());
+    const ck::index_t shape_seqlen_k =
+        (options.mode == Mode::Batch ? options.seqlen_k : seqstart_k_host.back());
+
+    const auto q_shape = get_shape(
+        options.i_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_q);
+    const auto k_shape = get_shape(
+        options.i_perm, options.shape_batch(), options.nhead, shape_seqlen_k, options.hdim_q);
+    const auto v_shape = get_shape(
+        options.i_perm, options.shape_batch(), options.nhead, options.hdim_v, shape_seqlen_k);
+    const auto o_shape = get_shape(
+        options.o_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_v);
 
     // host memory for storing all the tensor elements
     std::vector<QDataType> q_block(num_elem_q);
@@ -250,15 +255,15 @@ int main(int argc, char* argv[])
     seqstart_k.ToDevice(seqstart_k_host.data());
 
     dim3 kGridSize =
-        FmhaKernel::GridSize(options.work_batch(), options.nhead, options.seqlen_q, options.hdim_v);
+        FmhaKernel::GridSize(options.work_batch(), options.nhead, shape_seqlen_q, options.hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
-    std::cout << "mode: " << options.mode << ", batch: " << options.original_batch
-              << ", nhead: " << options.nhead << ", seqlen_q: " << options.seqlen_q
-              << ", seqlen_k: " << options.seqlen_k << ", hdim_q: " << options.hdim_q
-              << ", hdim_v: " << options.hdim_v << ", scale: " << options.scale
-              << ", i_perm: " << std::boolalpha << options.i_perm << ", o_perm: " << std::boolalpha
-              << options.o_perm << ", grid_size: " << kGridSize.x << "x" << kGridSize.y << "x"
+    std::cout << "mode:" << options.mode << ", batch:" << options.original_batch
+              << ", nhead:" << options.nhead << ", seqlen_q:" << options.seqlen_q
+              << ", seqlen_k:" << options.seqlen_k << ", hdim_q:" << options.hdim_q
+              << ", hdim_v:" << options.hdim_v << ", scale:" << options.scale
+              << ", i_perm:" << std::boolalpha << options.i_perm << ", o_perm:" << std::boolalpha
+              << options.o_perm << ", grid_size:" << kGridSize.x << "x" << kGridSize.y << "x"
               << kGridSize.z << std::endl;
 
     constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
@@ -289,8 +294,8 @@ int main(int argc, char* argv[])
                                          k_buf.GetDeviceBuffer(),
                                          v_buf.GetDeviceBuffer(),
                                          o_buf.GetDeviceBuffer(),
-                                         options.seqlen_q,
-                                         options.seqlen_k,
+                                         shape_seqlen_q,
+                                         shape_seqlen_k,
                                          options.hdim_q,
                                          options.hdim_v,
                                          options.scale,
@@ -316,7 +321,7 @@ int main(int argc, char* argv[])
                                          seqstart_q.GetDeviceBuffer(),
                                          seqstart_k.GetDeviceBuffer(),
                                          nullptr,
-                                         options.seqlen_q,
+                                         shape_seqlen_q,
                                          options.hdim_q,
                                          options.hdim_v,
                                          options.scale,
@@ -338,20 +343,20 @@ int main(int argc, char* argv[])
                                                               0,
                                                               kargs); // BatchStrideO
     /// TODO: use precise formula for group mode
-    std::size_t flop = std::size_t(2) * options.shape_batch() * options.nhead * options.seqlen_q *
-                           options.seqlen_k * options.hdim_q +
-                       std::size_t(2) * options.shape_batch() * options.nhead * options.seqlen_q *
-                           options.hdim_v * options.seqlen_k;
+    std::size_t flop = std::size_t(2) * options.shape_batch() * options.nhead * shape_seqlen_q *
+                           shape_seqlen_k * options.hdim_q +
+                       std::size_t(2) * options.shape_batch() * options.nhead * shape_seqlen_q *
+                           options.hdim_v * shape_seqlen_k;
 
     /// TODO: use precise formula for group mode
-    std::size_t num_btype = sizeof(QDataType) * options.shape_batch() * options.nhead *
-                                options.seqlen_q * options.hdim_q +
-                            sizeof(KDataType) * options.shape_batch() * options.nhead *
-                                options.seqlen_k * options.hdim_q +
-                            sizeof(VDataType) * options.shape_batch() * options.nhead *
-                                options.hdim_v * options.seqlen_k +
-                            sizeof(ODataType) * options.shape_batch() * options.nhead *
-                                options.seqlen_q * options.hdim_v;
+    std::size_t num_btype =
+        sizeof(QDataType) * options.shape_batch() * options.nhead * shape_seqlen_q *
+            options.hdim_q +
+        sizeof(KDataType) * options.shape_batch() * options.nhead * shape_seqlen_k *
+            options.hdim_q +
+        sizeof(VDataType) * options.shape_batch() * options.nhead * options.hdim_v *
+            shape_seqlen_k +
+        sizeof(ODataType) * options.shape_batch() * options.nhead * shape_seqlen_q * options.hdim_v;
 
     float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
 
