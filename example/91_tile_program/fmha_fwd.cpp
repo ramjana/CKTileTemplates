@@ -1,7 +1,7 @@
-#include <algorithm>
 #include <cstring>
 #include <cstdlib>
 #include <iomanip>
+#include <numeric>
 #include <ostream>
 
 #include "ck/utility/common_header.hpp"
