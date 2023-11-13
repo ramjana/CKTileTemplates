@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <numeric>
 #include <ostream>
+#include <random>
 
 #include "ck/utility/common_header.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
@@ -197,11 +198,35 @@ int main(int argc, char* argv[])
         seqstart_q_host.push_back(next_seqstart_q);
         seqstart_k_host.push_back(next_seqstart_k);
 
+        std::mt19937 random_engine(0);
+        std::uniform_int_distribution<ck::index_t> gen_seqlen_q(1, options.seqlen_q);
+        std::uniform_int_distribution<ck::index_t> gen_seqlen_k(1, options.seqlen_k);
+
         for(ck::index_t b = 0; b < options.work_batch(); ++b)
         {
-            /// TODO: randomize value in grouped mode
-            ck::index_t real_seqlen_q = options.seqlen_q;
-            ck::index_t real_seqlen_k = options.seqlen_k;
+            const auto [real_seqlen_q, real_seqlen_k] = [&]() {
+                if(options.mode == Mode::Batch)
+                {
+                    return std::make_tuple(options.seqlen_q, options.seqlen_k);
+                }
+                else
+                {
+                    ck::index_t next_seqlen_q = gen_seqlen_q(random_engine);
+
+                    // only randomize seqlen_k if it was set to a different value than seqlen_q
+                    // originally
+                    if(options.seqlen_q == options.seqlen_k)
+                    {
+                        return std::make_tuple(next_seqlen_q, options.seqlen_k);
+                    }
+                    else
+                    {
+                        ck::index_t next_seqlen_k = gen_seqlen_k(random_engine);
+
+                        return std::make_tuple(next_seqlen_q, next_seqlen_k);
+                    }
+                }
+            }();
 
             next_seqstart_q += real_seqlen_q;
             next_seqstart_k += real_seqlen_k;
