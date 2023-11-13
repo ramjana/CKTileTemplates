@@ -418,6 +418,43 @@ int main(int argc, char* argv[])
             {
                 return EXIT_FAILURE;
             }
+        } else { // options.mode == Mode::Group
+            const ck::index_t q_start = seqstart_q_host[b];
+            const ck::index_t k_start = seqstart_k_host[b];
+
+            Tensor<QDataType> q_host_ref({options.nhead, real_seqlen_q, options.hdim_q});
+            Tensor<KDataType> k_host_ref({options.nhead, real_seqlen_k, options.hdim_q});
+            Tensor<VDataType> v_host_ref({options.nhead, options.hdim_v, real_seqlen_k});
+            Tensor<ODataType> o_host_ref({options.nhead, real_seqlen_q, options.hdim_v});
+
+            Tensor<SMPLComputeDataType> s_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
+            Tensor<PDataType> p_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
+
+            // clang-format off
+            // permute
+            q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(0, idx[1] + q_start, idx[0], idx[2]); });
+            k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(0, idx[1] + k_start, idx[0], idx[2]); });
+            v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(0, idx[1], idx[0], idx[2] + k_start); });
+
+            // reference
+            reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
+                q_host_ref, k_host_ref, s_host_ref,
+                ck::identity{}, ck::identity{},
+                [scale = options.scale](const SaccDataType& x) { return scale * x; });
+            reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, 
+                                                                                           p_host_ref);
+            reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
+                p_host_ref, v_host_ref, o_host_ref);
+
+            Tensor<ODataType> o_host_result({options.nhead, real_seqlen_q, options.hdim_v});
+            // permute
+            o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(0, idx[1] + q_start, idx[0], idx[2]); });
+            // clang-format on
+
+            if(!ck::utils::check_err(o_host_result, o_host_ref))
+            {
+                return EXIT_FAILURE;
+            }
         }
     }
 }
