@@ -336,7 +336,6 @@ int main(int argc, char* argv[])
                                          seqstart_q.GetDeviceBuffer(),
                                          seqstart_k.GetDeviceBuffer(),
                                          nullptr,
-                                         shape_seqlen_q,
                                          options.hdim_q,
                                          options.hdim_v,
                                          options.scale,

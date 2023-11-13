@@ -126,7 +126,6 @@ struct FmhaFwdKernel
                                               const void* seqstart_q_ptr,
                                               const void* seqstart_k_ptr,
                                               const void* seqlen_k_ptr,
-                                              ck::index_t max_seqlen_q,
                                               ck::index_t hdim_q,
                                               ck::index_t hdim_v,
                                               float scale,
@@ -146,8 +145,8 @@ struct FmhaFwdKernel
         kargs.v_ptr = reinterpret_cast<const VDataType*>(v_ptr);
         kargs.o_ptr = reinterpret_cast<ODataType*>(o_ptr);
 
-        kargs.seqlen_q = max_seqlen_q;
-        kargs.seqlen_k = 0; // will be set inside the kernel
+        kargs.seqlen_q = -1; // will be updated inside the kernel
+        kargs.seqlen_k = -1; // will be updated inside the kernel
         kargs.hdim_q   = hdim_q;
         kargs.hdim_v   = hdim_v;
 
