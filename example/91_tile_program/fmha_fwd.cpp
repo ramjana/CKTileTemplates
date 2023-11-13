@@ -168,10 +168,10 @@ int main(int argc, char* argv[])
     }
 
     // decide tensor size & prepare group mode kernel arguments
-    ck::index_t num_elem_q = 0;
-    ck::index_t num_elem_k = 0;
-    ck::index_t num_elem_v = 0;
-    ck::index_t num_elem_o = 0;
+    ck::index_t num_elements_q = 0;
+    ck::index_t num_elements_k = 0;
+    ck::index_t num_elements_v = 0;
+    ck::index_t num_elements_o = 0;
 
     std::vector<ck::index_t> seqstart_q_host;
     std::vector<ck::index_t> seqstart_k_host;
@@ -196,10 +196,10 @@ int main(int argc, char* argv[])
 
             for(ck::index_t h = 0; h < options.nhead; ++h)
             {
-                num_elem_q += real_seqlen_q * options.hdim_q;
-                num_elem_k += real_seqlen_k * options.hdim_q;
-                num_elem_v += options.hdim_v * real_seqlen_k;
-                num_elem_o += real_seqlen_q * options.hdim_v;
+                num_elements_q += real_seqlen_q * options.hdim_q;
+                num_elements_k += real_seqlen_k * options.hdim_q;
+                num_elements_v += options.hdim_v * real_seqlen_k;
+                num_elements_o += real_seqlen_q * options.hdim_v;
             }
         }
     }
@@ -219,10 +219,10 @@ int main(int argc, char* argv[])
         options.o_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_v);
 
     // host memory for storing all the tensor elements
-    std::vector<QDataType> q_block(num_elem_q);
-    std::vector<KDataType> k_block(num_elem_k);
-    std::vector<VDataType> v_block(num_elem_v);
-    std::vector<ODataType> o_block(num_elem_o);
+    std::vector<QDataType> q_block(num_elements_q);
+    std::vector<KDataType> k_block(num_elements_k);
+    std::vector<VDataType> v_block(num_elements_v);
+    std::vector<ODataType> o_block(num_elements_o);
 
     // view for easy access the tensors
     TensorView<QDataType> q_host(q_block.data(), q_shape);
@@ -418,7 +418,9 @@ int main(int argc, char* argv[])
             {
                 return EXIT_FAILURE;
             }
-        } else { // options.mode == Mode::Group
+        }
+        else
+        { // options.mode == Mode::Group
             const ck::index_t q_start = seqstart_q_host[b];
             const ck::index_t k_start = seqstart_k_host[b];
 
