@@ -215,7 +215,7 @@ int main(int argc, char* argv[])
         std::uniform_int_distribution<ck::index_t> gen_seqlen_k_factor(
             1, options.seqlen_k / seqlen_alignment);
 
-        for(ck::index_t b = 0; b < options.work_batch(); ++b)
+        for(ck::index_t wb = 0; wb < options.work_batch(); ++wb)
         {
             const auto [real_seqlen_q, real_seqlen_k] = [&]() {
                 if(options.mode == Mode::Batch)
