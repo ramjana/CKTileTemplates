@@ -387,7 +387,7 @@ int main(int argc, char* argv[])
                                                               kBlockSize,
                                                               0,
                                                               kargs); // BatchStrideO
-    /// TODO: use precise formula for group mode
+
     std::size_t flop = std::size_t(2) * options.shape_batch() * options.nhead * shape_seqlen_q *
                            shape_seqlen_k * options.hdim_q +
                        std::size_t(2) * options.shape_batch() * options.nhead * shape_seqlen_q *
