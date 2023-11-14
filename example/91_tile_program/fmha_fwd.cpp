@@ -17,6 +17,7 @@
 #include "ck/library/utility/fill.hpp"
 #include "ck/library/utility/host_tensor.hpp"
 #include "ck/library/utility/host_tensor_generator.hpp"
+#include "ck/library/utility/literals.hpp"
 
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qkvs.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qkvs_default_policy.hpp"
@@ -190,6 +191,9 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    // accumulation numbers for performance evaluation
+    std::size_t flop = 0, num_byte = 0;
+
     // decide tensor size & prepare group mode kernel arguments
     ck::index_t num_elements_q = 0;
     ck::index_t num_elements_k = 0;
@@ -245,13 +249,20 @@ int main(int argc, char* argv[])
             seqstart_q_host.push_back(next_seqstart_q);
             seqstart_k_host.push_back(next_seqstart_k);
 
-            for(ck::index_t h = 0; h < options.nhead; ++h)
-            {
-                num_elements_q += real_seqlen_q * options.hdim_q;
-                num_elements_k += real_seqlen_k * options.hdim_q;
-                num_elements_v += options.hdim_v * real_seqlen_k;
-                num_elements_o += real_seqlen_q * options.hdim_v;
-            }
+            num_elements_q += (options.nhead * real_seqlen_q * options.hdim_q);
+            num_elements_k += (options.nhead * real_seqlen_k * options.hdim_q);
+            num_elements_v += (options.nhead * options.hdim_v * real_seqlen_k);
+            num_elements_o += (options.nhead * real_seqlen_q * options.hdim_v);
+
+            using namespace ck::literals;
+
+            flop += options.nhead * (2_uz * real_seqlen_q * real_seqlen_k * options.hdim_q +
+                                     2_uz * real_seqlen_q * options.hdim_v * real_seqlen_k);
+
+            num_byte += options.nhead * (sizeof(QDataType) * real_seqlen_q * options.hdim_q +
+                                         sizeof(KDataType) * real_seqlen_k * options.hdim_q +
+                                         sizeof(VDataType) * options.hdim_v * real_seqlen_k +
+                                         sizeof(ODataType) * real_seqlen_q * options.hdim_v);
         }
     }
 
@@ -388,23 +399,9 @@ int main(int argc, char* argv[])
                                                               0,
                                                               kargs); // BatchStrideO
 
-    std::size_t flop = std::size_t(2) * options.shape_batch() * options.nhead * shape_seqlen_q *
-                           shape_seqlen_k * options.hdim_q +
-                       std::size_t(2) * options.shape_batch() * options.nhead * shape_seqlen_q *
-                           options.hdim_v * shape_seqlen_k;
-
-    std::size_t num_btype =
-        sizeof(QDataType) * options.shape_batch() * options.nhead * shape_seqlen_q *
-            options.hdim_q +
-        sizeof(KDataType) * options.shape_batch() * options.nhead * shape_seqlen_k *
-            options.hdim_q +
-        sizeof(VDataType) * options.shape_batch() * options.nhead * options.hdim_v *
-            shape_seqlen_k +
-        sizeof(ODataType) * options.shape_batch() * options.nhead * shape_seqlen_q * options.hdim_v;
-
     float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
 
-    float gb_per_sec = num_btype / 1.E6 / ave_time;
+    float gb_per_sec = num_byte / 1.E6 / ave_time;
 
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
