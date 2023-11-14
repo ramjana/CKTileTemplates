@@ -416,91 +416,54 @@ int main(int argc, char* argv[])
 
     o_buf.FromDevice(o_host.mData.data());
 
-    for(ck::index_t b = 0; b < options.work_batch(); ++b)
+    for(ck::index_t wb = 0; wb < options.work_batch(); ++wb)
     {
-        const ck::index_t real_seqlen_q = seqstart_q_host[b + 1] - seqstart_q_host[b];
-        const ck::index_t real_seqlen_k = seqstart_k_host[b + 1] - seqstart_k_host[b];
+        const ck::index_t real_seqlen_q = seqstart_q_host[wb + 1] - seqstart_q_host[wb];
+        const ck::index_t real_seqlen_k = seqstart_k_host[wb + 1] - seqstart_k_host[wb];
 
-        if(options.mode == Mode::Batch)
+        // adjust matrix index according to the mode
+        const ck::index_t b            = (options.mode == Mode::Batch ? wb : 0);
+        const ck::index_t query_offset = (options.mode == Mode::Batch ? 0 : seqstart_q_host[wb]);
+        const ck::index_t key_offset   = (options.mode == Mode::Batch ? 0 : seqstart_k_host[wb]);
+
+        Tensor<QDataType> q_host_ref({options.nhead, real_seqlen_q, options.hdim_q});
+        Tensor<KDataType> k_host_ref({options.nhead, real_seqlen_k, options.hdim_q});
+        Tensor<VDataType> v_host_ref({options.nhead, options.hdim_v, real_seqlen_k});
+        Tensor<ODataType> o_host_ref({options.nhead, real_seqlen_q, options.hdim_v});
+
+        Tensor<SMPLComputeDataType> s_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
+        Tensor<PDataType> p_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
+
+        // clang-format off
+        // permute
+        if(options.i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[0], idx[1], idx[2]); });
+        else               q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[1] + query_offset, idx[0], idx[2]); });
+
+        if(options.i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], idx[1], idx[2]); });
+        else               k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[1] + key_offset, idx[0], idx[2]); });
+
+        if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[1], idx[2]); });
+        else               v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[1], idx[0], idx[2] + key_offset); });
+
+        // reference
+        reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
+            q_host_ref, k_host_ref, s_host_ref,
+            ck::identity{}, ck::identity{},
+            [scale = options.scale](const SaccDataType& x) { return scale * x; });
+        reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, 
+                                                                                    p_host_ref);
+        reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
+            p_host_ref, v_host_ref, o_host_ref);
+
+        Tensor<ODataType> o_host_result({options.nhead, real_seqlen_q, options.hdim_v});
+        // permute
+        if(options.o_perm) o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], idx[1], idx[2]); });
+        else               o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[1] + query_offset, idx[0], idx[2]); });
+        // clang-format on
+
+        if(!ck::utils::check_err(o_host_result, o_host_ref))
         {
-            Tensor<QDataType> q_host_ref({options.nhead, real_seqlen_q, options.hdim_q});
-            Tensor<KDataType> k_host_ref({options.nhead, real_seqlen_k, options.hdim_q});
-            Tensor<VDataType> v_host_ref({options.nhead, options.hdim_v, real_seqlen_k});
-            Tensor<ODataType> o_host_ref({options.nhead, real_seqlen_q, options.hdim_v});
-
-            Tensor<SMPLComputeDataType> s_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
-            Tensor<PDataType> p_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
-
-            // clang-format off
-            // permute
-            if(options.i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[0], idx[1], idx[2]); });
-            else               q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[1], idx[0], idx[2]); });
-
-            if(options.i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], idx[1], idx[2]); });
-            else               k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[1], idx[0], idx[2]); });
-
-            if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[1], idx[2]); });
-            else               v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[1], idx[0], idx[2]); });
-
-            // reference
-            reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
-                q_host_ref, k_host_ref, s_host_ref,
-                ck::identity{}, ck::identity{},
-                [scale = options.scale](const SaccDataType& x) { return scale * x; });
-            reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, 
-                                                                                           p_host_ref);
-            reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
-                p_host_ref, v_host_ref, o_host_ref);
-
-            Tensor<ODataType> o_host_result({options.nhead, real_seqlen_q, options.hdim_v});
-            // permute
-            if(options.o_perm) o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], idx[1], idx[2]); });
-            else               o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[1], idx[0], idx[2]); });
-            // clang-format on
-
-            if(!ck::utils::check_err(o_host_result, o_host_ref))
-            {
-                return EXIT_FAILURE;
-            }
-        }
-        else
-        { // options.mode == Mode::Group
-            const ck::index_t query_start = seqstart_q_host[b];
-            const ck::index_t key_start   = seqstart_k_host[b];
-
-            Tensor<QDataType> q_host_ref({options.nhead, real_seqlen_q, options.hdim_q});
-            Tensor<KDataType> k_host_ref({options.nhead, real_seqlen_k, options.hdim_q});
-            Tensor<VDataType> v_host_ref({options.nhead, options.hdim_v, real_seqlen_k});
-            Tensor<ODataType> o_host_ref({options.nhead, real_seqlen_q, options.hdim_v});
-
-            Tensor<SMPLComputeDataType> s_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
-            Tensor<PDataType> p_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
-
-            // clang-format off
-            // permute
-            q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(0, idx[1] + query_start, idx[0], idx[2]); });
-            k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(0, idx[1] + key_start, idx[0], idx[2]); });
-            v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(0, idx[1], idx[0], idx[2] + key_start); });
-
-            // reference
-            reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
-                q_host_ref, k_host_ref, s_host_ref,
-                ck::identity{}, ck::identity{},
-                [scale = options.scale](const SaccDataType& x) { return scale * x; });
-            reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, 
-                                                                                           p_host_ref);
-            reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
-                p_host_ref, v_host_ref, o_host_ref);
-
-            Tensor<ODataType> o_host_result({options.nhead, real_seqlen_q, options.hdim_v});
-            // permute
-            o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(0, idx[1] + query_start, idx[0], idx[2]); });
-            // clang-format on
-
-            if(!ck::utils::check_err(o_host_result, o_host_ref))
-            {
-                return EXIT_FAILURE;
-            }
+            return EXIT_FAILURE;
         }
     }
 }
