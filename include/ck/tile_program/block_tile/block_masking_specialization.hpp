@@ -7,25 +7,6 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
-enum struct MaskingSpecialization
-{
-    MaskDisabled,
-    MaskUpperTriangleFromTopLeft,
-    MaskUpperTriangleFromBottomRight
-};
-
-inline std::string getMaskingSpecializationString(const MaskingSpecialization& s)
-{
-    switch(s)
-    {
-    case MaskingSpecialization::MaskDisabled: return "MaskDisabled";
-    case MaskingSpecialization::MaskUpperTriangleFromTopLeft: return "MaskUpperTriangleFromTopLeft";
-    case MaskingSpecialization::MaskUpperTriangleFromBottomRight:
-        return "MaskUpperTriangleFromBottomRight";
-    default: return "Unrecognized specialization!";
-    }
-}
-
 struct MaskDisabledPredicate
 {
     __host__ __device__ constexpr bool operator()(index_t /*m*/, index_t /*n*/) const
