@@ -217,18 +217,12 @@ int main(int argc, char* argv[])
     constexpr bool is_v_rowmajor =
         ck::is_same_v<typename FmhaKernelHDim64::VLayout, ck::tensor_layout::gemm::RowMajor>;
 
-    const auto q_host_lengths = get_lengths(i_perm, batch, nhead, seqlen_q, hdim_q);
-    const auto k_host_lengths = get_lengths(i_perm, batch, nhead, seqlen_k, hdim_q);
-    const auto v_host_lengths =
-        (is_v_rowmajor ? get_lengths(i_perm, batch, nhead, seqlen_k, hdim_v)
-                       : get_lengths(i_perm, batch, nhead, hdim_v, seqlen_k));
-    const auto o_host_lengths = get_lengths(o_perm, batch, nhead, seqlen_q, hdim_v);
-
     // host verify
-    Tensor<QDataType> q_host(q_host_lengths);
-    Tensor<KDataType> k_host(k_host_lengths);
-    Tensor<VDataType> v_host(v_host_lengths);
-    Tensor<ODataType> o_host(o_host_lengths);
+    Tensor<QDataType> q_host(get_lengths(i_perm, batch, nhead, seqlen_q, hdim_q));
+    Tensor<KDataType> k_host(get_lengths(i_perm, batch, nhead, seqlen_k, hdim_q));
+    Tensor<VDataType> v_host(is_v_rowmajor ? get_lengths(i_perm, batch, nhead, seqlen_k, hdim_v)
+                                           : get_lengths(i_perm, batch, nhead, hdim_v, seqlen_k));
+    Tensor<ODataType> o_host(get_lengths(o_perm, batch, nhead, seqlen_q, hdim_v));
 
 #if 0
     ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
