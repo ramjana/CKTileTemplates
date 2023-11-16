@@ -1,7 +1,6 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
-#include <iomanip>
 #include <ostream>
 
 #include "ck/utility/common_header.hpp"
@@ -245,8 +244,7 @@ int main(int argc, char* argv[])
 
     std::cout << "batch:" << batch << ", nhead:" << nhead << ", seqlen_q:" << seqlen_q
               << ", seqlen_k:" << seqlen_k << ", hdim_q:" << hdim_q << ", hdim_v:" << hdim_v
-              << ", scale:" << scale << ", i_perm:" << std::boolalpha << i_perm
-              << ", o_perm:" << std::boolalpha << o_perm
+              << ", scale:" << scale << ", i_perm:" << i_perm << ", o_perm:" << o_perm
               << ", v:" << std::string(FmhaKernelHDim64::VLayout::name) << std::flush << std::endl;
 
     float ave_time = 0;
