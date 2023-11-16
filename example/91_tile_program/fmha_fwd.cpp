@@ -67,6 +67,76 @@ using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipeli
 using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
 using FmhaKernel   = FmhaFwdKernel<FmhaTilePartitioner, FmhaPipeline, FmhaEpilogue>;
 
+#if 0
+template <typename FmhaKernel>
+float invoker_fmha_kernel(const void* q_ptr,
+                          const void* k_ptr,
+                          const void* v_ptr,
+                          void* o_ptr,
+                          ck::index_t batch,
+                          ck::index_t nhead,
+                          ck::index_t seqlen_q,
+                          ck::index_t seqlen_k,
+                          ck::index_t hdim_q,
+                          ck::index_t hdim_v,
+                          float scale,
+                          bool i_perm,
+                          bool o_perm)
+{
+    dim3 kGridSize            = FmhaKernel::GridSize(batch, nhead, seqlen_q, hdim_v);
+    constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
+
+    constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
+    constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
+    constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
+
+    constexpr bool is_v_rowmajor =
+        ck::is_same_v<typename FmhaKernel::VLayout, ck::tensor_layout::gemm::RowMajor>;
+
+    // batch * nhead * seqlen * hdim or batch * seqlen * nhead * hdim
+    auto kargs = FmhaKernel::MakeKargs(
+        q_ptr,
+        k_ptr,
+        v_ptr,
+        o_ptr,
+        seqlen_q, // seqlen_q
+        seqlen_k, // seqlen_k
+        hdim_q,   // hdim_q
+        hdim_v,   // hdim_v
+        scale,
+        i_perm ? hdim_q : nhead * hdim_q, // stride_q
+        i_perm ? hdim_q : nhead * hdim_q, // stride_k
+        [&]() {
+            if constexpr(is_v_rowmajor)
+                return i_perm ? hdim_v : nhead * hdim_v;
+            else
+                return i_perm ? seqlen_k : nhead * seqlen_k;
+        }(),                                 // stride_v
+        o_perm ? hdim_v : nhead * hdim_v,    // stride_o
+        i_perm ? seqlen_q * hdim_q : hdim_q, // nhead_stride_q
+        i_perm ? seqlen_k * hdim_q : hdim_q, // nhead_stride_k
+        [&]() {
+            if constexpr(is_v_rowmajor)
+                return i_perm ? seqlen_k * hdim_v : hdim_v;
+            else
+                return i_perm ? hdim_v * seqlen_k : seqlen_k;
+        }(),                                 // nhead_stride_v
+        o_perm ? seqlen_q * hdim_v : hdim_v, // nhead_stride_o
+        nhead * seqlen_q * hdim_q,           // batch_stride_q
+        nhead * seqlen_k * hdim_q,           // batch_stride_k
+        nhead * hdim_v * seqlen_k,           // batch_stride_v
+        nhead * seqlen_q * hdim_v);          // batch_stride_o
+
+    float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
+                                                              FmhaKernel{},
+                                                              kGridSize,
+                                                              kBlockSize,
+                                                              0,
+                                                              kargs); // BatchStrideO
+    return ave_time;
+}
+#endif
+
 static constexpr ck::index_t seqlen_alignment = 128;
 
 enum class Mode : unsigned
@@ -140,7 +210,7 @@ struct Options
 
     ck::index_t shape_batch() const noexcept { return mode == Mode::Batch ? original_batch : 1; }
 
-    ck::index_t work_batch() const noexcept { return original_batch; }
+    ck::index_t problem_count() const noexcept { return original_batch; }
 };
 
 template <std::size_t Dim>
@@ -179,16 +249,16 @@ ck::index_t get_size(const TensorShape<Dim>& shape)
                            std::multiplies<ck::index_t>{});
 }
 
-TensorShape<4> get_shape(bool permute,
-                         ck::index_t b /*batch*/,
-                         ck::index_t h /*nhead*/,
-                         ck::index_t s /*seqlen*/,
-                         ck::index_t d /*hdim*/)
+std::array<ck::index_t, 4> get_lengths(bool permute,
+                                       ck::index_t b /*batch*/,
+                                       ck::index_t h /*nhead*/,
+                                       ck::index_t s /*seqlen*/,
+                                       ck::index_t d /*hdim*/)
 {
     if(permute)
-        return TensorShape<4>{b, h, s, d};
+        return {b, h, s, d};
     else
-        return TensorShape<4>{b, s, h, d};
+        return {b, s, h, d};
 }
 
 int main(int argc, char* argv[])
@@ -218,7 +288,7 @@ int main(int argc, char* argv[])
         std::uniform_int_distribution<ck::index_t> gen_seqlen_k_factor(
             1, options.seqlen_k / seqlen_alignment);
 
-        for(ck::index_t wb = 0; wb < options.work_batch(); ++wb)
+        for(ck::index_t p = 0; p < options.problem_count(); ++p)
         {
             const auto [real_seqlen_q, real_seqlen_k] = [&]() {
                 if(options.mode == Mode::Batch)
@@ -269,37 +339,31 @@ int main(int argc, char* argv[])
     const ck::index_t shape_seqlen_k =
         (options.mode == Mode::Batch ? options.seqlen_k : seqstart_k_host.back());
 
-    const auto q_shape = get_shape(
+    const auto q_shape = get_lengths(
         options.i_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_q);
-    const auto k_shape = get_shape(
+    const auto k_shape = get_lengths(
         options.i_perm, options.shape_batch(), options.nhead, shape_seqlen_k, options.hdim_q);
-    const auto v_shape = get_shape(
+    const auto v_shape = get_lengths(
         options.i_perm, options.shape_batch(), options.nhead, options.hdim_v, shape_seqlen_k);
-    const auto o_shape = get_shape(
+    const auto o_shape = get_lengths(
         options.o_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_v);
 
     // host memory for storing all the tensor elements
-    std::vector<QDataType> q_block(get_size(q_shape));
-    std::vector<KDataType> k_block(get_size(k_shape));
-    std::vector<VDataType> v_block(get_size(v_shape));
-    std::vector<ODataType> o_block(get_size(o_shape));
+    Tensor<QDataType> q_host(q_shape);
+    Tensor<KDataType> k_host(k_shape);
+    Tensor<VDataType> v_host(v_shape);
+    Tensor<ODataType> o_host(o_shape);
 
     // intialize tensors
 #if 0
-    ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_block);
-    ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f}(k_block);
-    ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_block);
+    ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
+    ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f}(k_host);
+    ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
 #else
-    ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_block);
-    ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_block);
-    ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_block);
+    ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_host);
+    ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_host);
+    ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_host);
 #endif
-
-    // view for easy access the tensors
-    TensorView<const QDataType> q_host(q_block.data(), q_shape);
-    TensorView<const KDataType> k_host(k_block.data(), k_shape);
-    TensorView<const VDataType> v_host(v_block.data(), v_shape);
-    TensorView<ODataType> o_host(o_block.data(), o_shape);
 
     DeviceMem q_buf(q_host.GetElementSpaceSizeInBytes());
     DeviceMem k_buf(k_host.GetElementSpaceSizeInBytes());
@@ -314,8 +378,8 @@ int main(int argc, char* argv[])
     seqstart_q.ToDevice(seqstart_q_host.data());
     seqstart_k.ToDevice(seqstart_k_host.data());
 
-    dim3 kGridSize =
-        FmhaKernel::GridSize(options.work_batch(), options.nhead, shape_seqlen_q, options.hdim_v);
+    dim3 kGridSize = FmhaKernel::GridSize(
+        options.problem_count(), options.nhead, shape_seqlen_q, options.hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
     std::cout << "mode:" << options.mode << ", batch:" << options.original_batch
@@ -411,15 +475,15 @@ int main(int argc, char* argv[])
 
     o_buf.FromDevice(o_host.mData.data());
 
-    for(ck::index_t wb = 0; wb < options.work_batch(); ++wb)
+    for(ck::index_t p = 0; p < options.problem_count(); ++p)
     {
-        const ck::index_t real_seqlen_q = seqstart_q_host[wb + 1] - seqstart_q_host[wb];
-        const ck::index_t real_seqlen_k = seqstart_k_host[wb + 1] - seqstart_k_host[wb];
+        const ck::index_t real_seqlen_q = seqstart_q_host[p + 1] - seqstart_q_host[p];
+        const ck::index_t real_seqlen_k = seqstart_k_host[p + 1] - seqstart_k_host[p];
 
         // adjust matrix index according to the mode
-        const ck::index_t b            = (options.mode == Mode::Batch ? wb : 0);
-        const ck::index_t query_offset = (options.mode == Mode::Batch ? 0 : seqstart_q_host[wb]);
-        const ck::index_t key_offset   = (options.mode == Mode::Batch ? 0 : seqstart_k_host[wb]);
+        const ck::index_t b            = (options.mode == Mode::Batch ? p : 0);
+        const ck::index_t query_offset = (options.mode == Mode::Batch ? 0 : seqstart_q_host[p]);
+        const ck::index_t key_offset   = (options.mode == Mode::Batch ? 0 : seqstart_k_host[p]);
 
         Tensor<QDataType> q_host_ref({options.nhead, real_seqlen_q, options.hdim_q});
         Tensor<KDataType> k_host_ref({options.nhead, real_seqlen_k, options.hdim_q});
