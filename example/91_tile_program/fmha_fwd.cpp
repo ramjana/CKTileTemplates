@@ -228,7 +228,7 @@ int main(int argc, char* argv[])
             [](const KDataType& x) { return x; },
             [&scale](const SaccDataType& x) { return scale * x; });
 
-        reference_batched_masking(s_host_ref);
+        reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref);
 
         reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
                                                                                        p_host_ref);

@@ -5,8 +5,10 @@
 
 #include "ck/utility/common_header.hpp"
 #include "ck/library/utility/host_tensor.hpp"
+#include "ck/tile_program/block_tile/block_masking_specialization.hpp"
 
-template <typename CDataType>
+
+template <typename CDataType, typename MaskingType>
 void reference_batched_masking(Tensor<CDataType>& c_b_m_n)
 {
     const int M = c_b_m_n.mDesc.GetLengths()[1];
@@ -15,9 +17,10 @@ void reference_batched_masking(Tensor<CDataType>& c_b_m_n)
     auto f = [&](auto batch){
         for(int n = 0; n < N; ++n){
             for(int m = 0; m < M; ++m){
-                if(n > m){
-                    c_b_m_n(batch, m, n) = -ck::NumericLimits<CDataType>::Infinity();
-                }
+                if(std::is_same_v<MaskingType, ck::tile_program::block::MaskUpperTriangleFromTopLeftPredicate>)
+                    if(n > m){
+                        c_b_m_n(batch, m, n) = -ck::NumericLimits<CDataType>::Infinity();
+                    }
             }
         }
     };
