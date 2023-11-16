@@ -312,53 +312,59 @@ int main(int argc, char* argv[])
 
     o_buf.FromDevice(o_host.data());
 
-    Tensor<QDataType> q_host_ref({batch * nhead, seqlen_q, hdim_q});
-    Tensor<KDataType> k_host_ref({batch * nhead, seqlen_k, hdim_q});
-    const auto v_host_ref_lengths = std::array<ck::index_t, 3>{batch * nhead, hdim_v, seqlen_k};
-    const auto v_host_ref_strides =
-        is_v_rowmajor ? std::array<ck::index_t, 3>{hdim_v * seqlen_k, 1, hdim_v}
-                      : std::array<ck::index_t, 3>{hdim_v * seqlen_k, seqlen_k, 1};
-    Tensor<VDataType> v_host_ref(v_host_ref_lengths, v_host_ref_strides);
-    Tensor<ODataType> o_host_ref({batch * nhead, seqlen_q, hdim_v});
-    Tensor<ODataType> o_host_result_ref(get_lengths(o_perm, batch, nhead, seqlen_q, hdim_v));
+    for(ck::index_t b = 0; b < batch; ++b)
+    {
+        Tensor<QDataType> q_host_ref({nhead, seqlen_q, hdim_q});
+        Tensor<KDataType> k_host_ref({nhead, seqlen_k, hdim_q});
+        const auto v_host_ref_lengths = std::array<ck::index_t, 3>{nhead, hdim_v, seqlen_k};
+        const auto v_host_ref_strides =
+            is_v_rowmajor ? std::array<ck::index_t, 3>{hdim_v * seqlen_k, 1, hdim_v}
+                          : std::array<ck::index_t, 3>{hdim_v * seqlen_k, seqlen_k, 1};
+        Tensor<VDataType> v_host_ref(v_host_ref_lengths, v_host_ref_strides);
+        Tensor<ODataType> o_host_ref({nhead, seqlen_q, hdim_v});
 
-    Tensor<SMPLComputeDataType> s_host_ref({batch * nhead, seqlen_q, seqlen_k});
-    Tensor<PDataType> p_host_ref({batch * nhead, seqlen_q, seqlen_k});
+        Tensor<SMPLComputeDataType> s_host_ref({nhead, seqlen_q, seqlen_k});
+        Tensor<PDataType> p_host_ref({nhead, seqlen_q, seqlen_k});
 
-    // clang-format off
-    // permute
-    if(i_perm) q_host.ForEach([&](auto& self, auto idx) { q_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
-    else       q_host.ForEach([&](auto& self, auto idx) { q_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
+        // clang-format off
+        // permute
+        if(i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[0], idx[1], idx[2]); });
+        else       q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[1], idx[0], idx[2]); });
 
-    if(i_perm) k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
-    else       k_host.ForEach([&](auto& self, auto idx) { k_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
+        if(i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], idx[1], idx[2]); });
+        else       k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[1], idx[0], idx[2]); });
 
-    if constexpr (is_v_rowmajor) {
-        //                              v_host ：b, h, s, d, v_host_ref : batch*hdim*seq
-        if(i_perm) v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[1], idx[3], idx[2]) = self(idx); });
-        //                              v_host : b, s, h, d, v_host_ref : batch*hdim*seq
-        else       v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[2], idx[3], idx[1]) = self(idx); });
+        if constexpr (is_v_rowmajor) {
+            //                                                        v_host ：b, h, s, d, v_host_ref : batch*hdim*seq
+            if(i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[2], idx[1]); });
+            //                                                        v_host : b, s, h, d, v_host_ref : batch*hdim*seq
+            else       v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[2], idx[0], idx[1]); });
+        }
+        else {
+            if(i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[1], idx[2]); });
+            else       v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[1], idx[0], idx[2]); });
+        }
+
+        // reference
+        reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
+            q_host_ref, k_host_ref, s_host_ref,
+            [](const QDataType& x) { return x; },
+            [](const KDataType& x) { return x; },
+            [&scale](const SaccDataType& x) { return scale * x; });
+        reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
+                                                                                       p_host_ref);
+        reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
+            p_host_ref, v_host_ref, o_host_ref);
+
+        Tensor<ODataType> o_host_result({nhead, seqlen_q, hdim_v});
+        // permute
+        if(o_perm) o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], idx[1], idx[2]); });
+        else       o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[1], idx[0], idx[2]); });
+        // clang-format on
+
+        if(!ck::utils::check_err(o_host_result, o_host_ref))
+        {
+            return EXIT_FAILURE;
+        }
     }
-    else {
-        if(i_perm) v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx); });
-        else       v_host.ForEach([&](auto& self, auto idx) { v_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx); });
-    }
-
-    // reference
-    reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
-        q_host_ref, k_host_ref, s_host_ref,
-        [](const QDataType& x) { return x; },
-        [](const KDataType& x) { return x; },
-        [&scale](const SaccDataType& x) { return scale * x; });
-    reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
-                                                                                    p_host_ref);
-    reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
-        p_host_ref, v_host_ref, o_host_ref);
-
-    // permute
-    if(o_perm) o_host_result_ref.ForEach([&](auto& self, auto idx) { self(idx) = o_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]); });
-    else       o_host_result_ref.ForEach([&](auto& self, auto idx) { self(idx) = o_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]); });
-    // clang-format on
-
-    return !ck::utils::check_err(o_host, o_host_result_ref);
 }
