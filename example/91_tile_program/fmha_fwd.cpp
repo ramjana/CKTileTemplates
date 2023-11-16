@@ -161,6 +161,24 @@ std::ostream& operator<<(std::ostream& stream, const TensorShape<Dim>& shape)
     return stream << "]";
 }
 
+template <std::size_t Dim>
+ck::index_t get_stride(const TensorShape<Dim>& shape, ck::index_t axis)
+{
+    return std::accumulate(std::rbegin(shape),
+                           std::next(std::rbegin(shape), Dim - axis - 1),
+                           static_cast<ck::index_t>(1),
+                           std::multiplies<ck::index_t>{});
+}
+
+template <std::size_t Dim>
+ck::index_t get_size(const TensorShape<Dim>& shape)
+{
+    return std::accumulate(std::begin(shape),
+                           std::end(shape),
+                           static_cast<ck::index_t>(1),
+                           std::multiplies<ck::index_t>{});
+}
+
 TensorShape<4> get_shape(bool permute,
                          ck::index_t b /*batch*/,
                          ck::index_t h /*nhead*/,
@@ -171,15 +189,6 @@ TensorShape<4> get_shape(bool permute,
         return TensorShape<4>{b, h, s, d};
     else
         return TensorShape<4>{b, s, h, d};
-}
-
-template <std::size_t Dim>
-ck::index_t get_stride(const TensorShape<Dim>& shape, ck::index_t axis)
-{
-    return std::accumulate(std::rbegin(shape),
-                           std::next(std::rbegin(shape), Dim - axis - 1),
-                           static_cast<ck::index_t>(1),
-                           std::multiplies<ck::index_t>{});
 }
 
 int main(int argc, char* argv[])
@@ -193,12 +202,6 @@ int main(int argc, char* argv[])
 
     // accumulation numbers for performance evaluation
     std::size_t flop = 0, num_byte = 0;
-
-    // decide tensor size & prepare group mode kernel arguments
-    ck::index_t num_elements_q = 0;
-    ck::index_t num_elements_k = 0;
-    ck::index_t num_elements_v = 0;
-    ck::index_t num_elements_o = 0;
 
     std::vector<ck::index_t> seqstart_q_host;
     std::vector<ck::index_t> seqstart_k_host;
@@ -249,11 +252,6 @@ int main(int argc, char* argv[])
             seqstart_q_host.push_back(next_seqstart_q);
             seqstart_k_host.push_back(next_seqstart_k);
 
-            num_elements_q += (options.nhead * real_seqlen_q * options.hdim_q);
-            num_elements_k += (options.nhead * real_seqlen_k * options.hdim_q);
-            num_elements_v += (options.nhead * options.hdim_v * real_seqlen_k);
-            num_elements_o += (options.nhead * real_seqlen_q * options.hdim_v);
-
             using namespace ck::literals;
 
             flop += options.nhead * (2_uz * real_seqlen_q * real_seqlen_k * options.hdim_q +
@@ -281,10 +279,10 @@ int main(int argc, char* argv[])
         options.o_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_v);
 
     // host memory for storing all the tensor elements
-    std::vector<QDataType> q_block(num_elements_q);
-    std::vector<KDataType> k_block(num_elements_k);
-    std::vector<VDataType> v_block(num_elements_v);
-    std::vector<ODataType> o_block(num_elements_o);
+    std::vector<QDataType> q_block(get_size(q_shape));
+    std::vector<KDataType> k_block(get_size(k_shape));
+    std::vector<VDataType> v_block(get_size(v_shape));
+    std::vector<ODataType> o_block(get_size(o_shape));
 
     // intialize tensors
 #if 0
