@@ -18,6 +18,7 @@
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qr_ks_vs_default_policy.hpp"
 #include "ck/tile_program/block_tile/block_reduce.hpp"
 #include "ck/tile_program/tile/shuffle_distributed_tensor.hpp"
+#include "ck/tile_program/block_tile/block_masking_specialization.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -35,6 +36,7 @@ struct BlockFmhaPipelineQRKSVS
     using PDataType           = remove_cvref_t<typename Problem::PDataType>;
     using OaccDataType        = remove_cvref_t<typename Problem::OaccDataType>;
     using ODataType           = remove_cvref_t<typename Problem::ODataType>;
+    using C0MatrixMask        = C0MatrixMask_impl<remove_cvref_t<typename Problem::BlockFmhaMask>>;
 
     using BlockFmhaShape             = remove_cvref_t<typename Problem::BlockFmhaShape>;
     using VLayout                    = remove_cvref_t<typename BlockFmhaShape::VLayout>;
@@ -68,6 +70,8 @@ struct BlockFmhaPipelineQRKSVS
                const VDramBlockWindowTmp& v_dram_block_window_tmp, // N1*K1 tile
                const VElementFunction& v_element_func,
                float scale,
+               index_t seqlen_q,
+               index_t seqlen_k,
                index_t num_total_loop,
                index_t /*num_sub_loop_qk*/, // in this pipeline, the 1st gemm loop must be static
                void* smem_ptr) const
@@ -84,6 +88,8 @@ struct BlockFmhaPipelineQRKSVS
                           kN1 == VDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kK1 == VDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}],
                       "wrong!");
+                      
+        C0MatrixMask c0_matrix_mask{seqlen_q, seqlen_k};
 
         // K tile in LDS
         KDataType* k_lds_ptr = static_cast<KDataType*>(static_cast<void*>(
@@ -153,9 +159,23 @@ struct BlockFmhaPipelineQRKSVS
                              Policy::template MakeVDramTileDistribution<Problem>());
 
         auto q_tile           = tile_elementwise_in(q_element_func, q);
+        
         index_t i_total_loops = 0;
+
+        index_t block_local_id_M = blockIdx.x;
+        index_t m_block_data_idx_on_grid = 
+            __builtin_amdgcn_readfirstlane(block_local_id_M * kM0);
+
         do
         {
+            auto n_block_data_idx_on_grid =
+                __builtin_amdgcn_readfirstlane(i_total_loops * kN0);
+            if(c0_matrix_mask.IsTileSkippable(
+                   m_block_data_idx_on_grid, n_block_data_idx_on_grid, kM0, kN0))
+            {
+                continue;
+            }
+
             // STAGE 1, QK gemm
             auto k_dram_window = make_tile_window(
                 k_dram_block_window.GetBottomTensorView(),
@@ -217,11 +237,68 @@ struct BlockFmhaPipelineQRKSVS
                        k_lds_window);
             }
 
+            //add casual mask
+            //index_t counter = 0;
+            constexpr auto s_acc_spans = decltype(s_acc)::GetDistributedSpans();
+            sweep_tile_span(s_acc_spans[Number<0>{}], [&](auto idxm) {
+                sweep_tile_span(s_acc_spans[Number<1>{}], [&](auto idxn){
+                    constexpr auto i_j_idx = make_tuple(idxm, idxn);
+                    index_t idn_0 = idxn.impl_.At(0);
+                    index_t idn_1 = idxn.impl_.At(1);
+                    index_t idn_2 = idxn.impl_.At(2);
+                    /*
+                    //index_t m_local = 0;
+                    index_t n_local = 0;
+                    if(threadIdx.x < 32 ){
+                    //    m_local = threadIdx.x;
+                        n_local = idn_0 * 32 + int(idn_1/2) * 16 + idn_1%2*4 + idn_2;
+                    }
+                    if(threadIdx.x >= 32 && threadIdx.x < 64 ){
+                    //    m_local = threadIdx.x - 32;
+                        n_local = 8 + idn_0 * 32 + int(idn_1/2) * 16 + idn_1%2*4 + idn_2;
+                    }
+                    if(threadIdx.x >= 64 && threadIdx.x < 96 ){ //  32=<m<64
+                    //    m_local = threadIdx.x - 32;
+                        n_local = idn_0 * 32 + int(idn_1/2) * 16 + idn_1%2*4 + idn_2;
+                    }
+                    if(threadIdx.x >= 96 && threadIdx.x < 128 ){ //  32=<m<64
+                    //    m_local = threadIdx.x - 64;
+                        n_local = 8 + idn_0 * 32 + int(idn_1/2) * 16 + idn_1%2*4 + idn_2;
+                    }
+                    if(threadIdx.x >= 128 && threadIdx.x < 160 ){ //  64=<m<96
+                    //    m_local = threadIdx.x - 64;
+                        n_local = idn_0 * 32 + int(idn_1/2) * 16 + idn_1%2*4 + idn_2;
+                    }
+                    if(threadIdx.x >= 160 && threadIdx.x < 192 ){ //  64=<m<96
+                    //    m_local = threadIdx.x - 96;
+                        n_local = 8 + idn_0 * 32 + int(idn_1/2) * 16 + idn_1%2*4 + idn_2;
+                    }
+                    if(threadIdx.x >= 192 && threadIdx.x < 224 ){ //  96=<m<128
+                    //    m_local = threadIdx.x - 96;
+                        n_local = idn_0 * 32 + int(idn_1/2) * 16 + idn_1%2*4 + idn_2;
+                    }
+                    if(threadIdx.x >= 224 && threadIdx.x < 256 ){ //  96=<m<128
+                    //    m_local = threadIdx.x - 128;
+                        n_local = 8 + idn_0 * 32 + int(idn_1/2) * 16 + idn_1%2*4 + idn_2;
+                    }
+                    */
+                    index_t m_local = threadIdx.x % 32 + 32 * int(threadIdx.x / 64);
+                    index_t n_local = ((threadIdx.x / 32) % 2) * 8 + idn_0 * 32 + int(idn_1/2) * 16 + idn_1%2*4 + idn_2;
+                    index_t m_global = m_local + m_block_data_idx_on_grid;
+                    index_t n_global = n_local + n_block_data_idx_on_grid;
+                    bool masked_flag = c0_matrix_mask.IsMaskedElement(m_global, n_global);
+                    s_acc(i_j_idx) = masked_flag ? -ck::NumericLimits<float>::Infinity()
+                                             : s_acc(i_j_idx);
+                });
+            });
+            //end casual mask
+
             // STAGE 2, scale softmax
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
 
             const auto s =
                 tile_elementwise_in(type_convert<SMPLComputeDataType, SaccDataType>, s_acc); // S{j}
+
             auto m_local = block_tile_reduce<SMPLComputeDataType>(
                 s,
                 Sequence<1>{},
@@ -240,6 +317,14 @@ struct BlockFmhaPipelineQRKSVS
             sweep_tile_span(p_spans[Number<0>{}], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
                 sweep_tile_span(p_spans[Number<1>{}], [&](auto idx1) {
+                    //if(threadIdx.x == 33 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0){
+                    //    counter = counter + 1;
+                    //    index_t idm_0 = idx0.impl_.At(0);
+                    //    index_t idn_0 = idx1.impl_.At(0);
+                    //    index_t idn_1 = idx1.impl_.At(1);
+                    //    index_t idn_2 = idx1.impl_.At(2);
+                    //    printf("in P idm is %d , idn_ is %d , %d , %d ,counter is %d \n", idm_0, idn_0, idn_1, idn_2, counter);
+                    //}
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
                     p_compute(i_j_idx)     = math::exp(s[i_j_idx] - m[i_idx]);
                 });
@@ -315,7 +400,6 @@ struct BlockFmhaPipelineQRKSVS
             }
             // move K tile windows
             move_tile_window(k_dram_block_window, {kN0, 0});
-            i_total_loops++;
             // tail
             {
                 block_sync_lds();
@@ -324,7 +408,11 @@ struct BlockFmhaPipelineQRKSVS
                        v_lds_window);
                 block_sync_lds();
             }
-        } while(i_total_loops < num_total_loop);
+
+            // move K tile windows
+            move_tile_window(k_dram_block_window, {kN0, 0});
+
+        } while(++i_total_loops < num_total_loop);
 
         // finally, O
         constexpr auto o_spans = decltype(o_acc)::GetDistributedSpans();
@@ -349,6 +437,8 @@ struct BlockFmhaPipelineQRKSVS
                const KDramBlockWindowTmp& k_dram_block_window_tmp, // N0*K0 tile
                const VDramBlockWindowTmp& v_dram_block_window_tmp, // N1*K1 tile
                float scale,
+               index_t seqlen_q,
+               index_t seqlen_k,
                index_t num_total_loop,
                index_t num_sub_loop_qk,
                void* smem_ptr) const
@@ -361,6 +451,8 @@ struct BlockFmhaPipelineQRKSVS
             v_dram_block_window_tmp,
             [](const VDataType& x) { return x; },
             scale,
+            seqlen_q,
+            seqlen_k,
             num_total_loop,
             num_sub_loop_qk,
             smem_ptr);

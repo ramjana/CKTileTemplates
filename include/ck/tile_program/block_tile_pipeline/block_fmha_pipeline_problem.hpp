@@ -19,7 +19,8 @@ template <typename QDataType_,
           typename OaccDataType_,
           typename ODataType_,
           index_t kBlockSize_,
-          typename BlockFmhaShape_>
+          typename BlockFmhaShape_,
+          typename BlockFmhaMask_>
 struct BlockFmhaPipelineProblem
 {
     using QDataType           = remove_cvref_t<QDataType_>;
@@ -31,6 +32,7 @@ struct BlockFmhaPipelineProblem
     using OaccDataType        = remove_cvref_t<OaccDataType_>;
     using ODataType           = remove_cvref_t<ODataType_>;
     using BlockFmhaShape      = remove_cvref_t<BlockFmhaShape_>;
+    using BlockFmhaMask       = remove_cvref_t<BlockFmhaMask_>;
 
     static constexpr index_t kBlockSize = kBlockSize_;
 };
