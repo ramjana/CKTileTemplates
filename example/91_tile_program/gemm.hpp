@@ -46,49 +46,7 @@ struct Gemm
                                                                     AElementFunction,
                                                                     BElementFunction,
                                                                     CElementFunction>;
-
-    struct GridGemmPolicy
-    {
-        static constexpr ck::index_t kBlockSize = kBlockSize_;
-        static constexpr ck::index_t kMPerBlock = kMPerBlock_;
-        static constexpr ck::index_t kNPerBlock = kNPerBlock_;
-        static constexpr ck::index_t kKPerBlock = kKPerBlock_;
-
-        template <typename Problem>
-        __host__ __device__ static constexpr auto MakeBlock2TileMap(ck::index_t NumTilesM,
-                                                                    ck::index_t NumTilesN)
-        {
-            using namespace ck;
-
-            const auto unmerge = make_merge_transform(make_tuple(NumTilesN, NumTilesM));
-
-            return [unmerge](index_t block_id) {
-                MultiIndex<2> unmerged;
-                unmerge.CalculateLowerIndex(unmerged, make_multi_index(block_id));
-
-                return make_multi_index(unmerged.At<1>(), unmerged.At<0>());
-            };
-        }
-
-        template <typename Problem>
-        __host__ __device__ static constexpr auto GetBlockGemmPipeline()
-        {
-            using namespace ck;
-            using namespace ck::tile_program;
-            using namespace ck::tile_program::block;
-
-            using BlockGemmPipelineProblem_ =
-                BlockGemmPipelineProblem<ADataType,
-                                         BDataType,
-                                         AccDataType,
-                                         kBlockSize,
-                                         TileGemmShape<kMPerBlock, kNPerBlock, kKPerBlock>>;
-
-            return BlockGemmPipelineAGmemBGmemCRegV2<
-                BlockGemmPipelineProblem_,
-                BlockGemmPipelineAGmemBGmemCRegV2DefaultPolicy>{};
-        }
-    };
+    using GridGemmPolicy = ck::GridGemmV1DefaultPolicy<kBlockSize_, kMPerBlock_, kNPerBlock_, kKPerBlock_>;
 
     using GridGemm = ck::GridGemmV1<GridGemmProblem, GridGemmPolicy>;
 
