@@ -165,18 +165,19 @@ float invoker_fmha_kernel(Mode mode,
     const ck::index_t batch_stride_v = (nhead * hdim_v * seqlen_k);
     const ck::index_t batch_stride_o = (nhead * seqlen_q * hdim_v);
 
-    const auto flow = [](bool cond, auto true_action, auto false_action, auto receiver) {
-        if(cond)
-        {
-            return receiver(true_action());
-        }
-        else
-        {
-            return receiver(false_action());
-        }
-    };
+    const auto launch_flow =
+        [](bool condition, auto true_action, auto false_action, auto launcher) {
+            if(condition)
+            {
+                return launcher(true_action());
+            }
+            else
+            {
+                return launcher(false_action());
+            }
+        };
 
-    return flow(
+    return launch_flow(
         mode == Mode::Batch,
         [&] {
             return FmhaKernel::MakeKargs(q_ptr,
