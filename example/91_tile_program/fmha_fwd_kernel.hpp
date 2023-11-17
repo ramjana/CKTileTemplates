@@ -30,7 +30,7 @@ struct FmhaFwdKernel
 
     using VLayout = ck::remove_cvref_t<typename FmhaPipeline::VLayout>;
 
-    struct KargsBatchMode
+    struct KargsCommon
     {
         const QDataType* q_ptr;
         const KDataType* k_ptr;
@@ -53,37 +53,18 @@ struct FmhaFwdKernel
         ck::index_t nhead_stride_k;
         ck::index_t nhead_stride_v;
         ck::index_t nhead_stride_o;
+    };
 
+    struct KargsBatchMode : KargsCommon
+    {
         ck::index_t batch_stride_q;
         ck::index_t batch_stride_k;
         ck::index_t batch_stride_v;
         ck::index_t batch_stride_o;
     };
 
-    struct KargsGroupMode
+    struct KargsGroupMode : KargsCommon
     {
-        const QDataType* q_ptr;
-        const KDataType* k_ptr;
-        const VDataType* v_ptr;
-        ODataType* o_ptr;
-
-        ck::index_t seqlen_q;
-        ck::index_t seqlen_k;
-        ck::index_t hdim_q;
-        ck::index_t hdim_v;
-
-        float scale;
-
-        ck::index_t stride_q;
-        ck::index_t stride_k;
-        ck::index_t stride_v;
-        ck::index_t stride_o;
-
-        ck::index_t nhead_stride_q;
-        ck::index_t nhead_stride_k;
-        ck::index_t nhead_stride_v;
-        ck::index_t nhead_stride_o;
-
         const ck::index_t* seqstart_q_ptr;
         const ck::index_t* seqstart_k_ptr;
         const ck::index_t* seqlen_k_ptr;
