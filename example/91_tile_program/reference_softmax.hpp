@@ -7,7 +7,7 @@
 #include "ck/library/utility/host_tensor.hpp"
 
 template <typename ADataType, typename AccDataType, typename BDataType>
-void reference_softmax(TensorView<const ADataType> a_m_n, TensorView<BDataType> b_m_n)
+void reference_softmax(const Tensor<ADataType>& a_m_n, Tensor<BDataType>& b_m_n)
 {
     auto f = [&](auto m) {
         const int N = a_m_n.mDesc.GetLengths()[1];

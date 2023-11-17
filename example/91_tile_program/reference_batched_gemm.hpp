@@ -13,9 +13,9 @@ template <typename ADataType,
           typename AElementOp   = ck::identity,
           typename BElementOp   = ck::identity,
           typename ACCElementOp = ck::identity>
-void reference_batched_gemm(TensorView<const ADataType> a_b_m_k,
-                            TensorView<const BDataType> b_b_n_k,
-                            TensorView<CDataType> c_b_m_n,
+void reference_batched_gemm(const Tensor<ADataType>& a_b_m_k,
+                            const Tensor<BDataType>& b_b_n_k,
+                            Tensor<CDataType>& c_b_m_n,
                             const AElementOp& a_element_op     = {},
                             const BElementOp& b_element_op     = {},
                             const ACCElementOp& acc_element_op = {})
