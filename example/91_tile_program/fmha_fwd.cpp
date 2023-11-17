@@ -67,78 +67,6 @@ using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipeli
 using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
 using FmhaKernel   = FmhaFwdKernel<FmhaTilePartitioner, FmhaPipeline, FmhaEpilogue>;
 
-#if 0
-template <typename FmhaKernel>
-float invoker_fmha_kernel(const void* q_ptr,
-                          const void* k_ptr,
-                          const void* v_ptr,
-                          void* o_ptr,
-                          ck::index_t batch,
-                          ck::index_t nhead,
-                          ck::index_t seqlen_q,
-                          ck::index_t seqlen_k,
-                          ck::index_t hdim_q,
-                          ck::index_t hdim_v,
-                          float scale,
-                          bool i_perm,
-                          bool o_perm)
-{
-    dim3 kGridSize            = FmhaKernel::GridSize(batch, nhead, seqlen_q, hdim_v);
-    constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
-
-    constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
-    constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
-    constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
-
-    constexpr bool is_v_rowmajor =
-        ck::is_same_v<typename FmhaKernel::VLayout, ck::tensor_layout::gemm::RowMajor>;
-
-    // batch * nhead * seqlen * hdim or batch * seqlen * nhead * hdim
-    auto kargs = FmhaKernel::MakeKargs(
-        q_ptr,
-        k_ptr,
-        v_ptr,
-        o_ptr,
-        seqlen_q, // seqlen_q
-        seqlen_k, // seqlen_k
-        hdim_q,   // hdim_q
-        hdim_v,   // hdim_v
-        scale,
-        i_perm ? hdim_q : nhead * hdim_q, // stride_q
-        i_perm ? hdim_q : nhead * hdim_q, // stride_k
-        [&]() {
-            if constexpr(is_v_rowmajor)
-                return i_perm ? hdim_v : nhead * hdim_v;
-            else
-                return i_perm ? seqlen_k : nhead * seqlen_k;
-        }(),                                 // stride_v
-        o_perm ? hdim_v : nhead * hdim_v,    // stride_o
-        i_perm ? seqlen_q * hdim_q : hdim_q, // nhead_stride_q
-        i_perm ? seqlen_k * hdim_q : hdim_q, // nhead_stride_k
-        [&]() {
-            if constexpr(is_v_rowmajor)
-                return i_perm ? seqlen_k * hdim_v : hdim_v;
-            else
-                return i_perm ? hdim_v * seqlen_k : seqlen_k;
-        }(),                                 // nhead_stride_v
-        o_perm ? seqlen_q * hdim_v : hdim_v, // nhead_stride_o
-        nhead * seqlen_q * hdim_q,           // batch_stride_q
-        nhead * seqlen_k * hdim_q,           // batch_stride_k
-        nhead * hdim_v * seqlen_k,           // batch_stride_v
-        nhead * seqlen_q * hdim_v);          // batch_stride_o
-
-    float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
-                                                              FmhaKernel{},
-                                                              kGridSize,
-                                                              kBlockSize,
-                                                              0,
-                                                              kargs); // BatchStrideO
-    return ave_time;
-}
-#endif
-
-static constexpr ck::index_t seqlen_alignment = 128;
-
 enum class Mode : unsigned
 {
     Batch,
@@ -149,6 +77,105 @@ inline std::ostream& operator<<(std::ostream& stream, Mode mode)
 {
     return stream << (mode == Mode::Batch ? "batch" : "group");
 }
+
+template <typename FmhaKernel_>
+float invoker_fmha_kernel(Mode mode,
+                          const void* q_ptr,
+                          const void* k_ptr,
+                          const void* v_ptr,
+                          void* o_ptr,
+                          const void* seqstart_q_ptr,
+                          const void* seqstart_k_ptr,
+                          const void* seqlen_k_ptr,
+                          ck::index_t problem_count,
+                          ck::index_t nhead,
+                          ck::index_t seqlen_q,
+                          ck::index_t seqlen_k,
+                          ck::index_t hdim_q,
+                          ck::index_t hdim_v,
+                          float scale,
+                          bool i_perm,
+                          bool o_perm)
+{
+    dim3 kGridSize            = FmhaKernel_::GridSize(problem_count, nhead, seqlen_q, hdim_v);
+    constexpr dim3 kBlockSize = FmhaKernel_::BlockSize();
+
+    constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
+    constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
+    constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
+
+    const ck::index_t stride_q = (i_perm ? hdim_q : nhead * hdim_q);
+    const ck::index_t stride_k = (i_perm ? hdim_q : nhead * hdim_q);
+    const ck::index_t stride_v = (i_perm ? seqlen_k : nhead * seqlen_k);
+    const ck::index_t stride_o = (o_perm ? hdim_v : nhead * hdim_v);
+
+    const ck::index_t nhead_stride_q = (i_perm ? seqlen_q * hdim_q : hdim_q);
+    const ck::index_t nhead_stride_k = (i_perm ? seqlen_k * hdim_q : hdim_q);
+    const ck::index_t nhead_stride_v = (i_perm ? hdim_v * seqlen_k : seqlen_k);
+    const ck::index_t nhead_stride_o = (o_perm ? seqlen_q * hdim_v : hdim_v);
+
+    const ck::index_t batch_stride_q = (nhead * seqlen_q * hdim_q);
+    const ck::index_t batch_stride_k = (nhead * seqlen_k * hdim_q);
+    const ck::index_t batch_stride_v = (nhead * hdim_v * seqlen_k);
+    const ck::index_t batch_stride_o = (nhead * seqlen_q * hdim_v);
+
+    auto kargs = [&]() {
+        if(mode == Mode::Batch)
+        {
+            return FmhaKernel_::MakeKargs(q_ptr,
+                                          k_ptr,
+                                          v_ptr,
+                                          o_ptr,
+                                          seqlen_q,
+                                          seqlen_k,
+                                          hdim_q,
+                                          hdim_v,
+                                          scale,
+                                          stride_q,
+                                          stride_k,
+                                          stride_v,
+                                          stride_o,
+                                          nhead_stride_q,
+                                          nhead_stride_k,
+                                          nhead_stride_v,
+                                          nhead_stride_o,
+                                          batch_stride_q,
+                                          batch_stride_k,
+                                          batch_stride_v,
+                                          batch_stride_o);
+        }
+        else
+        {
+            return FmhaKernel_::MakeKargs(q_ptr,
+                                          k_ptr,
+                                          v_ptr,
+                                          o_ptr,
+                                          seqstart_q_ptr,
+                                          seqstart_k_ptr,
+                                          seqlen_k_ptr,
+                                          hdim_q,
+                                          hdim_v,
+                                          scale,
+                                          stride_q,
+                                          stride_k,
+                                          stride_v,
+                                          stride_o,
+                                          nhead_stride_q,
+                                          nhead_stride_k,
+                                          nhead_stride_v,
+                                          nhead_stride_o);
+        }
+    }();
+
+    return launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
+                                                    FmhaKernel_{},
+                                                    kGridSize,
+                                                    kBlockSize,
+                                                    0,
+                                                    kargs); // BatchStrideO
+}
+
+static constexpr ck::index_t seqlen_alignment = 128;
 
 struct Options
 {
@@ -208,46 +235,10 @@ struct Options
         return true;
     }
 
-    ck::index_t shape_batch() const noexcept { return mode == Mode::Batch ? original_batch : 1; }
+    ck::index_t batch() const noexcept { return mode == Mode::Batch ? original_batch : 1; }
 
     ck::index_t problem_count() const noexcept { return original_batch; }
 };
-
-template <std::size_t Dim>
-using TensorShape = std::array<ck::index_t, Dim>;
-
-template <std::size_t Dim>
-std::ostream& operator<<(std::ostream& stream, const TensorShape<Dim>& shape)
-{
-    stream << "[";
-    if(!shape.empty())
-    {
-        stream << shape[0];
-        for(std::size_t idx = 1; idx < shape.size(); ++idx)
-        {
-            stream << ", " << shape[idx];
-        }
-    }
-    return stream << "]";
-}
-
-template <std::size_t Dim>
-ck::index_t get_stride(const TensorShape<Dim>& shape, ck::index_t axis)
-{
-    return std::accumulate(std::rbegin(shape),
-                           std::next(std::rbegin(shape), Dim - axis - 1),
-                           static_cast<ck::index_t>(1),
-                           std::multiplies<ck::index_t>{});
-}
-
-template <std::size_t Dim>
-ck::index_t get_size(const TensorShape<Dim>& shape)
-{
-    return std::accumulate(std::begin(shape),
-                           std::end(shape),
-                           static_cast<ck::index_t>(1),
-                           std::multiplies<ck::index_t>{});
-}
 
 std::array<ck::index_t, 4> get_lengths(bool permute,
                                        ck::index_t b /*batch*/,
@@ -339,20 +330,15 @@ int main(int argc, char* argv[])
     const ck::index_t shape_seqlen_k =
         (options.mode == Mode::Batch ? options.seqlen_k : seqstart_k_host.back());
 
-    const auto q_shape = get_lengths(
-        options.i_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_q);
-    const auto k_shape = get_lengths(
-        options.i_perm, options.shape_batch(), options.nhead, shape_seqlen_k, options.hdim_q);
-    const auto v_shape = get_lengths(
-        options.i_perm, options.shape_batch(), options.nhead, options.hdim_v, shape_seqlen_k);
-    const auto o_shape = get_lengths(
-        options.o_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_v);
-
     // host memory for storing all the tensor elements
-    Tensor<QDataType> q_host(q_shape);
-    Tensor<KDataType> k_host(k_shape);
-    Tensor<VDataType> v_host(v_shape);
-    Tensor<ODataType> o_host(o_shape);
+    Tensor<QDataType> q_host(get_lengths(
+        options.i_perm, options.batch(), options.nhead, shape_seqlen_q, options.hdim_q));
+    Tensor<KDataType> k_host(get_lengths(
+        options.i_perm, options.batch(), options.nhead, shape_seqlen_k, options.hdim_q));
+    Tensor<VDataType> v_host(get_lengths(
+        options.i_perm, options.batch(), options.nhead, options.hdim_v, shape_seqlen_k));
+    Tensor<ODataType> o_host(get_lengths(
+        options.o_perm, options.batch(), options.nhead, shape_seqlen_q, options.hdim_v));
 
     // intialize tensors
 #if 0
@@ -372,94 +358,35 @@ int main(int argc, char* argv[])
     DeviceMem seqstart_q(seqstart_q_host.size() * sizeof(ck::index_t));
     DeviceMem seqstart_k(seqstart_k_host.size() * sizeof(ck::index_t));
 
-    q_buf.ToDevice(q_host.mData.data());
-    k_buf.ToDevice(k_host.mData.data());
-    v_buf.ToDevice(v_host.mData.data());
+    q_buf.ToDevice(q_host.data());
+    k_buf.ToDevice(k_host.data());
+    v_buf.ToDevice(v_host.data());
     seqstart_q.ToDevice(seqstart_q_host.data());
     seqstart_k.ToDevice(seqstart_k_host.data());
-
-    dim3 kGridSize = FmhaKernel::GridSize(
-        options.problem_count(), options.nhead, shape_seqlen_q, options.hdim_v);
-    constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
     std::cout << "mode:" << options.mode << ", batch:" << options.original_batch
               << ", nhead:" << options.nhead << ", seqlen_q:" << options.seqlen_q
               << ", seqlen_k:" << options.seqlen_k << ", hdim_q:" << options.hdim_q
               << ", hdim_v:" << options.hdim_v << ", scale:" << options.scale
-              << ", i_perm:" << std::boolalpha << options.i_perm << ", o_perm:" << std::boolalpha
-              << options.o_perm << ", grid_size:" << kGridSize.x << "x" << kGridSize.y << "x"
-              << kGridSize.z << std::endl;
+              << ", i_perm:" << options.i_perm << ", o_perm:" << options.o_perm << std::endl;
 
-    constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
-    constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
-    constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
-
-    // if value of i_perm/o_perm is true, the tensor shape is [batch, nhead, seqlen, hdim];
-    // otherwise, shape is [batch, seqlen, nhead, hdim]. which means we are choosing
-    // stride/nhead_stride base on the axis of seqlen/nhead (axis=1 or axis=2)
-    auto kargs = [&]() {
-        const ck::index_t stride_q       = get_stride(q_shape, 1 + options.i_perm);
-        const ck::index_t stride_k       = get_stride(k_shape, 1 + options.i_perm);
-        const ck::index_t stride_v       = get_stride(v_shape, 1 + options.i_perm);
-        const ck::index_t stride_o       = get_stride(o_shape, 1 + options.o_perm);
-        const ck::index_t nhead_stride_q = get_stride(q_shape, 1 + !options.i_perm);
-        const ck::index_t nhead_stride_k = get_stride(k_shape, 1 + !options.i_perm);
-        const ck::index_t nhead_stride_v = get_stride(v_shape, 1 + !options.i_perm);
-        const ck::index_t nhead_stride_o = get_stride(o_shape, 1 + !options.o_perm);
-
-        if(options.mode == Mode::Batch)
-        {
-            return FmhaKernel::MakeKargs(q_buf.GetDeviceBuffer(),
-                                         k_buf.GetDeviceBuffer(),
-                                         v_buf.GetDeviceBuffer(),
-                                         o_buf.GetDeviceBuffer(),
-                                         shape_seqlen_q,
-                                         shape_seqlen_k,
-                                         options.hdim_q,
-                                         options.hdim_v,
-                                         options.scale,
-                                         stride_q,
-                                         stride_k,
-                                         stride_v,
-                                         stride_o,
-                                         nhead_stride_q,
-                                         nhead_stride_k,
-                                         nhead_stride_v,
-                                         nhead_stride_o,
-                                         get_stride(q_shape, 0),  // batch_stride_q
-                                         get_stride(k_shape, 0),  // batch_stride_k
-                                         get_stride(v_shape, 0),  // batch_stride_v
-                                         get_stride(o_shape, 0)); // batch_stride_o
-        }
-        else
-        {
-            return FmhaKernel::MakeKargs(q_buf.GetDeviceBuffer(),
-                                         k_buf.GetDeviceBuffer(),
-                                         v_buf.GetDeviceBuffer(),
-                                         o_buf.GetDeviceBuffer(),
-                                         seqstart_q.GetDeviceBuffer(),
-                                         seqstart_k.GetDeviceBuffer(),
-                                         nullptr,
-                                         options.hdim_q,
-                                         options.hdim_v,
-                                         options.scale,
-                                         stride_q,
-                                         stride_k,
-                                         stride_v,
-                                         stride_o,
-                                         nhead_stride_q,
-                                         nhead_stride_k,
-                                         nhead_stride_v,
-                                         nhead_stride_o);
-        }
-    }();
-
-    float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
-                                                              FmhaKernel{},
-                                                              kGridSize,
-                                                              kBlockSize,
-                                                              0,
-                                                              kargs); // BatchStrideO
+    float ave_time = invoker_fmha_kernel<FmhaKernel>(options.mode,
+                                                     q_buf.GetDeviceBuffer(),
+                                                     k_buf.GetDeviceBuffer(),
+                                                     v_buf.GetDeviceBuffer(),
+                                                     o_buf.GetDeviceBuffer(),
+                                                     seqstart_q.GetDeviceBuffer(),
+                                                     seqstart_k.GetDeviceBuffer(),
+                                                     nullptr,
+                                                     options.problem_count(),
+                                                     options.nhead,
+                                                     shape_seqlen_q,
+                                                     shape_seqlen_k,
+                                                     options.hdim_q,
+                                                     options.hdim_v,
+                                                     options.scale,
+                                                     options.i_perm,
+                                                     options.o_perm);
 
     float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
 
@@ -473,7 +400,7 @@ int main(int argc, char* argv[])
         return EXIT_SUCCESS;
     }
 
-    o_buf.FromDevice(o_host.mData.data());
+    o_buf.FromDevice(o_host.data());
 
     for(ck::index_t p = 0; p < options.problem_count(); ++p)
     {
