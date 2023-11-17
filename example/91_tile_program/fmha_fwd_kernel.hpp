@@ -54,10 +54,10 @@ struct FmhaFwdKernel
         ck::index_t nhead_stride_v;
         ck::index_t nhead_stride_o;
 
-        ck::index_t batch_stride_q = 0;
-        ck::index_t batch_stride_k = 0;
-        ck::index_t batch_stride_v = 0;
-        ck::index_t batch_stride_o = 0;
+        ck::index_t batch_stride_q;
+        ck::index_t batch_stride_k;
+        ck::index_t batch_stride_v;
+        ck::index_t batch_stride_o;
     };
 
     struct KargsGroupMode
@@ -84,9 +84,9 @@ struct FmhaFwdKernel
         ck::index_t nhead_stride_v;
         ck::index_t nhead_stride_o;
 
-        const ck::index_t* seqstart_q_ptr = nullptr;
-        const ck::index_t* seqstart_k_ptr = nullptr;
-        const ck::index_t* seqlen_k_ptr   = nullptr;
+        const ck::index_t* seqstart_q_ptr;
+        const ck::index_t* seqstart_k_ptr;
+        const ck::index_t* seqlen_k_ptr;
     };
 
     // initialize kernel arguments for batch mode
