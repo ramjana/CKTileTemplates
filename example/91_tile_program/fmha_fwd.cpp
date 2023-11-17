@@ -519,9 +519,9 @@ int main(int argc, char* argv[])
         else               k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[1] + key_offset, idx[0], idx[2]); });
 
         if constexpr (is_v_rowmajor) {
-            //                                                                v_host ：b, h, s, d, v_host_ref : batch*hdim*seq
+            //                                                                v_host_ref: [nhead, hdim, seq], v_host: [b, h, s, d] 
             if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[2] + key_offset, idx[1]); });
-            //                                                                v_host : b, s, h, d, v_host_ref : batch*hdim*seq
+            //                                                                v_host_ref: [nhead, hdim, seq], v_host: [b, s, h, d]
             else               v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[2] + key_offset, idx[0], idx[1]); });
         }
         else {
