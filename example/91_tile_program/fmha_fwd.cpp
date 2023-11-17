@@ -119,9 +119,20 @@ float invoker_fmha_kernel(Mode mode,
     const ck::index_t batch_stride_v = (nhead * hdim_v * seqlen_k);
     const ck::index_t batch_stride_o = (nhead * seqlen_q * hdim_v);
 
-    auto kargs = [&]() {
-        if(mode == Mode::Batch)
+    const auto flow = [](bool cond, auto true_action, auto false_action, auto receiver) {
+        if(cond)
         {
+            return receiver(true_action());
+        }
+        else
+        {
+            return receiver(false_action());
+        }
+    };
+
+    return flow(
+        mode == Mode::Batch,
+        [&] {
             return FmhaKernel_::MakeKargs(q_ptr,
                                           k_ptr,
                                           v_ptr,
@@ -143,9 +154,8 @@ float invoker_fmha_kernel(Mode mode,
                                           batch_stride_k,
                                           batch_stride_v,
                                           batch_stride_o);
-        }
-        else
-        {
+        },
+        [&] {
             return FmhaKernel_::MakeKargs(q_ptr,
                                           k_ptr,
                                           v_ptr,
@@ -164,15 +174,15 @@ float invoker_fmha_kernel(Mode mode,
                                           nhead_stride_k,
                                           nhead_stride_v,
                                           nhead_stride_o);
-        }
-    }();
-
-    return launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
-                                                    FmhaKernel_{},
-                                                    kGridSize,
-                                                    kBlockSize,
-                                                    0,
-                                                    kargs); // BatchStrideO
+        },
+        [&](auto kargs) {
+            return launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
+                                                            FmhaKernel_{},
+                                                            kGridSize,
+                                                            kBlockSize,
+                                                            0,
+                                                            kargs); // BatchStrideO
+        });
 }
 
 static constexpr ck::index_t seqlen_alignment = 128;
@@ -430,8 +440,8 @@ int main(int argc, char* argv[])
             q_host_ref, k_host_ref, s_host_ref,
             ck::identity{}, ck::identity{},
             [scale = options.scale](const SaccDataType& x) { return scale * x; });
-        reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, 
-                                                                                    p_host_ref);
+        reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
+                                                                                       p_host_ref);
         reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
             p_host_ref, v_host_ref, o_host_ref);
 
