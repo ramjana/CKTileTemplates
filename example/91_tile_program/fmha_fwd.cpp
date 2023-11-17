@@ -221,12 +221,6 @@ struct Options
         if(scale == .0f)
             scale = 1.0 / ck::math::sqrt(static_cast<float>(hdim_q)); // TODO: q ? v ?
 
-        // group mode is only available if i_perm=false & o_perm=false
-        if(mode == Mode::Group && !(!i_perm && !o_perm))
-        {
-            mode = Mode::Batch;
-        }
-
         if(seqlen_q % seqlen_alignment || seqlen_k % seqlen_alignment)
         {
             return false;
