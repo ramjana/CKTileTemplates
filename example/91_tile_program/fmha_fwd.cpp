@@ -1,3 +1,5 @@
+#include <array>
+#include <cstdlib>
 #include <cstring>
 #include <cstdlib>
 #include <iomanip>
@@ -44,28 +46,60 @@ using ODataType           = ck::half_t;
 //                                                 M0   N0  K0   N1  K1  K0L
 // using FmhaShape = ck::tile_program::TileFmhaShape<128,  64, 64, 128, 64>;
 // using FmhaShape = ck::tile_program::TileFmhaShape<128, 256, 32, 128, 32>;
-using FmhaBlockTile  = ck::Sequence<128, 128, 32, 128, 32, 128>;
-using FmhaBlockWarps = ck::Sequence<4, 1, 1>;
-using FmhaWarpTile   = ck::Sequence<32, 32, 16>;
-using FmhaShape      = ck::tile_program::
-    TileFmhaShape<FmhaBlockTile, FmhaBlockWarps, FmhaWarpTile, FmhaBlockWarps, FmhaWarpTile>;
+using VLayout = ck::tensor_layout::gemm::RowMajor; // (bs, nhead) seqlen * hdim
+// using VLayout = ck::tensor_layout::gemm::ColumnMajor; // (bs, nhead) hdim * seqlen
 
-using FmhaTilePartitioner = FmhaFwdTilePartitioner<FmhaShape>;
-using FmhaPipelineProblem = ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
-                                                                              KDataType,
-                                                                              VDataType,
-                                                                              SaccDataType,
-                                                                              SMPLComputeDataType,
-                                                                              PDataType,
-                                                                              OaccDataType,
-                                                                              ODataType,
-                                                                              256, // BlockSize
-                                                                              FmhaShape>;
+using FmhaBlockTileHdim64  = ck::Sequence<128, 64, 32, 64, 32, 64>;
+using FmhaBlockTileHdim128 = ck::Sequence<128, 128, 32, 128, 32, 128>;
+using FmhaBlockWarps       = ck::Sequence<4, 1, 1>;
+using FmhaWarpTile         = ck::Sequence<32, 32, 16>;
+using FmhaShapeHDim64      = ck::tile_program::TileFmhaShape<FmhaBlockTileHdim64,
+                                                        FmhaBlockWarps,
+                                                        FmhaWarpTile,
+                                                        FmhaBlockWarps,
+                                                        FmhaWarpTile,
+                                                        VLayout>;
+using FmhaShapeHDim128     = ck::tile_program::TileFmhaShape<FmhaBlockTileHdim128,
+                                                         FmhaBlockWarps,
+                                                         FmhaWarpTile,
+                                                         FmhaBlockWarps,
+                                                         FmhaWarpTile,
+                                                         VLayout>;
+
+using FmhaTilePartitionerHDim64  = FmhaFwdTilePartitioner<FmhaShapeHDim64>;
+using FmhaTilePartitionerHDim128 = FmhaFwdTilePartitioner<FmhaShapeHDim128>;
+using FmhaPipelineProblemHDim64 =
+    ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
+                                                      KDataType,
+                                                      VDataType,
+                                                      SaccDataType,
+                                                      SMPLComputeDataType,
+                                                      PDataType,
+                                                      OaccDataType,
+                                                      ODataType,
+                                                      256, // BlockSize
+                                                      FmhaShapeHDim64>;
+using FmhaPipelineProblemHDim128 =
+    ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
+                                                      KDataType,
+                                                      VDataType,
+                                                      SaccDataType,
+                                                      SMPLComputeDataType,
+                                                      PDataType,
+                                                      OaccDataType,
+                                                      ODataType,
+                                                      256, // BlockSize
+                                                      FmhaShapeHDim128>;
 // using FmhaPipeline        = ck::tile_program::block::BlockFmhaPipelineQKVS<FmhaPipelineProblem>;
-using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblem>;
+using FmhaPipelineHDim64 =
+    ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblemHDim64>;
+using FmhaPipelineHDim128 =
+    ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblemHDim128>;
 
-using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
-using FmhaKernel   = FmhaFwdKernel<FmhaTilePartitioner, FmhaPipeline, FmhaEpilogue>;
+using FmhaEpilogue     = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
+using FmhaKernelHDim64 = FmhaFwdKernel<FmhaTilePartitionerHDim64, FmhaPipelineHDim64, FmhaEpilogue>;
+using FmhaKernelHDim128 =
+    FmhaFwdKernel<FmhaTilePartitionerHDim128, FmhaPipelineHDim128, FmhaEpilogue>;
 
 enum class Mode : unsigned
 {
@@ -78,7 +112,7 @@ inline std::ostream& operator<<(std::ostream& stream, Mode mode)
     return stream << (mode == Mode::Batch ? "batch" : "group");
 }
 
-template <typename FmhaKernel_>
+template <typename FmhaKernel>
 float invoker_fmha_kernel(Mode mode,
                           const void* q_ptr,
                           const void* k_ptr,
@@ -97,21 +131,34 @@ float invoker_fmha_kernel(Mode mode,
                           bool i_perm,
                           bool o_perm)
 {
-    dim3 kGridSize            = FmhaKernel_::GridSize(problem_count, nhead, seqlen_q, hdim_v);
-    constexpr dim3 kBlockSize = FmhaKernel_::BlockSize();
+    dim3 kGridSize            = FmhaKernel::GridSize(problem_count, nhead, seqlen_q, hdim_v);
+    constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
     constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
     constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
     constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
 
+    constexpr bool is_v_rowmajor =
+        ck::is_same_v<typename FmhaKernel::VLayout, ck::tensor_layout::gemm::RowMajor>;
+
     const ck::index_t stride_q = (i_perm ? hdim_q : nhead * hdim_q);
     const ck::index_t stride_k = (i_perm ? hdim_q : nhead * hdim_q);
-    const ck::index_t stride_v = (i_perm ? seqlen_k : nhead * seqlen_k);
+    const ck::index_t stride_v = [&]() {
+        if constexpr(is_v_rowmajor)
+            return i_perm ? hdim_v : nhead * hdim_v;
+        else
+            return i_perm ? seqlen_k : nhead * seqlen_k;
+    }();
     const ck::index_t stride_o = (o_perm ? hdim_v : nhead * hdim_v);
 
     const ck::index_t nhead_stride_q = (i_perm ? seqlen_q * hdim_q : hdim_q);
     const ck::index_t nhead_stride_k = (i_perm ? seqlen_k * hdim_q : hdim_q);
-    const ck::index_t nhead_stride_v = (i_perm ? hdim_v * seqlen_k : seqlen_k);
+    const ck::index_t nhead_stride_v = [&]() {
+        if constexpr(is_v_rowmajor)
+            return i_perm ? seqlen_k * hdim_v : hdim_v;
+        else
+            return i_perm ? hdim_v * seqlen_k : seqlen_k;
+    }();
     const ck::index_t nhead_stride_o = (o_perm ? seqlen_q * hdim_v : hdim_v);
 
     const ck::index_t batch_stride_q = (nhead * seqlen_q * hdim_q);
@@ -133,51 +180,51 @@ float invoker_fmha_kernel(Mode mode,
     return flow(
         mode == Mode::Batch,
         [&] {
-            return FmhaKernel_::MakeKargs(q_ptr,
-                                          k_ptr,
-                                          v_ptr,
-                                          o_ptr,
-                                          seqlen_q,
-                                          seqlen_k,
-                                          hdim_q,
-                                          hdim_v,
-                                          scale,
-                                          stride_q,
-                                          stride_k,
-                                          stride_v,
-                                          stride_o,
-                                          nhead_stride_q,
-                                          nhead_stride_k,
-                                          nhead_stride_v,
-                                          nhead_stride_o,
-                                          batch_stride_q,
-                                          batch_stride_k,
-                                          batch_stride_v,
-                                          batch_stride_o);
+            return FmhaKernel::MakeKargs(q_ptr,
+                                         k_ptr,
+                                         v_ptr,
+                                         o_ptr,
+                                         seqlen_q,
+                                         seqlen_k,
+                                         hdim_q,
+                                         hdim_v,
+                                         scale,
+                                         stride_q,
+                                         stride_k,
+                                         stride_v,
+                                         stride_o,
+                                         nhead_stride_q,
+                                         nhead_stride_k,
+                                         nhead_stride_v,
+                                         nhead_stride_o,
+                                         batch_stride_q,
+                                         batch_stride_k,
+                                         batch_stride_v,
+                                         batch_stride_o);
         },
         [&] {
-            return FmhaKernel_::MakeKargs(q_ptr,
-                                          k_ptr,
-                                          v_ptr,
-                                          o_ptr,
-                                          seqstart_q_ptr,
-                                          seqstart_k_ptr,
-                                          seqlen_k_ptr,
-                                          hdim_q,
-                                          hdim_v,
-                                          scale,
-                                          stride_q,
-                                          stride_k,
-                                          stride_v,
-                                          stride_o,
-                                          nhead_stride_q,
-                                          nhead_stride_k,
-                                          nhead_stride_v,
-                                          nhead_stride_o);
+            return FmhaKernel::MakeKargs(q_ptr,
+                                         k_ptr,
+                                         v_ptr,
+                                         o_ptr,
+                                         seqstart_q_ptr,
+                                         seqstart_k_ptr,
+                                         seqlen_k_ptr,
+                                         hdim_q,
+                                         hdim_v,
+                                         scale,
+                                         stride_q,
+                                         stride_k,
+                                         stride_v,
+                                         stride_o,
+                                         nhead_stride_q,
+                                         nhead_stride_k,
+                                         nhead_stride_v,
+                                         nhead_stride_o);
         },
         [&](auto kargs) {
             return launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
-                                                            FmhaKernel_{},
+                                                            FmhaKernel{},
                                                             kGridSize,
                                                             kBlockSize,
                                                             0,
@@ -334,13 +381,20 @@ int main(int argc, char* argv[])
     const ck::index_t shape_seqlen_k =
         (options.mode == Mode::Batch ? options.seqlen_k : seqstart_k_host.back());
 
+    constexpr bool is_v_rowmajor =
+        ck::is_same_v<typename FmhaKernelHDim64::VLayout, ck::tensor_layout::gemm::RowMajor>;
+
     // host memory for storing all the tensor elements
     Tensor<QDataType> q_host(get_lengths(
         options.i_perm, options.batch(), options.nhead, shape_seqlen_q, options.hdim_q));
     Tensor<KDataType> k_host(get_lengths(
         options.i_perm, options.batch(), options.nhead, shape_seqlen_k, options.hdim_q));
-    Tensor<VDataType> v_host(get_lengths(
-        options.i_perm, options.batch(), options.nhead, options.hdim_v, shape_seqlen_k));
+    Tensor<VDataType> v_host(
+        is_v_rowmajor
+            ? get_lengths(
+                  options.i_perm, options.batch(), options.nhead, shape_seqlen_k, options.hdim_v)
+            : get_lengths(
+                  options.i_perm, options.batch(), options.nhead, options.hdim_v, shape_seqlen_k));
     Tensor<ODataType> o_host(get_lengths(
         options.o_perm, options.batch(), options.nhead, shape_seqlen_q, options.hdim_v));
 
@@ -372,25 +426,51 @@ int main(int argc, char* argv[])
               << ", nhead:" << options.nhead << ", seqlen_q:" << options.seqlen_q
               << ", seqlen_k:" << options.seqlen_k << ", hdim_q:" << options.hdim_q
               << ", hdim_v:" << options.hdim_v << ", scale:" << options.scale
-              << ", i_perm:" << options.i_perm << ", o_perm:" << options.o_perm << std::endl;
+              << ", i_perm:" << options.i_perm << ", o_perm:" << options.o_perm
+              << ", v:" << std::string(FmhaKernelHDim64::VLayout::name) << std::endl;
 
-    float ave_time = invoker_fmha_kernel<FmhaKernel>(options.mode,
-                                                     q_buf.GetDeviceBuffer(),
-                                                     k_buf.GetDeviceBuffer(),
-                                                     v_buf.GetDeviceBuffer(),
-                                                     o_buf.GetDeviceBuffer(),
-                                                     seqstart_q.GetDeviceBuffer(),
-                                                     seqstart_k.GetDeviceBuffer(),
-                                                     nullptr,
-                                                     options.problem_count(),
-                                                     options.nhead,
-                                                     shape_seqlen_q,
-                                                     shape_seqlen_k,
-                                                     options.hdim_q,
-                                                     options.hdim_v,
-                                                     options.scale,
-                                                     options.i_perm,
-                                                     options.o_perm);
+    float ave_time = 0;
+    if(options.hdim_q == options.hdim_v && options.hdim_q == 64)
+        ave_time = invoker_fmha_kernel<FmhaKernelHDim64>(options.mode,
+                                                         q_buf.GetDeviceBuffer(),
+                                                         k_buf.GetDeviceBuffer(),
+                                                         v_buf.GetDeviceBuffer(),
+                                                         o_buf.GetDeviceBuffer(),
+                                                         seqstart_q.GetDeviceBuffer(),
+                                                         seqstart_k.GetDeviceBuffer(),
+                                                         nullptr,
+                                                         options.problem_count(),
+                                                         options.nhead,
+                                                         shape_seqlen_q,
+                                                         shape_seqlen_k,
+                                                         options.hdim_q,
+                                                         options.hdim_v,
+                                                         options.scale,
+                                                         options.i_perm,
+                                                         options.o_perm);
+    else if(options.hdim_q == options.hdim_v && options.hdim_q == 128)
+        ave_time = invoker_fmha_kernel<FmhaKernelHDim128>(options.mode,
+                                                          q_buf.GetDeviceBuffer(),
+                                                          k_buf.GetDeviceBuffer(),
+                                                          v_buf.GetDeviceBuffer(),
+                                                          o_buf.GetDeviceBuffer(),
+                                                          seqstart_q.GetDeviceBuffer(),
+                                                          seqstart_k.GetDeviceBuffer(),
+                                                          nullptr,
+                                                          options.problem_count(),
+                                                          options.nhead,
+                                                          shape_seqlen_q,
+                                                          shape_seqlen_k,
+                                                          options.hdim_q,
+                                                          options.hdim_v,
+                                                          options.scale,
+                                                          options.i_perm,
+                                                          options.o_perm);
+    else
+    {
+        std::cerr << "not support hdim, will not run" << std::endl;
+        return EXIT_FAILURE;
+    }
 
     float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
 
@@ -416,9 +496,14 @@ int main(int argc, char* argv[])
         const ck::index_t query_offset = (options.mode == Mode::Batch ? 0 : seqstart_q_host[p]);
         const ck::index_t key_offset   = (options.mode == Mode::Batch ? 0 : seqstart_k_host[p]);
 
+        const auto v_host_ref_lengths = std::array<ck::index_t, 3>{options.nhead, options.hdim_v, real_seqlen_k};
+        const auto v_host_ref_strides =
+            is_v_rowmajor ? std::array<ck::index_t, 3>{options.hdim_v * real_seqlen_k, 1, options.hdim_v}
+                          : std::array<ck::index_t, 3>{options.hdim_v * real_seqlen_k, real_seqlen_k, 1};
+
         Tensor<QDataType> q_host_ref({options.nhead, real_seqlen_q, options.hdim_q});
         Tensor<KDataType> k_host_ref({options.nhead, real_seqlen_k, options.hdim_q});
-        Tensor<VDataType> v_host_ref({options.nhead, options.hdim_v, real_seqlen_k});
+        Tensor<VDataType> v_host_ref(v_host_ref_lengths, v_host_ref_strides);
         Tensor<ODataType> o_host_ref({options.nhead, real_seqlen_q, options.hdim_v});
 
         Tensor<SMPLComputeDataType> s_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
@@ -426,14 +511,22 @@ int main(int argc, char* argv[])
 
         // clang-format off
         // permute
-        if(options.i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[0], idx[1], idx[2]); });
+        if(options.i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[0], idx[1] + query_offset, idx[2]); });
         else               q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[1] + query_offset, idx[0], idx[2]); });
 
-        if(options.i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], idx[1], idx[2]); });
+        if(options.i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], idx[1] + key_offset, idx[2]); });
         else               k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[1] + key_offset, idx[0], idx[2]); });
 
-        if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[1], idx[2]); });
-        else               v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[1], idx[0], idx[2] + key_offset); });
+        if constexpr (is_v_rowmajor) {
+            //                                                                v_host ：b, h, s, d, v_host_ref : batch*hdim*seq
+            if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[2], idx[1] + key_offset); });
+            //                                                                v_host : b, s, h, d, v_host_ref : batch*hdim*seq
+            else               v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[2], idx[0], idx[1] + key_offset); });
+        }
+        else {
+            if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[1], idx[2] + key_offset); });
+            else               v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[1], idx[0], idx[2] + key_offset); });
+        }
 
         // reference
         reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
@@ -447,7 +540,7 @@ int main(int argc, char* argv[])
 
         Tensor<ODataType> o_host_result({options.nhead, real_seqlen_q, options.hdim_v});
         // permute
-        if(options.o_perm) o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], idx[1], idx[2]); });
+        if(options.o_perm) o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], idx[1] + query_offset, idx[2]); });
         else               o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[1] + query_offset, idx[0], idx[2]); });
         // clang-format on
 
