@@ -496,10 +496,12 @@ int main(int argc, char* argv[])
         const ck::index_t query_offset = (options.mode == Mode::Batch ? 0 : seqstart_q_host[p]);
         const ck::index_t key_offset   = (options.mode == Mode::Batch ? 0 : seqstart_k_host[p]);
 
-        const auto v_host_ref_lengths = std::array<ck::index_t, 3>{options.nhead, options.hdim_v, real_seqlen_k};
+        const auto v_host_ref_lengths =
+            std::array<ck::index_t, 3>{options.nhead, options.hdim_v, real_seqlen_k};
         const auto v_host_ref_strides =
-            is_v_rowmajor ? std::array<ck::index_t, 3>{options.hdim_v * real_seqlen_k, 1, options.hdim_v}
-                          : std::array<ck::index_t, 3>{options.hdim_v * real_seqlen_k, real_seqlen_k, 1};
+            is_v_rowmajor
+                ? std::array<ck::index_t, 3>{options.hdim_v * real_seqlen_k, 1, options.hdim_v}
+                : std::array<ck::index_t, 3>{options.hdim_v * real_seqlen_k, real_seqlen_k, 1};
 
         Tensor<QDataType> q_host_ref({options.nhead, real_seqlen_q, options.hdim_q});
         Tensor<KDataType> k_host_ref({options.nhead, real_seqlen_k, options.hdim_q});
