@@ -520,9 +520,9 @@ int main(int argc, char* argv[])
 
         if constexpr (is_v_rowmajor) {
             //                                                                v_host ：b, h, s, d, v_host_ref : batch*hdim*seq
-            if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[2], idx[1] + key_offset); });
+            if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[2] + key_offset, idx[1]); });
             //                                                                v_host : b, s, h, d, v_host_ref : batch*hdim*seq
-            else               v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[2], idx[0], idx[1] + key_offset); });
+            else               v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[2] + key_offset, idx[0], idx[1]); });
         }
         else {
             if(options.i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[1], idx[2] + key_offset); });

@@ -247,7 +247,7 @@ struct FmhaFwdKernel
 
             batch_offset_q = query_start * kargs.stride_q;
             batch_offset_k = key_start * kargs.stride_k;
-            batch_offset_v = key_start;
+            batch_offset_v = key_start * kargs.stride_v;
             batch_offset_o = query_start * kargs.stride_o;
 
             // get real # queries & # keys under group mode
