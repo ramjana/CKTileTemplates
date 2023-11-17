@@ -11,12 +11,16 @@ namespace ck {
 
 // Default policy for GridGemmV1
 // Default policy class should not be templated, put template on member functions instead
+template <ck::index_t kBlockSize_=256,
+          ck::index_t kMPerBlock_=128,
+          ck::index_t kNPerBlock_=128,
+          ck::index_t kKPerBlock_=32>
 struct GridGemmV1DefaultPolicy
 {
-    static constexpr index_t kBlockSize = 256;
-    static constexpr index_t kMPerBlock = 128;
-    static constexpr index_t kNPerBlock = 128;
-    static constexpr index_t kKPerBlock = 32;
+    static constexpr index_t kBlockSize = kBlockSize_;
+    static constexpr index_t kMPerBlock = kMPerBlock_;
+    static constexpr index_t kNPerBlock = kNPerBlock_;
+    static constexpr index_t kKPerBlock = kKPerBlock_;
 
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeBlock2TileMap(index_t NumTilesM,
