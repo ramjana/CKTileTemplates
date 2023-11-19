@@ -28,6 +28,7 @@
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_problem.hpp"
 #include "ck/tile_program/tile/tile_fmha_shape.hpp"
 
+#include "reference_batched_elementwise.hpp"
 #include "reference_batched_gemm.hpp"
 #include "reference_batched_softmax.hpp"
 #include "fmha_fwd_kernel.hpp"
@@ -430,12 +431,11 @@ int main(int argc, char* argv[])
                   options.i_perm, options.batch(), options.nhead, shape_seqlen_k, options.hdim_v)
             : get_lengths(
                   options.i_perm, options.batch(), options.nhead, options.hdim_v, shape_seqlen_k));
+    // use bias shape = [1, 1, shape_seqlen_q, shape_seqlen_k]
     Tensor<KDataType> bias_host(
-        get_lengths(options.i_perm,
-                    1,
-                    1,
-                    shape_seqlen_q,
-                    shape_seqlen_k)); // use bias shape = [1, 1, shape_seqlen_q, shape_seqlen_k]
+        options.use_bias
+            ? get_lengths(options.i_perm, 1, 1, shape_seqlen_q, shape_seqlen_k)
+            : std::array<ck::index_t, 4>{1, 1, 1, 1} /* dummy shape for simplifying code */);
     Tensor<ODataType> o_host(get_lengths(
         options.o_perm, options.batch(), options.nhead, shape_seqlen_q, options.hdim_v));
 
@@ -584,7 +584,19 @@ int main(int argc, char* argv[])
         reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
             q_host_ref, k_host_ref, s_host_ref,
             ck::identity{}, ck::identity{},
-            [scale = options.scale](const SaccDataType& x) { return scale * x; });
+            [scale = options.scale](SaccDataType x) { return scale * x; });
+        if(options.use_bias)
+        {
+            Tensor<BiasDataType> bias_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
+
+            if(options.i_perm)
+                bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, 0, idx[1] + query_offset, idx[2] + key_offset); });
+            else
+                bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, idx[1] + query_offset, 0, idx[2] + key_offset); });
+
+            reference_batched_elementwise<SMPLComputeDataType, BiasDataType, SMPLComputeDataType, SMPLComputeDataType>(
+                s_host_ref, bias_host_ref, s_host_ref);
+        }
         reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
                                                                                        p_host_ref);
         reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
