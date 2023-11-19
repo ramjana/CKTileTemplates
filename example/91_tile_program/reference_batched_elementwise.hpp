@@ -22,13 +22,36 @@ void reference_batched_elementwise(const Tensor<ADataType>& a_b_m_n,
                                    const BElementOp& b_element_op           = {},
                                    const BinaryElementOp& binary_element_op = {})
 {
-    const int N = c_b_m_n.mDesc.GetLengths()[2];
+    const ck::index_t N = c_b_m_n.mDesc.GetLengths()[2];
+
+    const bool broadcast_a_dim_b = (a_b_m_n.GetLengths()[0] == 1);
+    const bool broadcast_a_dim_m = (a_b_m_n.GetLengths()[1] == 1);
+    const bool broadcast_a_dim_n = (a_b_m_n.GetLengths()[2] == 1);
+
+    const bool broadcast_b_dim_b = (b_b_m_n.GetLengths()[0] == 1);
+    const bool broadcast_b_dim_m = (b_b_m_n.GetLengths()[1] == 1);
+    const bool broadcast_b_dim_n = (b_b_m_n.GetLengths()[2] == 1);
 
     auto f = [&](auto batch, auto m) {
-        for(int n = 0; n < N; ++n)
+        for(ck::index_t n = 0; n < N; ++n)
         {
-            auto v_a = ck::type_convert<AccDataType>(a_element_op(a_b_m_n(batch, m, n)));
-            auto v_b = ck::type_convert<AccDataType>(b_element_op(b_b_m_n(batch, m, n)));
+            AccDataType v_a{};
+            {
+                ck::index_t i_b = (broadcast_a_dim_b ? 0 : batch);
+                ck::index_t i_m = (broadcast_a_dim_m ? 0 : m);
+                ck::index_t i_n = (broadcast_a_dim_n ? 0 : n);
+
+                v_a = ck::type_convert<AccDataType>(a_element_op(a_b_m_n(i_b, i_m, i_n)));
+            }
+
+            AccDataType v_b{};
+            {
+                ck::index_t i_b = (broadcast_b_dim_b ? 0 : batch);
+                ck::index_t i_m = (broadcast_b_dim_m ? 0 : m);
+                ck::index_t i_n = (broadcast_b_dim_n ? 0 : n);
+
+                v_b = ck::type_convert<AccDataType>(b_element_op(b_b_m_n(i_b, i_m, i_n)));
+            }
 
             c_b_m_n(batch, m, n) = ck::type_convert<CDataType>(binary_element_op(v_a, v_b));
         }
