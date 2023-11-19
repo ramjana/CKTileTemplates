@@ -587,7 +587,7 @@ int main(int argc, char* argv[])
             [scale = options.scale](SaccDataType x) { return scale * x; });
         if(options.use_bias)
         {
-            Tensor<BiasDataType> bias_host_ref({options.nhead, real_seqlen_q, real_seqlen_k});
+            Tensor<BiasDataType> bias_host_ref({1, real_seqlen_q, real_seqlen_k});
             // broadcast from [1, real_seqlen_q, real_seqlen_k] to [nhead, real_seqlen_q, real_seqlen_k]
             if(options.i_perm)
                 bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, 0, idx[1] + query_offset, idx[2] + key_offset); });
