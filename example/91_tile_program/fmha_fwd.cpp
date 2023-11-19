@@ -278,7 +278,7 @@ struct Options
     bool i_perm = true;
     bool o_perm = true;
 
-    bool use_bias = true;
+    bool use_bias = false;
 
     bool parse(int argc, char* argv[])
     {
