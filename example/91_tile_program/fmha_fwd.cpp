@@ -463,6 +463,7 @@ int main(int argc, char* argv[])
     q_buf.ToDevice(q_host.data());
     k_buf.ToDevice(k_host.data());
     v_buf.ToDevice(v_host.data());
+    bias_buf.ToDevice(bias_host.data());
     seqstart_q.ToDevice(seqstart_q_host.data());
     seqstart_k.ToDevice(seqstart_k_host.data());
 
@@ -471,6 +472,7 @@ int main(int argc, char* argv[])
               << ", seqlen_k:" << options.seqlen_k << ", hdim_q:" << options.hdim_q
               << ", hdim_v:" << options.hdim_v << ", scale:" << options.scale
               << ", i_perm:" << options.i_perm << ", o_perm:" << options.o_perm
+              << ", use_bias:" << options.use_bias
               << ", v:" << std::string(FmhaKernelHDim64::VLayout::name) << std::endl;
 
     float ave_time = 0;
