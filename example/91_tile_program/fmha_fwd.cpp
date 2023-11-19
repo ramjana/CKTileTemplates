@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <numeric>
+#include <optional>
 #include <ostream>
 #include <random>
 
@@ -119,6 +120,7 @@ float invoker_fmha_kernel(Mode mode,
                           const void* q_ptr,
                           const void* k_ptr,
                           const void* v_ptr,
+                          const void* bias_ptr,
                           void* o_ptr,
                           const void* seqstart_q_ptr,
                           const void* seqstart_k_ptr,
@@ -131,7 +133,8 @@ float invoker_fmha_kernel(Mode mode,
                           ck::index_t hdim_v,
                           float scale,
                           bool i_perm,
-                          bool o_perm)
+                          bool o_perm,
+                          bool use_bias)
 {
     dim3 kGridSize            = FmhaKernel::GridSize(problem_count, nhead, seqlen_q, hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
@@ -142,7 +145,10 @@ float invoker_fmha_kernel(Mode mode,
 
     constexpr bool is_v_rowmajor =
         ck::is_same_v<typename FmhaKernel::VLayout, ck::tensor_layout::gemm::RowMajor>;
-
+    /// NOTE: we broadcast bias from [1, 1, seqlen_q, seqlen_k] to [batch, nhead, seqlen_q,
+    ///       seqlen_k] in this example. hence the 'batch_stride_bias' & 'nhead_stride_bias' will be
+    ///       0 in some cases (or is equivalent to the stride of lower dimension).
+    // setup stride_* arguments
     const ck::index_t stride_q = (i_perm ? hdim_q : nhead * hdim_q);
     const ck::index_t stride_k = (i_perm ? hdim_q : nhead * hdim_q);
     const ck::index_t stride_v = [&]() {
@@ -151,8 +157,9 @@ float invoker_fmha_kernel(Mode mode,
         else
             return i_perm ? seqlen_k : nhead * seqlen_k;
     }();
-    const ck::index_t stride_o = (o_perm ? hdim_v : nhead * hdim_v);
-
+    const ck::index_t stride_bias = (i_perm ? seqlen_k : 1 * seqlen_k);
+    const ck::index_t stride_o    = (o_perm ? hdim_v : nhead * hdim_v);
+    // setup nhead_stride_* arguments
     const ck::index_t nhead_stride_q = (i_perm ? seqlen_q * hdim_q : hdim_q);
     const ck::index_t nhead_stride_k = (i_perm ? seqlen_k * hdim_q : hdim_q);
     const ck::index_t nhead_stride_v = [&]() {
@@ -161,12 +168,14 @@ float invoker_fmha_kernel(Mode mode,
         else
             return i_perm ? hdim_v * seqlen_k : seqlen_k;
     }();
-    const ck::index_t nhead_stride_o = (o_perm ? seqlen_q * hdim_v : hdim_v);
-
-    const ck::index_t batch_stride_q = (nhead * seqlen_q * hdim_q);
-    const ck::index_t batch_stride_k = (nhead * seqlen_k * hdim_q);
-    const ck::index_t batch_stride_v = (nhead * hdim_v * seqlen_k);
-    const ck::index_t batch_stride_o = (nhead * seqlen_q * hdim_v);
+    const ck::index_t nhead_stride_bias = (i_perm ? 0 * seqlen_q * seqlen_k : 1 * seqlen_k);
+    const ck::index_t nhead_stride_o    = (o_perm ? seqlen_q * hdim_v : hdim_v);
+    // setup batch_stride_* arguments
+    const ck::index_t batch_stride_q    = (nhead * seqlen_q * hdim_q);
+    const ck::index_t batch_stride_k    = (nhead * seqlen_k * hdim_q);
+    const ck::index_t batch_stride_v    = (nhead * hdim_v * seqlen_k);
+    const ck::index_t batch_stride_bias = (0 * seqlen_q * seqlen_k);
+    const ck::index_t batch_stride_o    = (nhead * seqlen_q * hdim_v);
 
     const auto launch_flow =
         [](bool condition, auto true_action, auto false_action, auto launcher) {
@@ -183,6 +192,12 @@ float invoker_fmha_kernel(Mode mode,
     return launch_flow(
         mode == Mode::Batch,
         [&] {
+            std::optional<std::tuple<const void*, ck::index_t, ck::index_t, ck::index_t>> bias;
+            if(use_bias)
+            {
+                bias = std::make_tuple(bias_ptr, stride_bias, nhead_stride_bias, batch_stride_bias);
+            }
+
             return FmhaKernel::MakeKargs(q_ptr,
                                          k_ptr,
                                          v_ptr,
@@ -203,9 +218,16 @@ float invoker_fmha_kernel(Mode mode,
                                          batch_stride_q,
                                          batch_stride_k,
                                          batch_stride_v,
-                                         batch_stride_o);
+                                         batch_stride_o,
+                                         bias);
         },
         [&] {
+            std::optional<std::tuple<const void*, ck::index_t, ck::index_t>> bias;
+            if(use_bias)
+            {
+                bias = std::make_tuple(bias_ptr, stride_bias, nhead_stride_bias);
+            }
+
             return FmhaKernel::MakeKargs(q_ptr,
                                          k_ptr,
                                          v_ptr,
@@ -223,7 +245,8 @@ float invoker_fmha_kernel(Mode mode,
                                          nhead_stride_q,
                                          nhead_stride_k,
                                          nhead_stride_v,
-                                         nhead_stride_o);
+                                         nhead_stride_o,
+                                         bias);
         },
         [&](auto kargs) {
             return launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
@@ -255,6 +278,8 @@ struct Options
     bool i_perm = true;
     bool o_perm = true;
 
+    bool use_bias = true;
+
     bool parse(int argc, char* argv[])
     {
         if(argc >= 2)
@@ -277,10 +302,17 @@ struct Options
             i_perm = static_cast<bool>(std::stoi(argv[10]));
         if(argc >= 12)
             o_perm = static_cast<bool>(std::stoi(argv[11]));
+        if(argc >= 13)
+            use_bias = static_cast<bool>(std::stoi(argv[12]));
 
         if(scale == .0f)
             scale = 1.0 / ck::math::sqrt(static_cast<float>(hdim_q)); // TODO: q ? v ?
 
+        return validate();
+    }
+
+    bool validate()
+    {
         if(seqlen_q % seqlen_alignment || seqlen_k % seqlen_alignment)
         {
             return false;
@@ -398,6 +430,12 @@ int main(int argc, char* argv[])
                   options.i_perm, options.batch(), options.nhead, shape_seqlen_k, options.hdim_v)
             : get_lengths(
                   options.i_perm, options.batch(), options.nhead, options.hdim_v, shape_seqlen_k));
+    Tensor<KDataType> bias_host(
+        get_lengths(options.i_perm,
+                    1,
+                    1,
+                    shape_seqlen_q,
+                    shape_seqlen_k)); // use bias shape = [1, 1, shape_seqlen_q, shape_seqlen_k]
     Tensor<ODataType> o_host(get_lengths(
         options.o_perm, options.batch(), options.nhead, shape_seqlen_q, options.hdim_v));
 
@@ -406,15 +444,18 @@ int main(int argc, char* argv[])
     ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
     ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f}(k_host);
     ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
+    ck::utils::FillUniformDistributionIntegerValue<BiasDataType>{-2.f, 2.f}(bias_host);
 #else
     ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_host);
     ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_host);
     ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_host);
+    ck::utils::FillUniformDistribution<BiasDataType>{0.f, 1.f}(bias_host);
 #endif
 
     DeviceMem q_buf(q_host.GetElementSpaceSizeInBytes());
     DeviceMem k_buf(k_host.GetElementSpaceSizeInBytes());
     DeviceMem v_buf(v_host.GetElementSpaceSizeInBytes());
+    DeviceMem bias_buf(bias_host.GetElementSpaceSizeInBytes());
     DeviceMem o_buf(o_host.GetElementSpaceSizeInBytes());
     DeviceMem seqstart_q(seqstart_q_host.size() * sizeof(ck::index_t));
     DeviceMem seqstart_k(seqstart_k_host.size() * sizeof(ck::index_t));
@@ -438,6 +479,7 @@ int main(int argc, char* argv[])
                                                          q_buf.GetDeviceBuffer(),
                                                          k_buf.GetDeviceBuffer(),
                                                          v_buf.GetDeviceBuffer(),
+                                                         bias_buf.GetDeviceBuffer(),
                                                          o_buf.GetDeviceBuffer(),
                                                          seqstart_q.GetDeviceBuffer(),
                                                          seqstart_k.GetDeviceBuffer(),
@@ -450,12 +492,14 @@ int main(int argc, char* argv[])
                                                          options.hdim_v,
                                                          options.scale,
                                                          options.i_perm,
-                                                         options.o_perm);
+                                                         options.o_perm,
+                                                         options.use_bias);
     else if(options.hdim_q == options.hdim_v && options.hdim_q == 128)
         ave_time = invoker_fmha_kernel<FmhaKernelHDim128>(options.mode,
                                                           q_buf.GetDeviceBuffer(),
                                                           k_buf.GetDeviceBuffer(),
                                                           v_buf.GetDeviceBuffer(),
+                                                          bias_buf.GetDeviceBuffer(),
                                                           o_buf.GetDeviceBuffer(),
                                                           seqstart_q.GetDeviceBuffer(),
                                                           seqstart_k.GetDeviceBuffer(),
@@ -468,7 +512,8 @@ int main(int argc, char* argv[])
                                                           options.hdim_v,
                                                           options.scale,
                                                           options.i_perm,
-                                                          options.o_perm);
+                                                          options.o_perm,
+                                                          options.use_bias);
     else
     {
         std::cerr << "not support hdim, will not run" << std::endl;
