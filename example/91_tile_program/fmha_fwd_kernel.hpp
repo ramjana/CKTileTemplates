@@ -283,17 +283,19 @@ struct FmhaFwdKernel
         const index_t i_m0 = __builtin_amdgcn_readfirstlane(i_tile_m * FmhaPipeline::kM0);
         const index_t i_n1 = __builtin_amdgcn_readfirstlane(i_tile_n * FmhaPipeline::kN1);
 
-        index_t batch_offset_q = 0;
-        index_t batch_offset_k = 0;
-        index_t batch_offset_v = 0;
-        index_t batch_offset_o = 0;
+        index_t batch_offset_q    = 0;
+        index_t batch_offset_k    = 0;
+        index_t batch_offset_v    = 0;
+        index_t batch_offset_bias = 0;
+        index_t batch_offset_o    = 0;
 
         if constexpr(is_same_v<Kargs, KargsBatchMode>)
         {
-            batch_offset_q = i_batch * kargs.batch_stride_q;
-            batch_offset_k = i_batch * kargs.batch_stride_k;
-            batch_offset_v = i_batch * kargs.batch_stride_v;
-            batch_offset_o = i_batch * kargs.batch_stride_o;
+            batch_offset_q    = i_batch * kargs.batch_stride_q;
+            batch_offset_k    = i_batch * kargs.batch_stride_k;
+            batch_offset_v    = i_batch * kargs.batch_stride_v;
+            batch_offset_bias = i_batch * kargs.batch_stride_bias;
+            batch_offset_o    = i_batch * kargs.batch_stride_o;
         }
         else
         { // is_same_v<Kargs, KargsGroupMode>
@@ -301,10 +303,11 @@ struct FmhaFwdKernel
             const index_t query_start = kargs.seqstart_q_ptr[i_batch];
             const index_t key_start   = kargs.seqstart_k_ptr[i_batch];
 
-            batch_offset_q = query_start * kargs.stride_q;
-            batch_offset_k = key_start * kargs.stride_k;
-            batch_offset_v = key_start * kargs.stride_v;
-            batch_offset_o = query_start * kargs.stride_o;
+            batch_offset_q    = query_start * kargs.stride_q;
+            batch_offset_k    = key_start * kargs.stride_k;
+            batch_offset_v    = key_start * kargs.stride_v;
+            batch_offset_bias = query_start * kargs.stride_bias + key_start;
+            batch_offset_o    = query_start * kargs.stride_o;
 
             // get real # queries & # keys under group mode
             const auto adjusted_seqstart_q_ptr = kargs.seqstart_q_ptr + i_batch;
@@ -325,7 +328,12 @@ struct FmhaFwdKernel
         const QDataType* q_ptr = kargs.q_ptr + i_nhead * kargs.nhead_stride_q + batch_offset_q;
         const KDataType* k_ptr = kargs.k_ptr + i_nhead * kargs.nhead_stride_k + batch_offset_k;
         const VDataType* v_ptr = kargs.v_ptr + i_nhead * kargs.nhead_stride_v + batch_offset_v;
-        ODataType* o_ptr       = kargs.o_ptr + i_nhead * kargs.nhead_stride_o + batch_offset_o;
+        const BiasDataType* bias_ptr = nullptr;
+        if(kargs.bias_ptr != nullptr)
+        {
+            bias_ptr = kargs.bias_ptr + i_nhead * kargs.nhead_stride_bias + batch_offset_bias;
+        }
+        ODataType* o_ptr = kargs.o_ptr + i_nhead * kargs.nhead_stride_o + batch_offset_o;
 
         // Q/K/V DRAM and DRAM window
         const auto q_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
@@ -387,6 +395,24 @@ struct FmhaFwdKernel
             make_tile_window(v_dram,
                              make_tuple(Number<FmhaPipeline::kN1>{}, Number<FmhaPipeline::kK1>{}),
                              {i_n1, 0});
+
+        if(bias_ptr != nullptr)
+        {
+            const auto bias_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                bias_ptr,
+                make_tuple(kargs.seqlen_q, kargs.seqlen_k),
+                make_tuple(kargs.stride_bias, 1),
+                Number<32>{},
+                Number<1>{});
+
+            auto bias_dram_window = make_tile_window(
+                bias_dram,
+                make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kK1>{}),
+                {i_m0, 0});
+
+            (void)bias_dram;
+            (void)bias_dram_window;
+        }
 
         auto o_acc_tile = FmhaPipeline{}(q_dram_window,
                                          k_dram_window,
