@@ -36,6 +36,7 @@
 using QDataType           = ck::half_t;
 using KDataType           = ck::half_t;
 using VDataType           = ck::half_t;
+using BiasDataType        = ck::half_t;
 using SaccDataType        = float;      // data type for first gemm accumulation
 using SMPLComputeDataType = float;      // data type for reduction, softmax
 using PDataType           = ck::half_t; // data type for A matrix of second gemm
@@ -73,6 +74,7 @@ using FmhaPipelineProblemHDim64 =
                                                       VDataType,
                                                       SaccDataType,
                                                       SMPLComputeDataType,
+                                                      BiasDataType,
                                                       PDataType,
                                                       OaccDataType,
                                                       ODataType,
@@ -84,6 +86,7 @@ using FmhaPipelineProblemHDim128 =
                                                       VDataType,
                                                       SaccDataType,
                                                       SMPLComputeDataType,
+                                                      BiasDataType,
                                                       PDataType,
                                                       OaccDataType,
                                                       ODataType,

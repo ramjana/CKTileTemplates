@@ -32,6 +32,7 @@ struct BlockFmhaPipelineQRKSVS
     using VDataType           = remove_cvref_t<typename Problem::VDataType>;
     using SaccDataType        = remove_cvref_t<typename Problem::SaccDataType>;
     using SMPLComputeDataType = remove_cvref_t<typename Problem::SMPLComputeDataType>;
+    using BiasDataType        = remove_cvref_t<typename Problem::BiasDataType>;
     using PDataType           = remove_cvref_t<typename Problem::PDataType>;
     using OaccDataType        = remove_cvref_t<typename Problem::OaccDataType>;
     using ODataType           = remove_cvref_t<typename Problem::ODataType>;
