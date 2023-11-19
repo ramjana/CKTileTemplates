@@ -431,7 +431,8 @@ int main(int argc, char* argv[])
                   options.i_perm, options.batch(), options.nhead, shape_seqlen_k, options.hdim_v)
             : get_lengths(
                   options.i_perm, options.batch(), options.nhead, options.hdim_v, shape_seqlen_k));
-    // use bias shape = [1, 1, shape_seqlen_q, shape_seqlen_k]
+    // use bias shape = [1, 1, shape_seqlen_q, shape_seqlen_k]. if use_bias=false, the bias_host
+    // will not be used for verification at all (but will be copied to device anyway).
     Tensor<KDataType> bias_host(
         options.use_bias
             ? get_lengths(options.i_perm, 1, 1, shape_seqlen_q, shape_seqlen_k)
