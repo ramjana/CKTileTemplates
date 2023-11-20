@@ -396,31 +396,42 @@ struct FmhaFwdKernel
                              make_tuple(Number<FmhaPipeline::kN1>{}, Number<FmhaPipeline::kK1>{}),
                              {i_n1, 0});
 
-        if(bias_ptr != nullptr)
-        {
-            const auto bias_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-                bias_ptr,
-                make_tuple(kargs.seqlen_q, kargs.seqlen_k),
-                make_tuple(kargs.stride_bias, 1),
-                Number<32>{},
-                Number<1>{});
+        const auto run_pipeline_with = [&](auto bias_dram_window) {
+            return FmhaPipeline{}(q_dram_window,
+                                  k_dram_window,
+                                  v_dram_window,
+                                  bias_dram_window,
+                                  kargs.scale,
+                                  kargs.seqlen_k / FmhaPipeline::kN0,
+                                  kargs.hdim_q / FmhaPipeline::kK0,
+                                  smem_ptr);
+        };
 
-            auto bias_dram_window = make_tile_window(
-                bias_dram,
-                make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kK1>{}),
-                {i_m0, 0});
+        auto o_acc_tile = [&]() {
+            constexpr auto bias_dram_window_lengths =
+                make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kN0>{});
 
-            (void)bias_dram;
-            (void)bias_dram_window;
-        }
+            if(bias_ptr != nullptr)
+            {
+                const auto bias_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                    bias_ptr,
+                    make_tuple(kargs.seqlen_q, kargs.seqlen_k),
+                    make_tuple(kargs.stride_bias, 1),
+                    Number<32>{},
+                    Number<1>{});
 
-        auto o_acc_tile = FmhaPipeline{}(q_dram_window,
-                                         k_dram_window,
-                                         v_dram_window,
-                                         kargs.scale,
-                                         kargs.seqlen_k / FmhaPipeline::kN0,
-                                         kargs.hdim_q / FmhaPipeline::kK0,
-                                         smem_ptr);
+                auto bias_dram_window =
+                    make_tile_window(bias_dram, bias_dram_window_lengths, {i_m0, 0});
+
+                return run_pipeline_with(bias_dram_window);
+            }
+            else
+            {
+                auto dummy_bias_dram_window = make_null_tile_window(bias_dram_window_lengths);
+
+                return run_pipeline_with(dummy_bias_dram_window);
+            }
+        }();
 
         // O DRAM and O DRAM window
         auto o_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(

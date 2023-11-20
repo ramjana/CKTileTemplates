@@ -58,9 +58,11 @@ struct BlockFmhaPipelineQRKSVS
     template <typename QDramBlockWindowTmp,
               typename KDramBlockWindowTmp,
               typename VDramBlockWindowTmp,
+              typename BiasDramBlockWindowTmp,
               typename QElementFunction,
               typename KElementFunction,
-              typename VElementFunction>
+              typename VElementFunction,
+              typename BiasElementFunction>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
                const QElementFunction& q_element_func,
@@ -68,6 +70,8 @@ struct BlockFmhaPipelineQRKSVS
                const KElementFunction& k_element_func,
                const VDramBlockWindowTmp& v_dram_block_window_tmp, // N1*K1 tile
                const VElementFunction& v_element_func,
+               const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
+               const BiasElementFunction& bias_element_func,
                float scale,
                index_t num_total_loop,
                index_t /*num_sub_loop_qk*/, // in this pipeline, the 1st gemm loop must be static
@@ -83,7 +87,9 @@ struct BlockFmhaPipelineQRKSVS
                           kN0 == KDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kK0 == KDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}] &&
                           kN1 == VDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
-                          kK1 == VDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}],
+                          kK1 == VDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}] &&
+                          kM0 == BiasDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
+                          kN0 == BiasDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}],
                       "wrong!");
 
         // K tile in LDS
@@ -153,6 +159,12 @@ struct BlockFmhaPipelineQRKSVS
                              v_dram_block_window_tmp.GetWindowOrigin(),
                              Policy::template MakeVDramTileDistribution<Problem>());
 
+        auto bias_dram_window = make_tile_window(
+            bias_dram_block_window_tmp.GetBottomTensorView(),
+            bias_dram_block_window_tmp.GetWindowLengths(),
+            bias_dram_block_window_tmp.GetWindowOrigin(),
+            Policy::template MakeBiasDramTileDistribution<Problem, decltype(gemm_0)>());
+
         auto q_tile           = tile_elementwise_in(q_element_func, q);
         index_t i_total_loops = 0;
         do
@@ -198,8 +210,9 @@ struct BlockFmhaPipelineQRKSVS
                 });
             }
 
-            const auto v_prefetch = load_tile(v_dram_window); // prefetch load v tile
-            {                                                 // tail
+            const auto bias_tile  = load_tile(bias_dram_window); // load bias tile
+            const auto v_prefetch = load_tile(v_dram_window);    // prefetch load v tile
+            {                                                    // tail
                 block_sync_lds();
                 gemm_0(s_acc,
                        get_slice_tile(q_tile,
@@ -220,6 +233,13 @@ struct BlockFmhaPipelineQRKSVS
 
             // STAGE 2, scale softmax
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
+            tile_elementwise_inout(
+                [&](auto& x, const auto& y) {
+                    x = x + type_convert<SMPLComputeDataType>(bias_element_func(y));
+                },
+                s_acc,
+                bias_tile);
+            move_tile_window(bias_dram_window, {0, kN0});
 
             const auto s =
                 tile_elementwise_in(type_convert<SMPLComputeDataType, SaccDataType>, s_acc); // S{j}
@@ -344,11 +364,13 @@ struct BlockFmhaPipelineQRKSVS
 
     template <typename QDramBlockWindowTmp,
               typename KDramBlockWindowTmp,
-              typename VDramBlockWindowTmp>
+              typename VDramBlockWindowTmp,
+              typename BiasDramBlockWindowTmp>
     __host__ __device__ auto
-    operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
-               const KDramBlockWindowTmp& k_dram_block_window_tmp, // N0*K0 tile
-               const VDramBlockWindowTmp& v_dram_block_window_tmp, // N1*K1 tile
+    operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
+               const KDramBlockWindowTmp& k_dram_block_window_tmp,       // N0*K0 tile
+               const VDramBlockWindowTmp& v_dram_block_window_tmp,       // N1*K1 tile
+               const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
                float scale,
                index_t num_total_loop,
                index_t num_sub_loop_qk,
@@ -361,6 +383,8 @@ struct BlockFmhaPipelineQRKSVS
             [](const KDataType& x) { return x; },
             v_dram_block_window_tmp,
             [](const VDataType& x) { return x; },
+            bias_dram_block_window_tmp,
+            [](const BiasDataType& x) { return x; },
             scale,
             num_total_loop,
             num_sub_loop_qk,
