@@ -231,7 +231,7 @@ struct BlockFmhaPipelineQRKSVS
                        k_lds_window);
             }
 
-            // STAGE 2, scale softmax
+            // STAGE 2, scale, add bias, softmax
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
             tile_elementwise_inout(
                 [&](auto& x, const auto& y) {
