@@ -60,21 +60,22 @@ __device__ auto tile_elementwise_in(const InElementFunc& in_element_func,
 }
 
 // no-op function for NullTensor arguments
-template <typename InElementFunc,
-          typename... MaybeNullTensor,
-          typename = std::enable_if_t<
-              std::disjunction_v<std::is_same<remove_cvref_t<MaybeNullTensor>, NullTensor>...>>>
-__device__ void tile_elementwise_in(const InElementFunc&, MaybeNullTensor&&...)
-{
-}
-
-// no-op function for NullTensor arguments
 template <typename InOutElementFunc,
           typename... MaybeNullTensor,
           typename = std::enable_if_t<
               std::disjunction_v<std::is_same<remove_cvref_t<MaybeNullTensor>, NullTensor>...>>>
 __device__ void tile_elementwise_inout(const InOutElementFunc&, MaybeNullTensor&&...)
 {
+}
+
+// no-op function for NullTensor arguments
+template <typename InElementFunc,
+          typename... MaybeNullTensor,
+          typename = std::enable_if_t<
+              std::disjunction_v<std::is_same<remove_cvref_t<MaybeNullTensor>, NullTensor>...>>>
+__device__ auto tile_elementwise_in(const InElementFunc&, MaybeNullTensor&&...)
+{
+    return NullTensor{};
 }
 
 } // namespace tile_program
