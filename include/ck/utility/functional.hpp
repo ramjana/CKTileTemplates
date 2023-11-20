@@ -133,7 +133,7 @@ constexpr auto conditional_expr(X&& x, Y&& y)
 struct identity
 {
     template <typename T>
-    constexpr T&& operator()(T&& arg) const noexcept
+    __host__ __device__ constexpr T&& operator()(T&& arg) const noexcept
     {
         return std::forward<T>(arg);
     }
