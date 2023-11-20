@@ -147,8 +147,8 @@ float invoker_fmha_kernel(Mode mode,
     constexpr bool is_v_rowmajor =
         ck::is_same_v<typename FmhaKernel::VLayout, ck::tensor_layout::gemm::RowMajor>;
     /// NOTE: we broadcast bias from [1, 1, seqlen_q, seqlen_k] to [batch, nhead, seqlen_q,
-    ///       seqlen_k] in this example. hence the 'batch_stride_bias' & 'nhead_stride_bias' will be
-    ///       0 in some cases (or is equivalent to the stride of lower dimension).
+    ///       seqlen_k] in this example, hence both the 'batch_stride_bias' & 'nhead_stride_bias'
+    ///       are 0.
     // setup stride_* arguments
     const ck::index_t stride_q = (i_perm ? hdim_q : nhead * hdim_q);
     const ck::index_t stride_k = (i_perm ? hdim_q : nhead * hdim_q);
@@ -169,13 +169,13 @@ float invoker_fmha_kernel(Mode mode,
         else
             return i_perm ? hdim_v * seqlen_k : seqlen_k;
     }();
-    const ck::index_t nhead_stride_bias = (i_perm ? 0 * seqlen_q * seqlen_k : 1 * seqlen_k);
+    const ck::index_t nhead_stride_bias = (i_perm ? 0 * seqlen_q * seqlen_k : 0 * seqlen_k);
     const ck::index_t nhead_stride_o    = (o_perm ? seqlen_q * hdim_v : hdim_v);
     // setup batch_stride_* arguments
     const ck::index_t batch_stride_q    = (nhead * seqlen_q * hdim_q);
     const ck::index_t batch_stride_k    = (nhead * seqlen_k * hdim_q);
     const ck::index_t batch_stride_v    = (nhead * hdim_v * seqlen_k);
-    const ck::index_t batch_stride_bias = (0 * seqlen_q * seqlen_k);
+    const ck::index_t batch_stride_bias = (0 * nhead * seqlen_q * seqlen_k);
     const ck::index_t batch_stride_o    = (nhead * seqlen_q * hdim_v);
 
     const auto launch_flow =
