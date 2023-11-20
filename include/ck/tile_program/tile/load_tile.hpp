@@ -11,6 +11,7 @@
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
 #include "ck/tile_program/tile/tile_window.hpp"
+#include "ck/tile_program/tile/null_tensor.hpp"
 #include "ck/tile_program/tile/static_distributed_tensor.hpp"
 
 namespace ck {
@@ -26,6 +27,12 @@ __device__ auto load_tile(const TileWindowWithStaticDistribution<BottomTensorVie
                                                                  NumCoord>& tile_window)
 {
     return tile_window.Load();
+}
+
+template <typename WindowLengths>
+__device__ auto load_tile(const NullTileWindow<WindowLengths>&)
+{
+    return NullTensor{};
 }
 
 } // namespace tile_program

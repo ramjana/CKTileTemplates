@@ -97,6 +97,11 @@ struct TensorView
     TensorDesc desc_;
 };
 
+// placeholder type if we want to opt-out a tile view parameter
+struct NullTensorView
+{
+};
+
 template <AddressSpaceEnum BufferAddressSpace = AddressSpaceEnum::Generic,
           typename DataType,
           typename... Ts>
