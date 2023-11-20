@@ -589,12 +589,12 @@ int main(int argc, char* argv[])
         if(options.use_bias)
         {
             Tensor<BiasDataType> bias_host_ref({1, real_seqlen_q, real_seqlen_k});
-            // broadcast from [1, real_seqlen_q, real_seqlen_k] to [nhead, real_seqlen_q, real_seqlen_k]
             if(options.i_perm)
                 bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, 0, idx[1] + query_offset, idx[2] + key_offset); });
             else
                 bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, idx[1] + query_offset, 0, idx[2] + key_offset); });
-
+            
+            // broadcast from [1, real_seqlen_q, real_seqlen_k] to [nhead, real_seqlen_q, real_seqlen_k]
             reference_batched_elementwise<SMPLComputeDataType, BiasDataType, SMPLComputeDataType, SMPLComputeDataType>(
                 s_host_ref, bias_host_ref, s_host_ref);
         }
@@ -611,6 +611,7 @@ int main(int argc, char* argv[])
 
         if(!ck::utils::check_err(o_host_result, o_host_ref))
         {
+            std::cerr << "mismatch found at batch: " << p << std::endl;
             return EXIT_FAILURE;
         }
     }
