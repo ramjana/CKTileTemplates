@@ -376,19 +376,18 @@ struct BlockFmhaPipelineQRKSVS
                index_t num_sub_loop_qk,
                void* smem_ptr) const
     {
-        return operator()(
-            q_dram_block_window_tmp,
-            [](const QDataType& x) { return x; },
-            k_dram_block_window_tmp,
-            [](const KDataType& x) { return x; },
-            v_dram_block_window_tmp,
-            [](const VDataType& x) { return x; },
-            bias_dram_block_window_tmp,
-            [](const BiasDataType& x) { return x; },
-            scale,
-            num_total_loop,
-            num_sub_loop_qk,
-            smem_ptr);
+        return operator()(q_dram_block_window_tmp,
+                          identity{},
+                          k_dram_block_window_tmp,
+                          identity{},
+                          v_dram_block_window_tmp,
+                          identity{},
+                          bias_dram_block_window_tmp,
+                          identity{},
+                          scale,
+                          num_total_loop,
+                          num_sub_loop_qk,
+                          smem_ptr);
     }
 };
 
