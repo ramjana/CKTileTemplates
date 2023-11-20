@@ -39,6 +39,7 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
         using VDataType = remove_cvref_t<typename Problem::VDataType>;
         return 16 / sizeof(VDataType);
     }
+
     template <typename Problem>
     __host__ __device__ static constexpr auto GetTransposedVectorloadV()
     {
@@ -170,12 +171,13 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
     template <typename Problem>
     __host__ __device__ static constexpr ck::index_t GetSmemSize()
     {
-        constexpr index_t smem_size_gemm_0 =
-            GetSmemSizeQ<Problem>() + sizeof(typename Problem::KDataType) *
-                                          MakeKLdsBlockDescriptor<Problem>().GetElementSpaceSize();
-        constexpr index_t smem_size_gemm_1 =
-            MakeVLdsBlockDescriptor<Problem>().GetElementSpaceSize() *
-            sizeof(typename Problem::VDataType);
+        constexpr index_t smem_size_k = MakeKLdsBlockDescriptor<Problem>().GetElementSpaceSize() *
+                                        sizeof(typename Problem::KDataType);
+        constexpr index_t smem_size_v = MakeVLdsBlockDescriptor<Problem>().GetElementSpaceSize() *
+                                        sizeof(typename Problem::VDataType);
+
+        constexpr index_t smem_size_gemm_0 = GetSmemSizeQ<Problem>() + smem_size_k;
+        constexpr index_t smem_size_gemm_1 = smem_size_v;
 
         // TODO: consider shuffle requirement
         return math::max(smem_size_gemm_0, smem_size_gemm_1);
@@ -295,6 +297,38 @@ struct BlockFmhaPipelineQRKSVSDefaultPolicy
                                                Sequence<1, 2>,
                                                Sequence<0, 1>>{});
         }
+    }
+
+    template <typename Problem, typename BlockGemm>
+    __host__ __device__ static constexpr auto MakeBiasDramTileDistribution()
+    {
+        constexpr index_t MPerBlock = Problem::BlockFmhaShape::kM0;
+        constexpr index_t NPerBlock = Problem::BlockFmhaShape::kN0;
+
+        constexpr auto config = BlockGemm::Policy::template GetWarpGemmMWarpNWarp<Problem>();
+        using WG              = remove_cvref_t<decltype(config.template At<0>())>;
+
+        constexpr index_t MWarp = config.template At<1>();
+        constexpr index_t NWarp = config.template At<2>();
+
+        constexpr index_t MIterPerWarp = MPerBlock / (MWarp * WG::kM);
+        constexpr index_t NIterPerWarp = NPerBlock / (NWarp * WG::kN);
+
+        // Construct C-Block-Tensor
+        constexpr auto c_block_outer_dstr_encoding = StaticTileDistributionEncoding<
+            Sequence<>,
+            Tuple<Sequence<MIterPerWarp, MWarp>, Sequence<NIterPerWarp, NWarp>>,
+            Tuple<Sequence<1, 2>>,
+            Tuple<Sequence<1, 1>>,
+            Sequence<1, 2>,
+            Sequence<0, 0>>{};
+
+        constexpr auto c_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
+            c_block_outer_dstr_encoding, typename WG::CWarpDstrEncoding{});
+
+        constexpr auto c_block_dstr = make_static_tile_distribution(c_block_dstr_encode);
+
+        return c_block_dstr;
     }
 
     template <typename Problem>
