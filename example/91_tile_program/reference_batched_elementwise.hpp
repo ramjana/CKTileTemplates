@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <functional>
-
 #include "ck/utility/common_header.hpp"
 #include "ck/library/utility/host_tensor.hpp"
 
@@ -14,7 +12,7 @@ template <typename ADataType,
           typename CDataType,
           typename AElementOp      = ck::identity,
           typename BElementOp      = ck::identity,
-          typename BinaryElementOp = std::plus<AccDataType>>
+          typename BinaryElementOp = ck::math::plus<AccDataType>>
 void reference_batched_elementwise(const Tensor<ADataType>& a_b_m_n,
                                    const Tensor<BDataType>& b_b_m_n,
                                    Tensor<CDataType>& c_b_m_n,
