@@ -351,19 +351,19 @@ int main(int argc, char* argv[])
     // accumulation numbers for performance evaluation
     std::size_t flop = 0, num_byte = 0;
 
-    std::vector<ck::index_t> seqstart_q_host;
-    std::vector<ck::index_t> seqstart_k_host;
+    std::vector<int32_t> seqstart_q_host;
+    std::vector<int32_t> seqstart_k_host;
     {
-        ck::index_t next_seqstart_q = 0;
-        ck::index_t next_seqstart_k = 0;
+        int32_t next_seqstart_q = 0;
+        int32_t next_seqstart_k = 0;
 
         seqstart_q_host.push_back(next_seqstart_q);
         seqstart_k_host.push_back(next_seqstart_k);
 
         std::mt19937 random_engine(0);
-        std::uniform_int_distribution<ck::index_t> gen_seqlen_q_factor(
+        std::uniform_int_distribution<int32_t> gen_seqlen_q_factor(
             1, options.seqlen_q / seqlen_alignment);
-        std::uniform_int_distribution<ck::index_t> gen_seqlen_k_factor(
+        std::uniform_int_distribution<int32_t> gen_seqlen_k_factor(
             1, options.seqlen_k / seqlen_alignment);
 
         for(ck::index_t p = 0; p < options.problem_count(); ++p)
@@ -375,8 +375,7 @@ int main(int argc, char* argv[])
                 }
                 else
                 {
-                    ck::index_t next_seqlen_q =
-                        gen_seqlen_q_factor(random_engine) * seqlen_alignment;
+                    int32_t next_seqlen_q = gen_seqlen_q_factor(random_engine) * seqlen_alignment;
 
                     // only randomize seqlen_k if it was set to a different value than seqlen_q
                     // originally
@@ -386,7 +385,7 @@ int main(int argc, char* argv[])
                     }
                     else
                     {
-                        ck::index_t next_seqlen_k =
+                        int32_t next_seqlen_k =
                             gen_seqlen_k_factor(random_engine) * seqlen_alignment;
 
                         return std::make_tuple(next_seqlen_q, next_seqlen_k);
@@ -458,8 +457,8 @@ int main(int argc, char* argv[])
     DeviceMem v_buf(v_host.GetElementSpaceSizeInBytes());
     DeviceMem bias_buf(bias_host.GetElementSpaceSizeInBytes());
     DeviceMem o_buf(o_host.GetElementSpaceSizeInBytes());
-    DeviceMem seqstart_q(seqstart_q_host.size() * sizeof(ck::index_t));
-    DeviceMem seqstart_k(seqstart_k_host.size() * sizeof(ck::index_t));
+    DeviceMem seqstart_q(seqstart_q_host.size() * sizeof(int32_t));
+    DeviceMem seqstart_k(seqstart_k_host.size() * sizeof(int32_t));
 
     q_buf.ToDevice(q_host.data());
     k_buf.ToDevice(k_host.data());

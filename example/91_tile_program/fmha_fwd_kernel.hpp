@@ -77,9 +77,9 @@ struct FmhaFwdKernel
 
     struct KargsGroupMode : KargsCommon
     {
-        const ck::index_t* seqstart_q_ptr;
-        const ck::index_t* seqstart_k_ptr;
-        const ck::index_t* seqlen_k_ptr;
+        const int32_t* seqstart_q_ptr;
+        const int32_t* seqstart_k_ptr;
+        const int32_t* seqlen_k_ptr;
     };
 
     __host__ static constexpr void InitKargsCommon(KargsCommon& kargs,
@@ -244,9 +244,9 @@ struct FmhaFwdKernel
             InitKargsCommonBias(kargs, std::get<0>(*bias), std::get<1>(*bias), std::get<2>(*bias));
         }
 
-        kargs.seqstart_q_ptr = reinterpret_cast<const ck::index_t*>(seqstart_q_ptr);
-        kargs.seqstart_k_ptr = reinterpret_cast<const ck::index_t*>(seqstart_k_ptr);
-        kargs.seqlen_k_ptr   = reinterpret_cast<const ck::index_t*>(seqlen_k_ptr);
+        kargs.seqstart_q_ptr = reinterpret_cast<const int32_t*>(seqstart_q_ptr);
+        kargs.seqstart_k_ptr = reinterpret_cast<const int32_t*>(seqstart_k_ptr);
+        kargs.seqlen_k_ptr   = reinterpret_cast<const int32_t*>(seqlen_k_ptr);
 
         return kargs;
     }
