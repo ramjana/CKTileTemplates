@@ -3,15 +3,20 @@
 
 #pragma once
 
+#include <sstream>
+#include <stdexcept>
+
 #include <hip/hip_runtime.h>
 
-inline void hip_check_error(hipError_t x)
-{
-    if(x != hipSuccess)
-    {
-        std::ostringstream ss;
-        ss << "HIP runtime error: " << hipGetErrorString(x) << ". " << __FILE__ << ": " << __LINE__
-           << "in function: " << __func__;
-        throw std::runtime_error(ss.str());
-    }
-}
+#define HIP_CHECK_ERROR(val)                                                                      \
+    do                                                                                            \
+    {                                                                                             \
+        hipError_t _tmpVal;                                                                       \
+        if((_tmpVal = (val)) != hipSuccess)                                                       \
+        {                                                                                         \
+            std::ostringstream ss;                                                                \
+            ss << "HIP runtime error: " << hipGetErrorString(_tmpVal) << ". " << __FILE__ << ": " \
+               << __LINE__ << "in function: " << __func__;                                        \
+            throw std::runtime_error(ss.str());                                                   \
+        }                                                                                         \
+    } while(0)
