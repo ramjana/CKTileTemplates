@@ -19,4 +19,4 @@
                << __LINE__ << "in function: " << __func__;                                        \
             throw std::runtime_error(ss.str());                                                   \
         }                                                                                         \
-    } while(0)
+    } while(false)
