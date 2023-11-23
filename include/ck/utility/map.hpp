@@ -98,9 +98,7 @@ struct Map
     __host__ __device__ constexpr const Data& operator[](const Key& key) const
     {
         const auto it = Find(key);
-
-        // FIXME
-        assert(pos < Size());
+        assert(it.pos_ < Size());
 
         return impl_[it.pos_].template At<1>();
     }
