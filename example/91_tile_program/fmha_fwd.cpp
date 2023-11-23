@@ -62,7 +62,8 @@ using FmhaShapeHDim128     = ck::tile_program::TileFmhaShape<FmhaBlockTileHdim12
                                                          VLayout>;
 
 //using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromTopLeftPredicate;
-using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
+//using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
+using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromBottomRightPredicate;
 
 using FmhaTilePartitionerHDim64  = FmhaFwdTilePartitioner<FmhaShapeHDim64>;
 using FmhaTilePartitionerHDim128 = FmhaFwdTilePartitioner<FmhaShapeHDim128>;

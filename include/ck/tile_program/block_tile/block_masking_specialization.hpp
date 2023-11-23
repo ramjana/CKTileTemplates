@@ -40,14 +40,13 @@ struct MaskUpperTriangleFromTopLeftPredicate
 //    3 *  *  *  *  *
 struct MaskUpperTriangleFromBottomRightPredicate
 {
-    MaskUpperTriangleFromBottomRightPredicate() : diagonal_offset_(0) {}
     __host__ __device__ void SetDiagonalOffset(const index_t diagonal_offset)
     {
         diagonal_offset_ = diagonal_offset;
     }
     __host__ __device__ constexpr bool operator()(index_t m, index_t n) const
     {
-        return n > (m + diagonal_offset_);
+        return n > (m - diagonal_offset_);
     }
 
     __host__ __device__ constexpr bool IsTileSkippable(index_t m_tile_orig,
@@ -59,7 +58,7 @@ struct MaskUpperTriangleFromBottomRightPredicate
     }
 
     private:
-    index_t diagonal_offset_;
+    index_t diagonal_offset_ ;
 };
 
 // to track the points which need to be set to -inf on C0
@@ -69,11 +68,10 @@ struct C0MatrixMask_impl
 {
     __host__ __device__ C0MatrixMask_impl(index_t MRaw, index_t NRaw) : NRaw_(NRaw), predicate_(MaskOutPredicate{})
     {
-        if constexpr(std::is_same<MaskOutPredicate,
-                                  MaskUpperTriangleFromBottomRightPredicate>::value)
+        if constexpr(std::is_same_v<MaskOutPredicate,
+                                  MaskUpperTriangleFromBottomRightPredicate>)
         {
-            if(NRaw > MRaw)
-                predicate_.SetDiagonalOffset(NRaw - MRaw);
+            predicate_.SetDiagonalOffset(MRaw - NRaw);
         }
     }
 
