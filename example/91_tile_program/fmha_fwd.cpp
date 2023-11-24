@@ -132,27 +132,12 @@ float invoker_fmha_kernel(Mode mode,
                           ck::index_t seqlen_k,
                           ck::index_t hdim_q,
                           ck::index_t hdim_v,
+                          ck::index_t max_seqlen_q,
                           float scale,
                           bool i_perm,
                           bool o_perm,
                           bool use_bias)
 {
-    const int32_t max_seqlen_q = [&]() {
-        const ck::span seqstart_q(reinterpret_cast<const int32_t*>(seqstart_q_ptr),
-                                  problem_count + 1);
-
-        auto max_seqlen_q_ = std::numeric_limits<int32_t>::min();
-        for(ck::index_t p = 0; p < problem_count; ++p)
-        {
-            const int32_t next_seqlen_q = seqstart_q[p + 1] - seqstart_q[p];
-            if(max_seqlen_q_ < next_seqlen_q)
-            {
-                max_seqlen_q_ = next_seqlen_q;
-            }
-        }
-        return max_seqlen_q_;
-    }();
-
     dim3 kGridSize            = FmhaKernel::GridSize(problem_count, nhead, max_seqlen_q, hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
@@ -369,6 +354,7 @@ int main(int argc, char* argv[])
 
     std::vector<int32_t> seqstart_q_host;
     std::vector<int32_t> seqstart_k_host;
+    auto max_seqlen_q = std::numeric_limits<int32_t>::min();
     {
         int32_t next_seqstart_q = 0;
         int32_t next_seqstart_k = 0;
@@ -408,6 +394,11 @@ int main(int argc, char* argv[])
                     }
                 }
             }();
+
+            if(max_seqlen_q < real_seqlen_q)
+            {
+                max_seqlen_q = real_seqlen_q;
+            }
 
             next_seqstart_q += real_seqlen_q;
             next_seqstart_k += real_seqlen_k;
@@ -508,6 +499,7 @@ int main(int argc, char* argv[])
                                                          shape_seqlen_k,
                                                          options.hdim_q,
                                                          options.hdim_v,
+                                                         max_seqlen_q,
                                                          options.scale,
                                                          options.i_perm,
                                                          options.o_perm,
@@ -528,6 +520,7 @@ int main(int argc, char* argv[])
                                                           shape_seqlen_k,
                                                           options.hdim_q,
                                                           options.hdim_v,
+                                                          max_seqlen_q,
                                                           options.scale,
                                                           options.i_perm,
                                                           options.o_perm,
