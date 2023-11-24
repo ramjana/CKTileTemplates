@@ -64,4 +64,10 @@ class span
     size_type size_;
 };
 
+template <typename T>
+span(T* first, T* last) -> span<T>;
+
+template <typename T>
+span(T* first, size_t count) -> span<T>;
+
 } // namespace ck
