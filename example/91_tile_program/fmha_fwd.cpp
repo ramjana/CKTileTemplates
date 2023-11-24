@@ -137,7 +137,23 @@ float invoker_fmha_kernel(Mode mode,
                           bool o_perm,
                           bool use_bias)
 {
-    dim3 kGridSize            = FmhaKernel::GridSize(problem_count, nhead, seqlen_q, hdim_v);
+    const int32_t max_seqlen_q = [&]() {
+        const ck::span seqstart_q(reinterpret_cast<const int32_t*>(seqstart_q_ptr),
+                                  problem_count + 1);
+
+        auto max_seqlen_q_ = std::numeric_limits<int32_t>::min();
+        for(ck::index_t p = 0; p < problem_count; ++p)
+        {
+            const int32_t next_seqlen_q = seqstart_q[p + 1] - seqstart_q[p];
+            if(max_seqlen_q_ < next_seqlen_q)
+            {
+                max_seqlen_q_ = next_seqlen_q;
+            }
+        }
+        return max_seqlen_q_;
+    }();
+
+    dim3 kGridSize            = FmhaKernel::GridSize(problem_count, nhead, max_seqlen_q, hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
     constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
