@@ -313,15 +313,7 @@ struct Options
         return validate();
     }
 
-    bool validate()
-    {
-        if(seqlen_q % seqlen_alignment || seqlen_k % seqlen_alignment)
-        {
-            return false;
-        }
-
-        return true;
-    }
+    bool validate() { return true; }
 
     ck::index_t batch() const noexcept { return mode == Mode::Batch ? original_batch : 1; }
 
