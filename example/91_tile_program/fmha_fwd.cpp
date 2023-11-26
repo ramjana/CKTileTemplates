@@ -260,7 +260,7 @@ float invoker_fmha_kernel(Mode mode,
         });
 }
 
-static constexpr ck::index_t seqlen_alignment = 128;
+static constexpr ck::index_t seqlen_alignment = 32;
 
 struct Options
 {
