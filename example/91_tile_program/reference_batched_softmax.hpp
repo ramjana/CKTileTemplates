@@ -11,6 +11,10 @@ void reference_batched_softmax(const Tensor<ADataType>& a_b_m_n, Tensor<BDataTyp
 {
     const int N = a_b_m_n.mDesc.GetLengths()[2];
 
+#define ADD_PAD_VAL 0
+#if ADD_PAD_VAL
+    const int LN = ck::math::integer_divide_ceil(N, 128) * 128;
+#endif
     auto f = [&](auto batch, auto m) {
         AccDataType v_max = ck::NumericLimits<ADataType>::Lowest();
 
@@ -21,6 +25,14 @@ void reference_batched_softmax(const Tensor<ADataType>& a_b_m_n, Tensor<BDataTyp
 
             v_max = v_max < v_a ? v_a : v_max;
         }
+#if ADD_PAD_VAL
+        for(int n = N; n < LN; ++n)
+        {
+            const ADataType v_a = 0;
+
+            v_max = v_max < v_a ? v_a : v_max;
+        }
+#endif
 
         AccDataType v_exp_sum = 0;
 
@@ -31,6 +43,14 @@ void reference_batched_softmax(const Tensor<ADataType>& a_b_m_n, Tensor<BDataTyp
 
             v_exp_sum += ck::math::exp(v_a - v_max);
         }
+#if ADD_PAD_VAL
+        for(int n = N; n < LN; ++n)
+        {
+            const ADataType v_a = 0;
+
+            v_exp_sum += ck::math::exp(v_a - v_max);
+        }
+#endif
 
         // elementwise
         for(int n = 0; n < N; ++n)
