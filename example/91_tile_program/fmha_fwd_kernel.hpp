@@ -335,45 +335,110 @@ struct FmhaFwdKernel
         }
         ODataType* o_ptr = kargs.o_ptr + i_nhead * kargs.nhead_stride_o + batch_offset_o;
 
+#define PAD_MATRIX 1
+
         // Q/K/V DRAM and DRAM window
-        const auto q_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            q_ptr,
-            make_tuple(kargs.seqlen_q, kargs.hdim_q),
-            make_tuple(kargs.stride_q, 1),
-            Number<32>{},
-            Number<1>{});
+        const auto q_dram = [&]() {
+            const auto q_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                q_ptr,
+                make_tuple(kargs.seqlen_q, kargs.hdim_q),
+                make_tuple(kargs.stride_q, 1),
+                Number<32>{},
+                Number<1>{});
+#if !PAD_MATRIX
+            return q_dram_naive;
+#else
+            const index_t seqlen_q_padded =
+                FmhaPipeline::kM0 *
+                    ck::math::integer_divide_ceil(kargs.seqlen_q, FmhaPipeline::kM0) -
+                kargs.seqlen_q;
 
-        const auto k_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            k_ptr,
-            make_tuple(kargs.seqlen_k, kargs.hdim_q),
-            make_tuple(kargs.stride_k, 1),
-            Number<32>{},
-            Number<1>{});
+            return transform_tensor_view(
+                q_dram_naive,
+                make_tuple(make_right_pad_transform(kargs.seqlen_q, seqlen_q_padded),
+                           make_pass_through_transform(kargs.hdim_q)),
+                make_tuple(Sequence<0>{}, Sequence<1>{}),
+                make_tuple(Sequence<0>{}, Sequence<1>{}));
+#endif
+        }();
+        const auto k_dram = [&]() {
+            const auto k_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                k_ptr,
+                make_tuple(kargs.seqlen_k, kargs.hdim_q),
+                make_tuple(kargs.stride_k, 1),
+                Number<32>{},
+                Number<1>{});
+#if !PAD_MATRIX
+            return k_dram_naive;
+#else
+            const index_t seqlen_k_padded =
+                FmhaPipeline::kN0 *
+                    ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0) -
+                kargs.seqlen_k;
 
+            return transform_tensor_view(
+                k_dram_naive,
+                make_tuple(make_right_pad_transform(kargs.seqlen_k, seqlen_k_padded),
+                           make_pass_through_transform(kargs.hdim_q)),
+                make_tuple(Sequence<0>{}, Sequence<1>{}),
+                make_tuple(Sequence<0>{}, Sequence<1>{}));
+#endif
+        }();
         const auto v_dram = [&]() {
             if constexpr(ck::is_same_v<VLayout, ck::tensor_layout::gemm::RowMajor>)
             {
-                const auto v_dram_tmp = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                const auto v_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
                     v_ptr,
                     make_tuple(kargs.seqlen_k, kargs.hdim_v),
                     make_tuple(kargs.stride_v, 1),
                     Number<32>{},
                     Number<1>{});
+#if !PAD_MATRIX
+                return v_dram_naive;
+#else
+                const auto v_dram_transposed =
+                    transform_tensor_view(v_dram_naive,
+                                          make_tuple(make_pass_through_transform(kargs.seqlen_k),
+                                                     make_pass_through_transform(kargs.hdim_v)),
+                                          make_tuple(Sequence<1>{}, Sequence<0>{}),
+                                          make_tuple(Sequence<0>{}, Sequence<1>{}));
+
+                const index_t seqlen_k_padded =
+                    FmhaPipeline::kN1 *
+                        ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN1) -
+                    kargs.seqlen_k;
+
                 return transform_tensor_view(
-                    v_dram_tmp,
+                    v_dram_transposed,
                     make_tuple(make_pass_through_transform(kargs.hdim_v),
-                               make_pass_through_transform(kargs.seqlen_k)),
-                    make_tuple(Sequence<1>{}, Sequence<0>{}),
+                               make_right_pad_transform(kargs.seqlen_k, seqlen_k_padded)),
+                    make_tuple(Sequence<0>{}, Sequence<1>{}),
                     make_tuple(Sequence<0>{}, Sequence<1>{}));
+#endif
             }
             else
             {
-                return make_naive_tensor_view<AddressSpaceEnum::Global>(
+                const auto v_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
                     v_ptr,
                     make_tuple(kargs.hdim_v, kargs.seqlen_k),
                     make_tuple(kargs.stride_v, 1),
                     Number<32>{},
                     Number<1>{});
+#if !PAD_MATRIX
+                return v_dram_naive;
+#else
+                const index_t seqlen_k_padded =
+                    FmhaPipeline::kN1 *
+                        ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN1) -
+                    kargs.seqlen_k;
+
+                return transform_tensor_view(
+                    v_dram_naive,
+                    make_tuple(make_pass_through_transform(kargs.hdim_v),
+                               make_right_pad_transform(kargs.seqlen_k, seqlen_k_padded)),
+                    make_tuple(Sequence<0>{}, Sequence<1>{}),
+                    make_tuple(Sequence<0>{}, Sequence<1>{}));
+#endif
             }
         }();
 
@@ -434,12 +499,29 @@ struct FmhaFwdKernel
         }();
 
         // O DRAM and O DRAM window
-        auto o_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            o_ptr,
-            make_tuple(kargs.seqlen_q, kargs.hdim_v),
-            make_tuple(kargs.stride_o, 1),
-            Number<32>{},
-            Number<1>{});
+        auto o_dram = [&]() {
+            const auto o_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                o_ptr,
+                make_tuple(kargs.seqlen_q, kargs.hdim_v),
+                make_tuple(kargs.stride_o, 1),
+                Number<32>{},
+                Number<1>{});
+#if !PAD_MATRIX
+            return o_dram_naive;
+#else
+            const index_t seqlen_q_padded =
+                FmhaPipeline::kM0 *
+                    ck::math::integer_divide_ceil(kargs.seqlen_q, FmhaPipeline::kM0) -
+                kargs.seqlen_q;
+
+            return transform_tensor_view(
+                o_dram_naive,
+                make_tuple(make_right_pad_transform(kargs.seqlen_q, seqlen_q_padded),
+                           make_pass_through_transform(kargs.hdim_v)),
+                make_tuple(Sequence<0>{}, Sequence<1>{}),
+                make_tuple(Sequence<0>{}, Sequence<1>{}));
+#endif
+        }();
 
         auto o_dram_window =
             make_tile_window(o_dram,
