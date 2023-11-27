@@ -462,14 +462,16 @@ struct FmhaFwdKernel
                              {i_n1, 0});
 
         const auto run_pipeline_with = [&](auto bias_dram_window) {
-            return FmhaPipeline{}(q_dram_window,
-                                  k_dram_window,
-                                  v_dram_window,
-                                  bias_dram_window,
-                                  kargs.scale,
-                                  ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0),
-                                  ck::math::integer_divide_ceil(kargs.hdim_q, FmhaPipeline::kK0),
-                                  smem_ptr);
+            return FmhaPipeline{}(
+                q_dram_window,
+                k_dram_window,
+                v_dram_window,
+                bias_dram_window,
+                [&](index_t m, index_t n) { return !(m < kargs.seqlen_q && n < kargs.seqlen_k); },
+                kargs.scale,
+                ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0),
+                ck::math::integer_divide_ceil(kargs.hdim_q, FmhaPipeline::kK0),
+                smem_ptr);
         };
 
         auto o_acc_tile = [&]() {

@@ -62,7 +62,8 @@ struct BlockFmhaPipelineQRKSVS
               typename QElementFunction,
               typename KElementFunction,
               typename VElementFunction,
-              typename BiasElementFunction>
+              typename BiasElementFunction,
+              typename SMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
                const QElementFunction& q_element_func,
@@ -72,6 +73,7 @@ struct BlockFmhaPipelineQRKSVS
                const VElementFunction& v_element_func,
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
                const BiasElementFunction& bias_element_func,
+               SMask s_mask,
                float scale,
                index_t num_total_loop,
                index_t /*num_sub_loop_qk*/, // in this pipeline, the 1st gemm loop must be static
@@ -176,7 +178,6 @@ struct BlockFmhaPipelineQRKSVS
                 k_dram_block_window.GetWindowOrigin(),
                 Policy::template MakeKDramTileDistribution<Problem>()); // K DRAM tile window for
                                                                         // load
-
             auto k_block_tile = load_tile(k_dram_window);
             {
                 move_tile_window(k_dram_window, {0, kK0});
@@ -243,15 +244,12 @@ struct BlockFmhaPipelineQRKSVS
 
             set_value_if(
                 s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
-                    const auto row = tile_idx.At(Number<0>{});
+                    const auto tensor_idx = k_dram_block_window.GetWindowOrigin() + tile_idx;
 
-                    const auto bottom_tensor_view = k_dram_block_window.GetBottomTensorView();
-                    const auto tensor_idx   = k_dram_block_window.GetWindowOrigin() + tile_idx;
-                    const auto tensor_coord = make_tensor_coordinate(
-                        bottom_tensor_view.GetTensorDescriptor(), tensor_idx);
+                    const auto row = tensor_idx.At(Number<0>{});
+                    const auto col = tensor_idx.At(Number<1>{});
 
-                    return row < kM0 && !coordinate_has_valid_offset_assuming_top_index_is_valid(
-                                            bottom_tensor_view.GetTensorDescriptor(), tensor_coord);
+                    return s_mask(row, col);
                 });
 
             const auto s =
@@ -378,12 +376,14 @@ struct BlockFmhaPipelineQRKSVS
     template <typename QDramBlockWindowTmp,
               typename KDramBlockWindowTmp,
               typename VDramBlockWindowTmp,
-              typename BiasDramBlockWindowTmp>
+              typename BiasDramBlockWindowTmp,
+              typename SMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
                const KDramBlockWindowTmp& k_dram_block_window_tmp,       // N0*K0 tile
                const VDramBlockWindowTmp& v_dram_block_window_tmp,       // N1*K1 tile
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
+               SMask s_mask,
                float scale,
                index_t num_total_loop,
                index_t num_sub_loop_qk,
@@ -397,6 +397,7 @@ struct BlockFmhaPipelineQRKSVS
                           identity{},
                           bias_dram_block_window_tmp,
                           identity{},
+                          s_mask,
                           scale,
                           num_total_loop,
                           num_sub_loop_qk,
