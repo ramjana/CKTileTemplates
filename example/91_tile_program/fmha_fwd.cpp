@@ -356,9 +356,9 @@ int main(int argc, char* argv[])
 
         std::mt19937 random_engine(0);
         std::uniform_int_distribution<int32_t> gen_seqlen_q_factor(
-            1, options.seqlen_q / seqlen_alignment);
+            1, ck::math::integer_divide_ceil(options.seqlen_q, seqlen_alignment));
         std::uniform_int_distribution<int32_t> gen_seqlen_k_factor(
-            1, options.seqlen_k / seqlen_alignment);
+            1, ck::math::integer_divide_ceil(options.seqlen_k, seqlen_alignment));
 
         for(ck::index_t p = 0; p < options.problem_count(); ++p)
         {
@@ -602,7 +602,7 @@ int main(int argc, char* argv[])
                                                                                        p_host_ref);
         reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
             p_host_ref, v_host_ref, o_host_ref);
-
+        
         Tensor<ODataType> o_host_result({options.nhead, real_seqlen_q, options.hdim_v});
         // permute
         if(options.o_perm) o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], idx[1] + query_offset, idx[2]); });
