@@ -480,12 +480,34 @@ struct FmhaFwdKernel
 
             if(bias_ptr != nullptr)
             {
-                const auto bias_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-                    bias_ptr,
-                    make_tuple(kargs.seqlen_q, kargs.seqlen_k),
-                    make_tuple(kargs.stride_bias, 1),
-                    Number<32>{},
-                    Number<1>{});
+                const auto bias_dram = [&]() {
+                    const auto bias_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
+                        bias_ptr,
+                        make_tuple(kargs.seqlen_q, kargs.seqlen_k),
+                        make_tuple(kargs.stride_bias, 1),
+                        Number<32>{},
+                        Number<1>{});
+#if !PAD_MATRIX
+                    return bias_dram_naive;
+#else
+                    const index_t seqlen_q_padded =
+                        FmhaPipeline::kM0 *
+                            ck::math::integer_divide_ceil(kargs.seqlen_q, FmhaPipeline::kM0) -
+                        kargs.seqlen_q;
+
+                    const index_t seqlen_k_padded =
+                        FmhaPipeline::kN0 *
+                            ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0) -
+                        kargs.seqlen_k;
+
+                    return transform_tensor_view(
+                        bias_dram_naive,
+                        make_tuple(make_right_pad_transform(kargs.seqlen_q, seqlen_q_padded),
+                                   make_right_pad_transform(kargs.seqlen_k, seqlen_k_padded)),
+                        make_tuple(Sequence<0>{}, Sequence<1>{}),
+                        make_tuple(Sequence<0>{}, Sequence<1>{}));
+#endif
+                }();
 
                 auto bias_dram_window =
                     make_tile_window(bias_dram, bias_dram_window_lengths, {i_m0, 0});
