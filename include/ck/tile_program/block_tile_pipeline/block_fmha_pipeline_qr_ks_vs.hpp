@@ -244,10 +244,11 @@ struct BlockFmhaPipelineQRKSVS
 
             set_value_if(
                 s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
-                    const auto tensor_idx = k_dram_block_window.GetWindowOrigin() + tile_idx;
+                    const auto q_origin = q_dram_window.GetWindowOrigin();
+                    const auto k_origin = k_dram_block_window.GetWindowOrigin();
 
-                    const auto row = tensor_idx.At(Number<0>{});
-                    const auto col = tensor_idx.At(Number<1>{});
+                    const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
+                    const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
 
                     return s_mask(row, col);
                 });
