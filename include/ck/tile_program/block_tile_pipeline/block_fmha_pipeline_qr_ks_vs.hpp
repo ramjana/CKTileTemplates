@@ -241,6 +241,24 @@ struct BlockFmhaPipelineQRKSVS
                 bias_tile);
             move_tile_window(bias_dram_window, {0, kN0});
 
+            set_value_if(
+                s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
+                    const auto row = tile_idx.At(Number<0>{});
+                    const auto col = tile_idx.At(Number<1>{});
+#if 1
+                    return row < kM0 && 100 <= col;
+#else
+                const auto bottom_tensor_view = k_dram_block_window.GetBottomTensorView();
+                const auto tensor_idx = k_dram_block_window.GetWindowOrigin() + make_tuple(0, col);
+                const auto tensor_coord = make_tensor_coordinate(
+                    bottom_tensor_view.GetTensorDescriptor(), tensor_idx);
+                
+                return row < kM0 &&
+                !coordinate_has_valid_offset_assuming_top_index_is_valid(bottom_tensor_view.GetTensorDescriptor(),
+                tensor_coord);
+#endif
+                });
+
             const auto s =
                 tile_elementwise_in(type_convert<SMPLComputeDataType, SaccDataType>, s_acc); // S{j}
             auto m_local = block_tile_reduce<SMPLComputeDataType>(
