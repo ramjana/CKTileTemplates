@@ -380,6 +380,10 @@ struct FmhaFwdKernel
                                           make_tuple(Sequence<1>{}, Sequence<0>{}),
                                           make_tuple(Sequence<0>{}, Sequence<1>{}));
 
+                /// FIXME: The return value of v_dram_naive.GetTensorDescriptor().GetLength() is
+                /// same as
+                ///   v_dram_transposed.GetTensorDescriptor().GetLength(). Replace following
+                ///   if-clause by pad_tensor_view() call after fixing this issue.
                 if constexpr(!NeedPadding)
                 {
                     return v_dram_transposed;
@@ -408,24 +412,9 @@ struct FmhaFwdKernel
                     Number<32>{},
                     Number<1>{});
 
-                if constexpr(!NeedPadding)
-                {
-                    return v_dram_naive;
-                }
-                else
-                {
-                    const index_t seqlen_k_padded =
-                        FmhaPipeline::kN1 *
-                            ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN1) -
-                        kargs.seqlen_k;
-
-                    return transform_tensor_view(
-                        v_dram_naive,
-                        make_tuple(make_pass_through_transform(kargs.hdim_v),
-                                   make_right_pad_transform(kargs.seqlen_k, seqlen_k_padded)),
-                        make_tuple(Sequence<0>{}, Sequence<1>{}),
-                        make_tuple(Sequence<0>{}, Sequence<1>{}));
-                }
+                return pad_tensor_view(v_dram_naive,
+                                       make_tuple(Number<1>{}, Number<FmhaPipeline::kN1>{}),
+                                       Sequence<false, NeedPadding>{});
             }
         }();
 
