@@ -260,8 +260,6 @@ float invoker_fmha_kernel(Mode mode,
         });
 }
 
-static constexpr ck::index_t seqlen_alignment = 32;
-
 struct Options
 {
     bool do_validation         = true;
@@ -332,6 +330,53 @@ std::array<ck::index_t, 4> get_lengths(bool permute,
         return {b, s, h, d};
 }
 
+std::vector<int32_t> generate_seqstarts(Mode mode,
+                                        unsigned count,
+                                        int32_t seqlens_sum,
+                                        std::optional<unsigned> seed = std::nullopt)
+{
+    assert(0 < count);
+
+    const std::vector<int32_t> seqlens = [&]() {
+        std::vector<int32_t> original_seqlens(count, seqlens_sum);
+
+        if(mode == Mode::Group && 1 < count)
+        {
+            using size_type = std::vector<int32_t>::size_type;
+
+            std::mt19937 random_engine(seed.has_value() ? *seed : std::random_device{}());
+            std::uniform_int_distribution<size_type> idx_dist(0, count - 1);
+            auto next_idx = std::bind(idx_dist, std::ref(random_engine));
+
+            std::uniform_int_distribution<size_type> step_dist(1, count - 1);
+            auto next_step = std::bind(step_dist, std::ref(random_engine));
+
+            for(unsigned repeat = seqlens_sum * (count / 2); 0 < repeat; --repeat)
+            {
+                const size_type to_decrease = next_idx();
+                if(original_seqlens[to_decrease] == 1)
+                {
+                    continue;
+                }
+
+                const size_type to_increase = (to_decrease + next_step()) % count;
+
+                --original_seqlens[to_decrease];
+                ++original_seqlens[to_increase];
+            }
+        }
+
+        return original_seqlens;
+    }();
+
+    std::vector<int32_t> seqstarts = {0};
+    for(int32_t seqlen : seqlens)
+    {
+        seqstarts.push_back(seqstarts.back() + seqlen);
+    }
+    return seqstarts;
+}
+
 int main(int argc, char* argv[])
 {
     Options options;
@@ -341,62 +386,25 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    const std::vector<int32_t> seqstart_q_host =
+        generate_seqstarts(options.mode, options.problem_count(), options.seqlen_q);
+    const std::vector<int32_t> seqstart_k_host =
+        generate_seqstarts(options.mode, options.problem_count(), options.seqlen_k);
+
     // accumulation numbers for performance evaluation
     std::size_t flop = 0, num_byte = 0;
-
-    std::vector<int32_t> seqstart_q_host;
-    std::vector<int32_t> seqstart_k_host;
-    auto max_seqlen_q = std::numeric_limits<int32_t>::min();
+    auto max_seqlen_q =
+        std::numeric_limits<int32_t>::min(); // we will use max seqlen to decide grid size
     {
-        int32_t next_seqstart_q = 0;
-        int32_t next_seqstart_k = 0;
-
-        seqstart_q_host.push_back(next_seqstart_q);
-        seqstart_k_host.push_back(next_seqstart_k);
-
-        std::mt19937 random_engine(0);
-        std::uniform_int_distribution<int32_t> gen_seqlen_q_factor(
-            1, ck::math::integer_divide_ceil(options.seqlen_q, seqlen_alignment));
-        std::uniform_int_distribution<int32_t> gen_seqlen_k_factor(
-            1, ck::math::integer_divide_ceil(options.seqlen_k, seqlen_alignment));
-
         for(ck::index_t p = 0; p < options.problem_count(); ++p)
         {
-            const auto [real_seqlen_q, real_seqlen_k] = [&]() {
-                if(options.mode == Mode::Batch)
-                {
-                    return std::make_tuple(options.seqlen_q, options.seqlen_k);
-                }
-                else
-                {
-                    int32_t next_seqlen_q = gen_seqlen_q_factor(random_engine) * seqlen_alignment;
-
-                    // only randomize seqlen_k if it was set to a different value than seqlen_q
-                    // originally
-                    if(options.seqlen_q == options.seqlen_k)
-                    {
-                        return std::make_tuple(next_seqlen_q, options.seqlen_k);
-                    }
-                    else
-                    {
-                        int32_t next_seqlen_k =
-                            gen_seqlen_k_factor(random_engine) * seqlen_alignment;
-
-                        return std::make_tuple(next_seqlen_q, next_seqlen_k);
-                    }
-                }
-            }();
+            const int32_t real_seqlen_q = seqstart_q_host[p + 1] - seqstart_q_host[p];
+            const int32_t real_seqlen_k = seqstart_k_host[p + 1] - seqstart_k_host[p];
 
             if(max_seqlen_q < real_seqlen_q)
             {
                 max_seqlen_q = real_seqlen_q;
             }
-
-            next_seqstart_q += real_seqlen_q;
-            next_seqstart_k += real_seqlen_k;
-
-            seqstart_q_host.push_back(next_seqstart_q);
-            seqstart_k_host.push_back(next_seqstart_k);
 
             using namespace ck::literals;
 
