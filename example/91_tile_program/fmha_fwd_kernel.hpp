@@ -21,7 +21,7 @@
 template <typename TilePartitioner_,
           typename FmhaPipeline_,
           typename EpiloguePipeline_,
-          bool NeedPadding = false>
+          bool NeedPadding>
 struct FmhaFwdKernel
 {
     using TilePartitioner                   = ck::remove_cvref_t<TilePartitioner_>;
