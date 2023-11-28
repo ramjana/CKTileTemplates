@@ -611,7 +611,12 @@ int main(int argc, char* argv[])
 
         if(!ck::utils::check_err(o_host_result, o_host_ref))
         {
-            std::cerr << "mismatch found at batch: " << p << std::endl;
+            std::cerr << "mismatch found at batch: " << p << std::endl
+                      << "\treal_seqlen_q: " << real_seqlen_q << std::endl
+                      << "\treal_seqlen_k: " << real_seqlen_k << std::endl
+                      << "\tseqstart_q: " << seqstart_q_host << std::endl
+                      << "\tseqstart_k: " << seqstart_k_host << std::endl;
+
             return EXIT_FAILURE;
         }
     }
