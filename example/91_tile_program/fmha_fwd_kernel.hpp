@@ -316,6 +316,13 @@ struct FmhaFwdKernel
             const auto adjusted_seqstart_q_ptr = kargs.seqstart_q_ptr + i_batch;
             kargs.seqlen_q = adjusted_seqstart_q_ptr[1] - adjusted_seqstart_q_ptr[0];
 
+            // # of required blocks is different in each groups, terminate unnecessary blocks
+            // earlier
+            if(kargs.seqlen_q <= i_m0 || kargs.hdim_v <= i_n1)
+            {
+                return;
+            }
+
             if(kargs.seqlen_k_ptr != nullptr)
             {
                 kargs.seqlen_k = kargs.seqlen_k_ptr[i_batch];
@@ -391,8 +398,8 @@ struct FmhaFwdKernel
                 else
                 {
                     const index_t seqlen_k_padded =
-                        FmhaPipeline::kN1 *
-                            ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN1) -
+                        FmhaPipeline::kK1 *
+                            ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kK1) -
                         kargs.seqlen_k;
 
                     return transform_tensor_view(
@@ -413,7 +420,7 @@ struct FmhaFwdKernel
                     Number<1>{});
 
                 return pad_tensor_view(v_dram_naive,
-                                       make_tuple(Number<1>{}, Number<FmhaPipeline::kN1>{}),
+                                       make_tuple(Number<1>{}, Number<FmhaPipeline::kK1>{}),
                                        Sequence<false, NeedPadding>{});
             }
         }();
