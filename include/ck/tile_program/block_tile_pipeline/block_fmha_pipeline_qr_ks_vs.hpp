@@ -23,6 +23,10 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
+struct NullMask
+{
+};
+
 // This pipeline is qkv all located in LDS
 template <typename Problem, typename Policy = BlockFmhaPipelineQRKSVSDefaultPolicy>
 struct BlockFmhaPipelineQRKSVS
@@ -241,17 +245,19 @@ struct BlockFmhaPipelineQRKSVS
                 s_acc,
                 bias_tile);
             move_tile_window(bias_dram_window, {0, kN0});
+            if constexpr(!std::is_same_v<SMask, NullMask>)
+            {
+                set_value_if(
+                    s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
+                        const auto q_origin = q_dram_window.GetWindowOrigin();
+                        const auto k_origin = k_dram_block_window.GetWindowOrigin();
 
-            set_value_if(
-                s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
-                    const auto q_origin = q_dram_window.GetWindowOrigin();
-                    const auto k_origin = k_dram_block_window.GetWindowOrigin();
+                        const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
+                        const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
 
-                    const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
-                    const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
-
-                    return s_mask(row, col);
-                });
+                        return s_mask(row, col);
+                    });
+            }
 
             const auto s =
                 tile_elementwise_in(type_convert<SMPLComputeDataType, SaccDataType>, s_acc); // S{j}
