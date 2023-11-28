@@ -346,6 +346,7 @@ struct FmhaFwdKernel
                 make_tuple(kargs.stride_q, 1),
                 Number<32>{},
                 Number<1>{});
+
             if constexpr(!NeedPadding)
             {
                 return q_dram_naive;
@@ -372,6 +373,7 @@ struct FmhaFwdKernel
                 make_tuple(kargs.stride_k, 1),
                 Number<32>{},
                 Number<1>{});
+
             if constexpr(!NeedPadding)
             {
                 return k_dram_naive;
@@ -400,19 +402,20 @@ struct FmhaFwdKernel
                     make_tuple(kargs.stride_v, 1),
                     Number<32>{},
                     Number<1>{});
+
+                const auto v_dram_transposed =
+                    transform_tensor_view(v_dram_naive,
+                                          make_tuple(make_pass_through_transform(kargs.seqlen_k),
+                                                     make_pass_through_transform(kargs.hdim_v)),
+                                          make_tuple(Sequence<1>{}, Sequence<0>{}),
+                                          make_tuple(Sequence<0>{}, Sequence<1>{}));
+
                 if constexpr(!NeedPadding)
                 {
-                    return v_dram_naive;
+                    return v_dram_transposed;
                 }
                 else
                 {
-                    const auto v_dram_transposed = transform_tensor_view(
-                        v_dram_naive,
-                        make_tuple(make_pass_through_transform(kargs.seqlen_k),
-                                   make_pass_through_transform(kargs.hdim_v)),
-                        make_tuple(Sequence<1>{}, Sequence<0>{}),
-                        make_tuple(Sequence<0>{}, Sequence<1>{}));
-
                     const index_t seqlen_k_padded =
                         FmhaPipeline::kN1 *
                             ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN1) -
@@ -434,6 +437,7 @@ struct FmhaFwdKernel
                     make_tuple(kargs.stride_v, 1),
                     Number<32>{},
                     Number<1>{});
+
                 if constexpr(!NeedPadding)
                 {
                     return v_dram_naive;
@@ -510,6 +514,7 @@ struct FmhaFwdKernel
                         make_tuple(kargs.stride_bias, 1),
                         Number<32>{},
                         Number<1>{});
+
                     if constexpr(!NeedPadding)
                     {
                         return bias_dram_naive;
@@ -556,6 +561,7 @@ struct FmhaFwdKernel
                 make_tuple(kargs.stride_o, 1),
                 Number<32>{},
                 Number<1>{});
+
             if constexpr(!NeedPadding)
             {
                 return o_dram_naive;
