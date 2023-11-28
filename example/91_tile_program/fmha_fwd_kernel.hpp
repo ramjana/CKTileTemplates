@@ -467,7 +467,7 @@ struct FmhaFwdKernel
                 k_dram_window,
                 v_dram_window,
                 bias_dram_window,
-                [&](index_t m, index_t n) { return !(m < kargs.seqlen_q && n < kargs.seqlen_k); },
+                [&](index_t /* m */, index_t n) { return !(n < kargs.seqlen_k); },
                 kargs.scale,
                 ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0),
                 ck::math::integer_divide_ceil(kargs.hdim_q, FmhaPipeline::kK0),
