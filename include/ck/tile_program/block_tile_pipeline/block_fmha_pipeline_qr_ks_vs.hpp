@@ -245,7 +245,7 @@ struct BlockFmhaPipelineQRKSVS
                 s_acc,
                 bias_tile);
             move_tile_window(bias_dram_window, {0, kN0});
-            if constexpr(!std::is_same_v<SMask, NullMask>)
+            if constexpr(!is_same_v<SMask, NullMask>)
             {
                 set_value_if(
                     s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {

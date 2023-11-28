@@ -292,7 +292,7 @@ struct FmhaFwdKernel
         index_t batch_offset_bias = 0;
         index_t batch_offset_o    = 0;
 
-        if constexpr(is_same_v<Kargs, KargsBatchMode>)
+        if constexpr(ck::is_same_v<Kargs, KargsBatchMode>)
         {
             batch_offset_q    = i_batch * kargs.batch_stride_q;
             batch_offset_k    = i_batch * kargs.batch_stride_k;
@@ -301,7 +301,7 @@ struct FmhaFwdKernel
             batch_offset_o    = i_batch * kargs.batch_stride_o;
         }
         else
-        { // is_same_v<Kargs, KargsGroupMode>
+        { // ck::is_same_v<Kargs, KargsGroupMode>
             // get starting offset for each work batch
             const index_t query_start = kargs.seqstart_q_ptr[i_batch];
             const index_t key_start   = kargs.seqstart_k_ptr[i_batch];
