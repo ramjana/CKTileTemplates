@@ -318,7 +318,7 @@ struct FmhaFwdKernel
 
             // # of required blocks is different in each groups, terminate unnecessary blocks
             // earlier
-            if(kargs.seqlen_q <= i_m0 || kargs.hdim_v <= i_n1)
+            if(kargs.seqlen_q <= i_m0)
             {
                 return;
             }
