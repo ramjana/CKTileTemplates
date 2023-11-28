@@ -452,7 +452,10 @@ struct FmhaFwdKernel
             const auto s_mask = [&]() {
                 if constexpr(NeedPadding)
                 {
-                    return [&](index_t /* m */, index_t n) { return !(n < kargs.seqlen_k); };
+                    return [&](index_t /* m */, index_t n) {
+                        const bool is_out_of_bound = !(n < kargs.seqlen_k);
+                        return is_out_of_bound;
+                    };
                 }
                 else
                 {
