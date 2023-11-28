@@ -397,7 +397,7 @@ struct FmhaFwdKernel
                 }
                 else
                 {
-                    const index_t seqlen_k_padded =
+                    const index_t pad_length =
                         FmhaPipeline::kK1 *
                             ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kK1) -
                         kargs.seqlen_k;
@@ -405,7 +405,7 @@ struct FmhaFwdKernel
                     return transform_tensor_view(
                         v_dram_transposed,
                         make_tuple(make_pass_through_transform(kargs.hdim_v),
-                                   make_right_pad_transform(kargs.seqlen_k, seqlen_k_padded)),
+                                   make_right_pad_transform(kargs.seqlen_k, pad_length)),
                         make_tuple(Sequence<0>{}, Sequence<1>{}),
                         make_tuple(Sequence<0>{}, Sequence<1>{}));
                 }
