@@ -484,10 +484,9 @@ struct FmhaFwdKernel
                         Number<32>{},
                         Number<1>{});
 
-                    return pad_tensor_view(
-                        bias_dram_naive,
-                        make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kN0>{}),
-                        Sequence<NeedPadding, NeedPadding>{});
+                    return pad_tensor_view(bias_dram_naive,
+                                           bias_dram_window_lengths,
+                                           Sequence<NeedPadding, NeedPadding>{});
                 }();
 
                 auto bias_dram_window =
