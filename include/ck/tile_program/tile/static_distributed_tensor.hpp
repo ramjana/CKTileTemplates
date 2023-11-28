@@ -189,7 +189,6 @@ set_value_if(StaticDistributedTensor<DataType, StaticTileDistribution>& out_tens
     constexpr auto out_spans =
         StaticDistributedTensor<DataType, StaticTileDistribution>::GetDistributedSpans();
     sweep_tile_span(out_spans[Number<0>{}], [&](auto idx0) {
-        // constexpr auto i_idx = make_tuple(idx0);
         sweep_tile_span(out_spans[Number<1>{}], [&](auto idx1) {
             constexpr auto i_j_idx = make_tuple(idx0, idx1);
             constexpr auto y_idx   = tile_distribution.GetYIndicesFromDistributedIndices(i_j_idx);
