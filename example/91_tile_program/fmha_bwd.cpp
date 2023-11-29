@@ -171,10 +171,12 @@ float invoker_fmha_bwd_kernel(const void* q_ptr,
                                           i_perm ? seqlen_k * hdim_q : hdim_q, // nhead_stride_k
                                           i_perm ? seqlen_k * hdim_v : hdim_v, // nhead_stride_v
                                           o_perm ? seqlen_q * hdim_v : hdim_v, // nhead_stride_o
+                                          seqlen_q,                            // nhead_stride_lse
                                           nhead * seqlen_q * hdim_q,           // batch_stride_q
                                           nhead * seqlen_k * hdim_q,           // batch_stride_k
                                           nhead * seqlen_k * hdim_v,           // batch_stride_v
-                                          nhead * seqlen_q * hdim_v);          // batch_stride_o
+                                          nhead * seqlen_q * hdim_v,           // batch_stride_o
+                                          nhead * seqlen_q);                   // batch_stride_lse
 
     float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(
         StreamConfig{nullptr, time_kernel}, FmhaBwdKernel{}, kGridSize, kBlockSize, 0, kargs);
