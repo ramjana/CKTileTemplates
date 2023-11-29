@@ -87,7 +87,9 @@ using FmhaPipelineProblemHDim64 =
                                                       OaccDataType,
                                                       ODataType,
                                                       256, // BlockSize
-                                                      FmhaShapeHDim64>;
+                                                      FmhaShapeHDim64,
+                                                      FmhaMask>;
+
 using FmhaPipelineProblemHDim128 =
     ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
                                                       KDataType,
@@ -99,7 +101,8 @@ using FmhaPipelineProblemHDim128 =
                                                       OaccDataType,
                                                       ODataType,
                                                       256, // BlockSize
-                                                      FmhaShapeHDim128>;
+                                                      FmhaShapeHDim128,
+                                                      FmhaMask>;
 // using FmhaPipeline        = ck::tile_program::block::BlockFmhaPipelineQKVS<FmhaPipelineProblem>;
 using FmhaPipelineHDim64 =
     ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblemHDim64>;
