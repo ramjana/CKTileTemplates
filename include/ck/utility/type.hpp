@@ -32,4 +32,10 @@ inline constexpr bool is_pointer_v = std::is_pointer<T>::value;
 template <typename T>
 inline constexpr bool is_empty_v = std::is_empty<T>::value;
 
+template <typename T>
+struct type_identity
+{
+    using type = T;
+};
+
 } // namespace ck
