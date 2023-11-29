@@ -265,14 +265,14 @@ float invoker_fmha_kernel(Mode mode,
 
 struct Options
 {
-    bool do_validation         = true;
-    Mode mode                  = Mode::Batch;
-    ck::index_t original_batch = 2;
-    ck::index_t nhead          = 8;
-    ck::index_t seqlen_q       = 3328;
-    ck::index_t seqlen_k       = 4096;
-    ck::index_t hdim_q         = 128;
-    ck::index_t hdim_v         = 128;
+    bool do_validation   = true;
+    Mode mode            = Mode::Batch;
+    ck::index_t batch    = 2;
+    ck::index_t nhead    = 8;
+    ck::index_t seqlen_q = 3328;
+    ck::index_t seqlen_k = 4096;
+    ck::index_t hdim_q   = 128;
+    ck::index_t hdim_v   = 128;
 
     float scale = .0f;
 
@@ -292,12 +292,12 @@ struct Options
 
         if(argc >= 9)
         {
-            original_batch = std::stoi(argv[3]);
-            nhead          = std::stoi(argv[4]);
-            seqlen_q       = std::stoi(argv[5]);
-            seqlen_k       = std::stoi(argv[6]);
-            hdim_q         = std::stoi(argv[7]);
-            hdim_v         = std::stoi(argv[8]);
+            batch    = std::stoi(argv[3]);
+            nhead    = std::stoi(argv[4]);
+            seqlen_q = std::stoi(argv[5]);
+            seqlen_k = std::stoi(argv[6]);
+            hdim_q   = std::stoi(argv[7]);
+            hdim_v   = std::stoi(argv[8]);
         }
         if(argc >= 10)
             scale = std::stof(argv[9]);
@@ -316,9 +316,9 @@ struct Options
 
     bool validate() { return true; }
 
-    ck::index_t batch() const noexcept { return mode == Mode::Batch ? original_batch : 1; }
+    ck::index_t shape_batch() const noexcept { return mode == Mode::Batch ? batch : 1; }
 
-    ck::index_t problem_count() const noexcept { return original_batch; }
+    ck::index_t problem_count() const noexcept { return batch; }
 };
 
 std::array<ck::index_t, 4> get_lengths(bool permute,
@@ -431,15 +431,19 @@ int main(int argc, char* argv[])
 
     // host memory for storing all the tensor elements
     Tensor<QDataType> q_host(get_lengths(
-        options.i_perm, options.batch(), options.nhead, shape_seqlen_q, options.hdim_q));
+        options.i_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_q));
     Tensor<KDataType> k_host(get_lengths(
-        options.i_perm, options.batch(), options.nhead, shape_seqlen_k, options.hdim_q));
-    Tensor<VDataType> v_host(
-        is_v_rowmajor
-            ? get_lengths(
-                  options.i_perm, options.batch(), options.nhead, shape_seqlen_k, options.hdim_v)
-            : get_lengths(
-                  options.i_perm, options.batch(), options.nhead, options.hdim_v, shape_seqlen_k));
+        options.i_perm, options.shape_batch(), options.nhead, shape_seqlen_k, options.hdim_q));
+    Tensor<VDataType> v_host(is_v_rowmajor ? get_lengths(options.i_perm,
+                                                         options.shape_batch(),
+                                                         options.nhead,
+                                                         shape_seqlen_k,
+                                                         options.hdim_v)
+                                           : get_lengths(options.i_perm,
+                                                         options.shape_batch(),
+                                                         options.nhead,
+                                                         options.hdim_v,
+                                                         shape_seqlen_k));
     // use bias shape = [1, 1, shape_seqlen_q, shape_seqlen_k]. if use_bias=false, the bias_host
     // will not be used for verification at all (but will be copied to device anyway).
     Tensor<KDataType> bias_host(
@@ -447,7 +451,7 @@ int main(int argc, char* argv[])
             ? get_lengths(options.i_perm, 1, 1, shape_seqlen_q, shape_seqlen_k)
             : std::array<ck::index_t, 4>{1, 1, 1, 1} /* dummy shape for simplifying code */);
     Tensor<ODataType> o_host(get_lengths(
-        options.o_perm, options.batch(), options.nhead, shape_seqlen_q, options.hdim_v));
+        options.o_perm, options.shape_batch(), options.nhead, shape_seqlen_q, options.hdim_v));
 
     // intialize tensors
 #if 0
@@ -477,7 +481,7 @@ int main(int argc, char* argv[])
     seqstart_q.ToDevice(seqstart_q_host.data());
     seqstart_k.ToDevice(seqstart_k_host.data());
 
-    std::cout << "mode:" << options.mode << ", batch:" << options.original_batch
+    std::cout << "mode:" << options.mode << ", batch:" << options.batch
               << ", nhead:" << options.nhead << ", seqlen_q:" << options.seqlen_q
               << ", seqlen_k:" << options.seqlen_k << ", hdim_q:" << options.hdim_q
               << ", hdim_v:" << options.hdim_v << ", scale:" << options.scale
