@@ -129,7 +129,7 @@ float invoker_fmha_kernel(Mode mode,
                           const void* seqstart_q_ptr,
                           const void* seqstart_k_ptr,
                           const void* seqlen_k_ptr,
-                          ck::index_t problem_count,
+                          ck::index_t batch,
                           ck::index_t nhead,
                           ck::index_t seqlen_q,
                           ck::index_t seqlen_k,
@@ -141,7 +141,7 @@ float invoker_fmha_kernel(Mode mode,
                           bool o_perm,
                           bool use_bias)
 {
-    dim3 kGridSize            = FmhaKernel::GridSize(problem_count, nhead, max_seqlen_q, hdim_v);
+    dim3 kGridSize            = FmhaKernel::GridSize(batch, nhead, max_seqlen_q, hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
     constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
@@ -318,7 +318,7 @@ struct Options
 
     ck::index_t shape_batch() const noexcept { return mode == Mode::Batch ? batch : 1; }
 
-    ck::index_t problem_count() const noexcept { return batch; }
+    ck::index_t work_batch() const noexcept { return batch; }
 };
 
 std::array<ck::index_t, 4> get_lengths(bool permute,
@@ -390,19 +390,19 @@ int main(int argc, char* argv[])
     }
 
     const std::vector<int32_t> seqstart_q_host =
-        generate_seqstarts(options.mode, options.problem_count(), options.seqlen_q);
+        generate_seqstarts(options.mode, options.work_batch(), options.seqlen_q);
     const std::vector<int32_t> seqstart_k_host =
-        generate_seqstarts(options.mode, options.problem_count(), options.seqlen_k);
+        generate_seqstarts(options.mode, options.work_batch(), options.seqlen_k);
 
     // accumulation numbers for performance evaluation
     std::size_t flop = 0, num_byte = 0;
     auto max_seqlen_q =
         std::numeric_limits<int32_t>::min(); // we will use max seqlen to decide grid size
     {
-        for(ck::index_t p = 0; p < options.problem_count(); ++p)
+        for(ck::index_t wb = 0; wb < options.work_batch(); ++wb)
         {
-            const int32_t real_seqlen_q = seqstart_q_host[p + 1] - seqstart_q_host[p];
-            const int32_t real_seqlen_k = seqstart_k_host[p + 1] - seqstart_k_host[p];
+            const int32_t real_seqlen_q = seqstart_q_host[wb + 1] - seqstart_q_host[wb];
+            const int32_t real_seqlen_k = seqstart_k_host[wb + 1] - seqstart_k_host[wb];
 
             if(max_seqlen_q < real_seqlen_q)
             {
@@ -505,7 +505,7 @@ int main(int argc, char* argv[])
                                                                    seqstart_q.GetDeviceBuffer(),
                                                                    seqstart_k.GetDeviceBuffer(),
                                                                    nullptr,
-                                                                   options.problem_count(),
+                                                                   options.work_batch(),
                                                                    options.nhead,
                                                                    shape_seqlen_q,
                                                                    shape_seqlen_k,
@@ -537,15 +537,15 @@ int main(int argc, char* argv[])
 
     o_buf.FromDevice(o_host.data());
 
-    for(ck::index_t p = 0; p < options.problem_count(); ++p)
+    for(ck::index_t wb = 0; wb < options.work_batch(); ++wb)
     {
-        const ck::index_t real_seqlen_q = seqstart_q_host[p + 1] - seqstart_q_host[p];
-        const ck::index_t real_seqlen_k = seqstart_k_host[p + 1] - seqstart_k_host[p];
+        const ck::index_t real_seqlen_q = seqstart_q_host[wb + 1] - seqstart_q_host[wb];
+        const ck::index_t real_seqlen_k = seqstart_k_host[wb + 1] - seqstart_k_host[wb];
 
         // adjust matrix index according to the mode
-        const ck::index_t b            = (options.mode == Mode::Batch ? p : 0);
-        const ck::index_t query_offset = (options.mode == Mode::Batch ? 0 : seqstart_q_host[p]);
-        const ck::index_t key_offset   = (options.mode == Mode::Batch ? 0 : seqstart_k_host[p]);
+        const ck::index_t b            = (options.mode == Mode::Batch ? wb : 0);
+        const ck::index_t query_offset = (options.mode == Mode::Batch ? 0 : seqstart_q_host[wb]);
+        const ck::index_t key_offset   = (options.mode == Mode::Batch ? 0 : seqstart_k_host[wb]);
 
         const auto v_host_ref_lengths =
             std::array<ck::index_t, 3>{options.nhead, options.hdim_v, real_seqlen_k};
@@ -611,7 +611,7 @@ int main(int argc, char* argv[])
 
         if(!ck::utils::check_err(o_host_result, o_host_ref))
         {
-            std::cerr << "mismatch found at batch: " << p << std::endl
+            std::cerr << "mismatch found at batch: " << wb << std::endl
                       << "\treal_seqlen_q: " << real_seqlen_q << std::endl
                       << "\treal_seqlen_k: " << real_seqlen_k << std::endl
                       << "\tseqstart_q: " << seqstart_q_host << std::endl
