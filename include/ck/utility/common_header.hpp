@@ -42,6 +42,7 @@
 #include "ck/utility/thread_group.hpp"
 #include "ck/utility/meta_data_buffer.hpp"
 #include "ck/utility/debug.hpp"
+#include "ck/utility/type_select.hpp"
 
 #include "ck/utility/amd_buffer_addressing.hpp"
 #include "ck/utility/amd_wave_read_first_lane.hpp"
