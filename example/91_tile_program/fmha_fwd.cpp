@@ -491,33 +491,33 @@ int main(int argc, char* argv[])
 
     float ave_time = 0;
     // clang-format off
-    if(!ck::type_select([&] { return options.hdim_q == options.hdim_v && options.hdim_q == 64; },  ck::type_identity<FmhaKernelHDim64>{},
-                        [&] { return options.hdim_q == options.hdim_v && options.hdim_q == 128; }, ck::type_identity<FmhaKernelHDim128>{},
-                        [&](auto type_carrier) {
-                            using Kernel = typename decltype(type_carrier)::type;
+    if(!ck::select_arg([&] { return options.hdim_q == options.hdim_v && options.hdim_q == 64; },  ck::type_identity<FmhaKernelHDim64>{},
+                       [&] { return options.hdim_q == options.hdim_v && options.hdim_q == 128; }, ck::type_identity<FmhaKernelHDim128>{},
+                       [&](auto type_carrier) {
+                           using Kernel = typename decltype(type_carrier)::type;
 
-                            ave_time = invoker_fmha_kernel<Kernel>(options.mode,
-                                                                   q_buf.GetDeviceBuffer(),
-                                                                   k_buf.GetDeviceBuffer(),
-                                                                   v_buf.GetDeviceBuffer(),
-                                                                   bias_buf.GetDeviceBuffer(),
-                                                                   o_buf.GetDeviceBuffer(),
-                                                                   seqstart_q.GetDeviceBuffer(),
-                                                                   seqstart_k.GetDeviceBuffer(),
-                                                                   nullptr,
-                                                                   options.work_batch(),
-                                                                   options.nhead,
-                                                                   shape_seqlen_q,
-                                                                   shape_seqlen_k,
-                                                                   options.hdim_q,
-                                                                   options.hdim_v,
-                                                                   max_seqlen_q,
-                                                                   options.scale,
-                                                                   options.i_perm,
-                                                                   options.o_perm,
-                                                                   options.use_bias);
-                        },
-                        [] { std::cerr << "not support hdim, will not run" << std::endl; }))
+                           ave_time = invoker_fmha_kernel<Kernel>(options.mode,
+                                                                  q_buf.GetDeviceBuffer(),
+                                                                  k_buf.GetDeviceBuffer(),
+                                                                  v_buf.GetDeviceBuffer(),
+                                                                  bias_buf.GetDeviceBuffer(),
+                                                                  o_buf.GetDeviceBuffer(),
+                                                                  seqstart_q.GetDeviceBuffer(),
+                                                                  seqstart_k.GetDeviceBuffer(),
+                                                                  nullptr,
+                                                                  options.work_batch(),
+                                                                  options.nhead,
+                                                                  shape_seqlen_q,
+                                                                  shape_seqlen_k,
+                                                                  options.hdim_q,
+                                                                  options.hdim_v,
+                                                                  max_seqlen_q,
+                                                                  options.scale,
+                                                                  options.i_perm,
+                                                                  options.o_perm,
+                                                                  options.use_bias);
+                       },
+                       [] { std::cerr << "not support hdim, will not run" << std::endl; }))
     {
         return EXIT_FAILURE;
     }
