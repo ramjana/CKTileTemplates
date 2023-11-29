@@ -141,13 +141,6 @@ float invoker_fmha_kernel(Mode mode,
                           bool o_perm,
                           bool use_bias)
 {
-    dim3 kGridSize            = FmhaKernel::GridSize(batch, nhead, max_seqlen_q, hdim_v);
-    constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
-
-    constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
-    constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
-    constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
-
     constexpr bool is_v_rowmajor =
         ck::is_same_v<typename FmhaKernel::VLayout, ck::tensor_layout::gemm::RowMajor>;
     /// NOTE: we broadcast bias from [1, 1, seqlen_q, seqlen_k] to [batch, nhead, seqlen_q,
@@ -254,6 +247,13 @@ float invoker_fmha_kernel(Mode mode,
                                          bias);
         },
         [&](auto kargs) {
+            const dim3 kGridSize      = FmhaKernel::GridSize(batch, nhead, max_seqlen_q, hdim_v);
+            constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
+
+            constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
+            constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
+            constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
+
             return launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
                                                             FmhaKernel{},
                                                             kGridSize,
