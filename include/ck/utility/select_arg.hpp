@@ -14,16 +14,17 @@ template <typename FirstPred,
           typename FirstArg,
           typename SecondPred,
           typename SecondArg,
-          typename... RestArgs,
+          typename... RestPredArgs,
           typename ArgReceiver>
 __host__ auto select_arg(FirstPred first_pred,
                          FirstArg&& first_arg,
                          SecondPred second_pred,
                          SecondArg&& second_arg,
-                         RestArgs&&... rest_args,
+                         RestPredArgs&&... rest_pred_args,
                          ArgReceiver&& arg_receiver,
                          std::optional<std::function<void()>> error_handler = std::nullopt)
-    -> std::enable_if_t<sizeof...(RestArgs) % 2 == 0 && std::is_invocable_r_v<bool, FirstPred> &&
+    -> std::enable_if_t<sizeof...(RestPredArgs) % 2 == 0 &&
+                            std::is_invocable_r_v<bool, FirstPred> &&
                             std::is_invocable_v<ArgReceiver&&, FirstArg&&>,
                         bool>
 {
@@ -35,7 +36,7 @@ __host__ auto select_arg(FirstPred first_pred,
 
     return select_arg(std::forward<SecondPred>(second_pred),
                       std::forward<SecondArg>(second_arg),
-                      std::forward<RestArgs>(rest_args)...,
+                      std::forward<RestPredArgs>(rest_pred_args)...,
                       std::forward<ArgReceiver>(arg_receiver),
                       std::move(error_handler));
 }
