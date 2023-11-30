@@ -58,18 +58,20 @@ struct MaskUpperTriangleFromBottomRightPredicate
     }
 
     private:
-    index_t diagonal_offset_ ;
+    index_t diagonal_offset_;
 };
 
 // to track the points which need to be set to -inf on C0
 // Note: no need to reset M padding value, because they will not be stored out.
-template <typename MaskOutPredicate>
+template <typename MaskOutPredicate_>
 struct C0MatrixMask_impl
 {
-    __host__ __device__ C0MatrixMask_impl(index_t MRaw, index_t NRaw) : NRaw_(NRaw), predicate_(MaskOutPredicate{})
+    using MaskOutPredicate = MaskOutPredicate_;
+
+    __host__ __device__ C0MatrixMask_impl(index_t MRaw, index_t NRaw)
+        : NRaw_(NRaw), predicate_(MaskOutPredicate{})
     {
-        if constexpr(std::is_same_v<MaskOutPredicate,
-                                  MaskUpperTriangleFromBottomRightPredicate>)
+        if constexpr(std::is_same_v<MaskOutPredicate, MaskUpperTriangleFromBottomRightPredicate>)
         {
             predicate_.SetDiagonalOffset(MRaw - NRaw);
         }
@@ -97,6 +99,6 @@ struct C0MatrixMask_impl
     MaskOutPredicate predicate_;
 };
 
-} // namespace device
-} // namespace tensor_operation
+} // namespace block
+} // namespace tile_program
 } // namespace ck
