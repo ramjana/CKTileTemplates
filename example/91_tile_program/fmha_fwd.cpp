@@ -128,8 +128,9 @@ template <bool kIsGroupMode>
 using FmhaKernelHDim128 =
     FmhaFwdKernel<FmhaTilePartitionerHDim128, FmhaPipelineHDim128<kIsGroupMode>, FmhaEpilogue>;
 
-template <template <bool> class FmhaKernel>
-struct FmhaKernelTemplateCarrier
+// FmhaKernel template carrier
+template <template <bool kIsGroupMode> class FmhaKernel>
+struct FKTCarrier
 {
     template <bool kIsGroupMode>
     using Kernel = FmhaKernel<kIsGroupMode>;
@@ -513,8 +514,8 @@ int main(int argc, char* argv[])
 
     float ave_time = 0;
     // clang-format off
-    if(!ck::select_arg([&] { return options.hdim_q == options.hdim_v && options.hdim_q == 64; },  FmhaKernelTemplateCarrier<FmhaKernelHDim64>{},
-                       [&] { return options.hdim_q == options.hdim_v && options.hdim_q == 128; }, FmhaKernelTemplateCarrier<FmhaKernelHDim128>{},
+    if(!ck::select_arg([&] { return options.hdim_q == options.hdim_v && options.hdim_q == 64; },  FKTCarrier<FmhaKernelHDim64>{},
+                       [&] { return options.hdim_q == options.hdim_v && options.hdim_q == 128; }, FKTCarrier<FmhaKernelHDim128>{},
                        [&](auto carrier) {
                            const auto invoker =
                                get_fmha_kernel_invoker<decltype(carrier)::template Kernel>(
