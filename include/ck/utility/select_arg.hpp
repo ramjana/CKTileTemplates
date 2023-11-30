@@ -8,6 +8,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "ck/utility/remove_cvref.hpp"
+
 namespace ck {
 
 template <typename FirstPred,
@@ -18,14 +20,14 @@ template <typename FirstPred,
           typename ArgReceiver>
 __host__ auto select_arg(FirstPred first_pred,
                          FirstArg&& first_arg,
-                         SecondPred second_pred,
+                         SecondPred&& second_pred,
                          SecondArg&& second_arg,
                          RestPredArgs&&... rest_pred_args,
                          ArgReceiver&& arg_receiver,
                          std::optional<std::function<void()>> error_handler = std::nullopt)
     -> std::enable_if_t<sizeof...(RestPredArgs) % 2 == 0 &&
                             std::is_invocable_r_v<bool, FirstPred> &&
-                            std::is_invocable_v<ArgReceiver&&, FirstArg&&>,
+                            std::is_invocable_v<remove_reference_t<ArgReceiver>&, FirstArg&&>,
                         bool>
 {
     if(first_pred())
@@ -37,7 +39,7 @@ __host__ auto select_arg(FirstPred first_pred,
     return select_arg(std::forward<SecondPred>(second_pred),
                       std::forward<SecondArg>(second_arg),
                       std::forward<RestPredArgs>(rest_pred_args)...,
-                      std::forward<ArgReceiver>(arg_receiver),
+                      arg_receiver,
                       std::move(error_handler));
 }
 
@@ -47,7 +49,7 @@ __host__ auto select_arg(Pred pred,
                          ArgReceiver&& arg_receiver,
                          std::optional<std::function<void()>> error_handler = std::nullopt)
     -> std::enable_if_t<std::is_invocable_r_v<bool, Pred> &&
-                            std::is_invocable_v<ArgReceiver&&, Arg&&>,
+                            std::is_invocable_v<remove_reference_t<ArgReceiver>&, Arg&&>,
                         bool>
 {
     if(pred())
