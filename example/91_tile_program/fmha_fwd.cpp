@@ -189,7 +189,7 @@ float invoker_fmha_kernel(Mode mode,
 
     return launch_flow(
         mode == Mode::Batch,
-        [&] {
+        [&] { // create batch mode kernel arguments
             std::optional<std::tuple<const void*, ck::index_t, ck::index_t, ck::index_t>> bias;
             if(use_bias)
             {
@@ -219,7 +219,7 @@ float invoker_fmha_kernel(Mode mode,
                                          batch_stride_o,
                                          bias);
         },
-        [&] {
+        [&] { // create group mode kernel arguments
             std::optional<std::tuple<const void*, ck::index_t, ck::index_t>> bias;
             if(use_bias)
             {
@@ -246,7 +246,7 @@ float invoker_fmha_kernel(Mode mode,
                                          nhead_stride_o,
                                          bias);
         },
-        [&](auto kargs) {
+        [&](auto kargs) { // launch kernel by the given kernel argument
             const dim3 kGridSize      = FmhaKernel::GridSize(batch, nhead, max_seqlen_q, hdim_v);
             constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
