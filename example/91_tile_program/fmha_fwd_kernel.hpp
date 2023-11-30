@@ -37,6 +37,8 @@ struct FmhaFwdKernel
 
     using VLayout = ck::remove_cvref_t<typename FmhaPipeline::VLayout>;
 
+    using C0MatrixMask = ck::tile_program::block::C0MatrixMask_impl<ck::remove_cvref_t<typename FmhaPipeline::BlockFmhaMask>>;
+
     struct KargsCommon
     {
         const QDataType* q_ptr;
@@ -466,10 +468,13 @@ struct FmhaFwdKernel
                 }
             }();
 
+            C0MatrixMask casual_mask{kargs.seqlen_q, kargs.seqlen_k};
+
             return FmhaPipeline{}(q_dram_window,
                                   k_dram_window,
                                   v_dram_window,
                                   bias_dram_window,
+                                  casual_mask,
                                   s_mask,
                                   kargs.scale,
                                   ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0),

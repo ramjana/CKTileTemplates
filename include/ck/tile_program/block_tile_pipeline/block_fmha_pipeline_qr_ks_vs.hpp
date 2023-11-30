@@ -18,6 +18,7 @@
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qr_ks_vs_default_policy.hpp"
 #include "ck/tile_program/block_tile/block_reduce.hpp"
 #include "ck/tile_program/tile/shuffle_distributed_tensor.hpp"
+#include "ck/tile_program/block_tile/block_masking_specialization.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -40,6 +41,7 @@ struct BlockFmhaPipelineQRKSVS
     using PDataType           = remove_cvref_t<typename Problem::PDataType>;
     using OaccDataType        = remove_cvref_t<typename Problem::OaccDataType>;
     using ODataType           = remove_cvref_t<typename Problem::ODataType>;
+    using BlockFmhaMask       = remove_cvref_t<typename Problem::BlockFmhaMask>;
 
     using BlockFmhaShape             = remove_cvref_t<typename Problem::BlockFmhaShape>;
     using VLayout                    = remove_cvref_t<typename BlockFmhaShape::VLayout>;
@@ -67,6 +69,7 @@ struct BlockFmhaPipelineQRKSVS
               typename KElementFunction,
               typename VElementFunction,
               typename BiasElementFunction,
+              typename CasualMask,
               typename SMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
@@ -77,6 +80,7 @@ struct BlockFmhaPipelineQRKSVS
                const VElementFunction& v_element_func,
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
                const BiasElementFunction& bias_element_func,
+               CasualMask casual_mask,
                SMask s_mask,
                float scale,
                index_t num_total_loop,
@@ -173,8 +177,18 @@ struct BlockFmhaPipelineQRKSVS
 
         auto q_tile           = tile_elementwise_in(q_element_func, q);
         index_t i_total_loops = 0;
+        
+        const auto q_origin = q_dram_window.GetWindowOrigin();
+        const auto m_block_data_idx_on_grid = q_origin.At(Number<0>{});
         do
         {
+            const auto k_origin = k_dram_block_window.GetWindowOrigin();
+            const auto n_block_data_idx_on_grid = k_origin.At(Number<0>{});         
+            if(casual_mask.IsTileSkippable(
+                   m_block_data_idx_on_grid, n_block_data_idx_on_grid, kM0, kN0))
+            {
+                continue;
+            }
             // STAGE 1, QK gemm
             auto k_dram_window = make_tile_window(
                 k_dram_block_window.GetBottomTensorView(),
@@ -245,17 +259,15 @@ struct BlockFmhaPipelineQRKSVS
                 s_acc,
                 bias_tile);
             move_tile_window(bias_dram_window, {0, kN0});
-            if constexpr(!is_same_v<SMask, NullMask>)
+            if constexpr(!is_same_v<SMask, NullMask> || !is_same_v<CasualMask, MaskDisabledPredicate>)
             {
                 set_value_if(
                     s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
-                        const auto q_origin = q_dram_window.GetWindowOrigin();
-                        const auto k_origin = k_dram_block_window.GetWindowOrigin();
 
                         const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
                         const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
 
-                        return s_mask(row, col);
+                        return s_mask(row, col) || casual_mask.IsMaskedElement(row, col);
                     });
             }
 
@@ -354,7 +366,7 @@ struct BlockFmhaPipelineQRKSVS
             }
             // move K tile windows
             move_tile_window(k_dram_block_window, {kN0, 0});
-            i_total_loops++;
+            //i_total_loops++;
             // tail
             {
                 block_sync_lds();
@@ -363,7 +375,7 @@ struct BlockFmhaPipelineQRKSVS
                        v_lds_window);
                 block_sync_lds();
             }
-        } while(i_total_loops < num_total_loop);
+        } while(++i_total_loops < num_total_loop);
 
         // finally, O
         constexpr auto o_spans = decltype(o_acc)::GetDistributedSpans();
@@ -384,12 +396,14 @@ struct BlockFmhaPipelineQRKSVS
               typename KDramBlockWindowTmp,
               typename VDramBlockWindowTmp,
               typename BiasDramBlockWindowTmp,
+              typename CasualMask,
               typename SMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
                const KDramBlockWindowTmp& k_dram_block_window_tmp,       // N0*K0 tile
                const VDramBlockWindowTmp& v_dram_block_window_tmp,       // N1*K1 tile
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
+               CasualMask casual_mask,
                SMask s_mask,
                float scale,
                index_t num_total_loop,
@@ -404,6 +418,7 @@ struct BlockFmhaPipelineQRKSVS
                           identity{},
                           bias_dram_block_window_tmp,
                           identity{},
+                          casual_mask,
                           s_mask,
                           scale,
                           num_total_loop,
