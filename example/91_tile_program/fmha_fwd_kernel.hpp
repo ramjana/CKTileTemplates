@@ -34,13 +34,15 @@ struct FmhaFwdKernel
 
     using VLayout = ck::remove_cvref_t<typename FmhaPipeline::VLayout>;
 
+    static constexpr bool kIsGroupMode = FmhaPipeline::kIsGroupMode;
     static constexpr bool kNeedPadding = FmhaPipeline::kNeedPadding;
 
     using C0MatrixMask = ck::tile_program::block::C0MatrixMask_impl<
         ck::remove_cvref_t<typename FmhaPipeline::BlockFmhaMask>>;
 
-    struct KargsCommon
+    struct Kargs
     {
+        // common attributes for batch & group modes
         const QDataType* q_ptr;
         const KDataType* k_ptr;
         const VDataType* v_ptr;
@@ -63,81 +65,25 @@ struct FmhaFwdKernel
         ck::index_t nhead_stride_v;
         ck::index_t nhead_stride_o;
 
-        // following attributes are optional
+        // optional common attributes for batch & group modes
         const BiasDataType* bias_ptr  = nullptr;
         ck::index_t stride_bias       = 0;
         ck::index_t nhead_stride_bias = 0;
-    };
 
-    struct KargsBatchMode : KargsCommon
-    {
+        /// NOTE: following are batch mode attributes
         ck::index_t batch_stride_q;
         ck::index_t batch_stride_k;
         ck::index_t batch_stride_v;
         ck::index_t batch_stride_o;
 
-        // following attributes are optional
+        // optional batch mode attributes
         ck::index_t batch_stride_bias = 0;
-    };
 
-    struct KargsGroupMode : KargsCommon
-    {
+        /// NOTE: following are group mode attributes
         const int32_t* seqstart_q_ptr;
         const int32_t* seqstart_k_ptr;
         const int32_t* seqlen_k_ptr;
     };
-
-    __host__ static constexpr void InitKargsCommon(KargsCommon& kargs,
-                                                   const void* q_ptr,
-                                                   const void* k_ptr,
-                                                   const void* v_ptr,
-                                                   void* o_ptr,
-                                                   ck::index_t seqlen_q,
-                                                   ck::index_t seqlen_k,
-                                                   ck::index_t hdim_q,
-                                                   ck::index_t hdim_v,
-                                                   float scale,
-                                                   ck::index_t stride_q,
-                                                   ck::index_t stride_k,
-                                                   ck::index_t stride_v,
-                                                   ck::index_t stride_o,
-                                                   ck::index_t nhead_stride_q,
-                                                   ck::index_t nhead_stride_k,
-                                                   ck::index_t nhead_stride_v,
-                                                   ck::index_t nhead_stride_o)
-    {
-        kargs.q_ptr = reinterpret_cast<const QDataType*>(q_ptr);
-        kargs.k_ptr = reinterpret_cast<const KDataType*>(k_ptr);
-        kargs.v_ptr = reinterpret_cast<const VDataType*>(v_ptr);
-        kargs.o_ptr = reinterpret_cast<ODataType*>(o_ptr);
-
-        kargs.seqlen_q = seqlen_q;
-        kargs.seqlen_k = seqlen_k;
-        kargs.hdim_q   = hdim_q;
-        kargs.hdim_v   = hdim_v;
-
-        kargs.scale = scale;
-
-        kargs.stride_q = stride_q;
-        kargs.stride_k = stride_k;
-        kargs.stride_v = stride_v;
-        kargs.stride_o = stride_o;
-
-        kargs.nhead_stride_q = nhead_stride_q;
-        kargs.nhead_stride_k = nhead_stride_k;
-        kargs.nhead_stride_v = nhead_stride_v;
-        kargs.nhead_stride_o = nhead_stride_o;
-    }
-
-    __host__ static constexpr void InitKargsCommonBias(KargsCommon& kargs,
-                                                       const void* bias_ptr,
-                                                       ck::index_t stride_bias,
-                                                       ck::index_t nhead_stride_bias)
-    {
-        kargs.bias_ptr          = reinterpret_cast<const BiasDataType*>(bias_ptr);
-        kargs.stride_bias       = stride_bias;
-        kargs.nhead_stride_bias = nhead_stride_bias;
-    }
 
     // initialize kernel arguments for batch mode
     __host__ static constexpr auto
@@ -165,27 +111,32 @@ struct FmhaFwdKernel
               std::optional<std::tuple<const void*, ck::index_t, ck::index_t, ck::index_t>> bias =
                   std::nullopt)
     {
-        KargsBatchMode kargs;
+        Kargs kargs;
 
-        InitKargsCommon(kargs,
-                        q_ptr,
-                        k_ptr,
-                        v_ptr,
-                        o_ptr,
-                        seqlen_q,
-                        seqlen_k,
-                        hdim_q,
-                        hdim_v,
-                        scale,
-                        stride_q,
-                        stride_k,
-                        stride_v,
-                        stride_o,
-                        nhead_stride_q,
-                        nhead_stride_k,
-                        nhead_stride_v,
-                        nhead_stride_o);
+        // initialize common attributes
+        kargs.q_ptr = reinterpret_cast<const QDataType*>(q_ptr);
+        kargs.k_ptr = reinterpret_cast<const KDataType*>(k_ptr);
+        kargs.v_ptr = reinterpret_cast<const VDataType*>(v_ptr);
+        kargs.o_ptr = reinterpret_cast<ODataType*>(o_ptr);
 
+        kargs.seqlen_q = seqlen_q;
+        kargs.seqlen_k = seqlen_k;
+        kargs.hdim_q   = hdim_q;
+        kargs.hdim_v   = hdim_v;
+
+        kargs.scale = scale;
+
+        kargs.stride_q = stride_q;
+        kargs.stride_k = stride_k;
+        kargs.stride_v = stride_v;
+        kargs.stride_o = stride_o;
+
+        kargs.nhead_stride_q = nhead_stride_q;
+        kargs.nhead_stride_k = nhead_stride_k;
+        kargs.nhead_stride_v = nhead_stride_v;
+        kargs.nhead_stride_o = nhead_stride_o;
+
+        // initialize batch mode attributes
         kargs.batch_stride_q = batch_stride_q;
         kargs.batch_stride_k = batch_stride_k;
         kargs.batch_stride_v = batch_stride_v;
@@ -193,8 +144,12 @@ struct FmhaFwdKernel
 
         if(bias.has_value())
         {
-            InitKargsCommonBias(kargs, std::get<0>(*bias), std::get<1>(*bias), std::get<2>(*bias));
+            // initialize common attributes
+            kargs.bias_ptr          = reinterpret_cast<const BiasDataType*>(std::get<0>(*bias));
+            kargs.stride_bias       = std::get<1>(*bias);
+            kargs.nhead_stride_bias = std::get<2>(*bias);
 
+            // initialize batch mode attributes
             kargs.batch_stride_bias = std::get<3>(*bias);
         }
 
@@ -223,35 +178,43 @@ struct FmhaFwdKernel
               ck::index_t nhead_stride_o,
               std::optional<std::tuple<const void*, ck::index_t, ck::index_t>> bias = std::nullopt)
     {
-        KargsGroupMode kargs;
+        Kargs kargs;
 
-        InitKargsCommon(kargs,
-                        q_ptr,
-                        k_ptr,
-                        v_ptr,
-                        o_ptr,
-                        -1, // seqlen_q will be updated inside the kernel
-                        -1, // seqlen_k will be updated inside the kernel
-                        hdim_q,
-                        hdim_v,
-                        scale,
-                        stride_q,
-                        stride_k,
-                        stride_v,
-                        stride_o,
-                        nhead_stride_q,
-                        nhead_stride_k,
-                        nhead_stride_v,
-                        nhead_stride_o);
+        // initialize common attributes
+        kargs.q_ptr = reinterpret_cast<const QDataType*>(q_ptr);
+        kargs.k_ptr = reinterpret_cast<const KDataType*>(k_ptr);
+        kargs.v_ptr = reinterpret_cast<const VDataType*>(v_ptr);
+        kargs.o_ptr = reinterpret_cast<ODataType*>(o_ptr);
 
-        if(bias.has_value())
-        {
-            InitKargsCommonBias(kargs, std::get<0>(*bias), std::get<1>(*bias), std::get<2>(*bias));
-        }
+        kargs.seqlen_q = -1; // will be updated inside the kernel
+        kargs.seqlen_k = -1; // will be updated inside the kernel
+        kargs.hdim_q   = hdim_q;
+        kargs.hdim_v   = hdim_v;
 
+        kargs.scale = scale;
+
+        kargs.stride_q = stride_q;
+        kargs.stride_k = stride_k;
+        kargs.stride_v = stride_v;
+        kargs.stride_o = stride_o;
+
+        kargs.nhead_stride_q = nhead_stride_q;
+        kargs.nhead_stride_k = nhead_stride_k;
+        kargs.nhead_stride_v = nhead_stride_v;
+        kargs.nhead_stride_o = nhead_stride_o;
+
+        // initialize group mode attributes
         kargs.seqstart_q_ptr = reinterpret_cast<const int32_t*>(seqstart_q_ptr);
         kargs.seqstart_k_ptr = reinterpret_cast<const int32_t*>(seqstart_k_ptr);
         kargs.seqlen_k_ptr   = reinterpret_cast<const int32_t*>(seqlen_k_ptr);
+
+        if(bias.has_value())
+        {
+            // initialize common attributes
+            kargs.bias_ptr          = reinterpret_cast<const BiasDataType*>(std::get<0>(*bias));
+            kargs.stride_bias       = std::get<1>(*bias);
+            kargs.nhead_stride_bias = std::get<2>(*bias);
+        }
 
         return kargs;
     }
@@ -271,7 +234,6 @@ struct FmhaFwdKernel
         return ck::math::max(FmhaPipeline::GetSmemSize(), EpiloguePipeline::GetSmemSize());
     }
 
-    template <typename Kargs>
     __device__ void operator()(Kargs kargs) const
     {
         using namespace ck;
@@ -294,7 +256,7 @@ struct FmhaFwdKernel
         index_t batch_offset_bias = 0;
         index_t batch_offset_o    = 0;
 
-        if constexpr(ck::is_same_v<Kargs, KargsBatchMode>)
+        if constexpr(!kIsGroupMode)
         {
             batch_offset_q    = i_batch * kargs.batch_stride_q;
             batch_offset_k    = i_batch * kargs.batch_stride_k;

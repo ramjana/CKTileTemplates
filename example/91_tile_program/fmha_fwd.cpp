@@ -78,6 +78,8 @@ using FmhaTilePartitionerHDim64  = FmhaFwdTilePartitioner<FmhaShapeHDim64>;
 using FmhaTilePartitionerHDim128 = FmhaFwdTilePartitioner<FmhaShapeHDim128>;
 
 inline constexpr bool NeedPadding = true;
+
+template <bool kIsGroupMode>
 using FmhaPipelineProblemHDim64 =
     ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
                                                       KDataType,
@@ -90,9 +92,10 @@ using FmhaPipelineProblemHDim64 =
                                                       ODataType,
                                                       256, // BlockSize
                                                       FmhaShapeHDim64,
+                                                      kIsGroupMode,
                                                       NeedPadding,
                                                       FmhaMask>;
-
+template <bool kIsGroupMode>
 using FmhaPipelineProblemHDim128 =
     ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
                                                       KDataType,
@@ -105,18 +108,32 @@ using FmhaPipelineProblemHDim128 =
                                                       ODataType,
                                                       256, // BlockSize
                                                       FmhaShapeHDim128,
+                                                      kIsGroupMode,
                                                       NeedPadding,
                                                       FmhaMask>;
-// using FmhaPipeline        = ck::tile_program::block::BlockFmhaPipelineQKVS<FmhaPipelineProblem>;
-using FmhaPipelineHDim64 =
-    ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblemHDim64>;
-using FmhaPipelineHDim128 =
-    ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblemHDim128>;
 
-using FmhaEpilogue     = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
-using FmhaKernelHDim64 = FmhaFwdKernel<FmhaTilePartitionerHDim64, FmhaPipelineHDim64, FmhaEpilogue>;
+// using FmhaPipeline        = ck::tile_program::block::BlockFmhaPipelineQKVS<FmhaPipelineProblem>;
+template <bool kIsGroupMode>
+using FmhaPipelineHDim64 =
+    ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblemHDim64<kIsGroupMode>>;
+template <bool kIsGroupMode>
+using FmhaPipelineHDim128 =
+    ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblemHDim128<kIsGroupMode>>;
+
+using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
+template <bool kIsGroupMode>
+using FmhaKernelHDim64 =
+    FmhaFwdKernel<FmhaTilePartitionerHDim64, FmhaPipelineHDim64<kIsGroupMode>, FmhaEpilogue>;
+template <bool kIsGroupMode>
 using FmhaKernelHDim128 =
-    FmhaFwdKernel<FmhaTilePartitionerHDim128, FmhaPipelineHDim128, FmhaEpilogue>;
+    FmhaFwdKernel<FmhaTilePartitionerHDim128, FmhaPipelineHDim128<kIsGroupMode>, FmhaEpilogue>;
+
+template <template <bool> class FmhaKernel>
+struct FmhaKernelTemplateCarrier
+{
+    template <bool kIsGroupMode>
+    using Kernel = FmhaKernel<kIsGroupMode>;
+};
 
 enum class Mode : unsigned
 {
@@ -130,8 +147,7 @@ inline std::ostream& operator<<(std::ostream& stream, Mode mode)
 }
 
 template <typename FmhaKernel>
-float invoker_fmha_kernel(Mode mode,
-                          const void* q_ptr,
+float fmha_kernel_invoker(const void* q_ptr,
                           const void* k_ptr,
                           const void* v_ptr,
                           const void* bias_ptr,
@@ -185,21 +201,38 @@ float invoker_fmha_kernel(Mode mode,
     const ck::index_t batch_stride_bias = (0 * nhead * seqlen_q * seqlen_k);
     const ck::index_t batch_stride_o    = (nhead * seqlen_q * hdim_v);
 
-    const auto launch_flow =
-        [](bool condition, auto true_action, auto false_action, auto launcher) {
-            if(condition)
+    // create group mode kernel arguments
+    const auto kargs = [&] {
+        if(FmhaKernel::kIsGroupMode)
+        {
+            std::optional<std::tuple<const void*, ck::index_t, ck::index_t>> bias;
+            if(use_bias)
             {
-                return launcher(true_action());
+                bias = std::make_tuple(bias_ptr, stride_bias, nhead_stride_bias);
             }
-            else
-            {
-                return launcher(false_action());
-            }
-        };
 
-    return launch_flow(
-        mode == Mode::Batch,
-        [&] { // create batch mode kernel arguments
+            return FmhaKernel::MakeKargs(q_ptr,
+                                         k_ptr,
+                                         v_ptr,
+                                         o_ptr,
+                                         seqstart_q_ptr,
+                                         seqstart_k_ptr,
+                                         seqlen_k_ptr,
+                                         hdim_q,
+                                         hdim_v,
+                                         scale,
+                                         stride_q,
+                                         stride_k,
+                                         stride_v,
+                                         stride_o,
+                                         nhead_stride_q,
+                                         nhead_stride_k,
+                                         nhead_stride_v,
+                                         nhead_stride_o,
+                                         bias);
+        }
+        else
+        { // create batch mode kernel arguments
             std::optional<std::tuple<const void*, ck::index_t, ck::index_t, ck::index_t>> bias;
             if(use_bias)
             {
@@ -228,49 +261,29 @@ float invoker_fmha_kernel(Mode mode,
                                          batch_stride_v,
                                          batch_stride_o,
                                          bias);
-        },
-        [&] { // create group mode kernel arguments
-            std::optional<std::tuple<const void*, ck::index_t, ck::index_t>> bias;
-            if(use_bias)
-            {
-                bias = std::make_tuple(bias_ptr, stride_bias, nhead_stride_bias);
-            }
+        }
+    }();
 
-            return FmhaKernel::MakeKargs(q_ptr,
-                                         k_ptr,
-                                         v_ptr,
-                                         o_ptr,
-                                         seqstart_q_ptr,
-                                         seqstart_k_ptr,
-                                         seqlen_k_ptr,
-                                         hdim_q,
-                                         hdim_v,
-                                         scale,
-                                         stride_q,
-                                         stride_k,
-                                         stride_v,
-                                         stride_o,
-                                         nhead_stride_q,
-                                         nhead_stride_k,
-                                         nhead_stride_v,
-                                         nhead_stride_o,
-                                         bias);
-        },
-        [&](auto kargs) { // launch kernel by the given kernel argument
-            const dim3 kGridSize      = FmhaKernel::GridSize(batch, nhead, max_seqlen_q, hdim_v);
-            constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
+    const dim3 kGridSize      = FmhaKernel::GridSize(batch, nhead, max_seqlen_q, hdim_v);
+    constexpr dim3 kBlockSize = FmhaKernel::BlockSize();
 
-            constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
-            constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
-            constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
+    constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
+    constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
+    constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
 
-            return launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
-                                                            FmhaKernel{},
-                                                            kGridSize,
-                                                            kBlockSize,
-                                                            0,
-                                                            kargs); // BatchStrideO
-        });
+    return launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, true},
+                                                    FmhaKernel{},
+                                                    kGridSize,
+                                                    kBlockSize,
+                                                    0,
+                                                    kargs); // BatchStrideO
+}
+
+template <template <bool kIsGroupMode> class FmhaKernel>
+auto get_fmha_kernel_invoker(Mode mode)
+{
+    return (mode == Mode::Batch ? fmha_kernel_invoker<FmhaKernel</* kIsGroupMode = */ false>>
+                                : fmha_kernel_invoker<FmhaKernel</* kIsGroupMode = */ true>>);
 }
 
 struct Options
@@ -436,8 +449,7 @@ int main(int argc, char* argv[])
     const ck::index_t shape_seqlen_k =
         (options.mode == Mode::Batch ? options.seqlen_k : seqstart_k_host.back());
 
-    constexpr bool is_v_rowmajor =
-        ck::is_same_v<typename FmhaKernelHDim64::VLayout, ck::tensor_layout::gemm::RowMajor>;
+    constexpr bool is_v_rowmajor = ck::is_same_v<VLayout, ck::tensor_layout::gemm::RowMajor>;
 
     // host memory for storing all the tensor elements
     Tensor<QDataType> q_host(get_lengths(
@@ -496,36 +508,36 @@ int main(int argc, char* argv[])
               << ", seqlen_k:" << options.seqlen_k << ", hdim_q:" << options.hdim_q
               << ", hdim_v:" << options.hdim_v << ", scale:" << options.scale
               << ", i_perm:" << options.i_perm << ", o_perm:" << options.o_perm
-              << ", use_bias:" << options.use_bias
-              << ", v:" << std::string(FmhaKernelHDim64::VLayout::name) << std::endl;
+              << ", use_bias:" << options.use_bias << ", v:" << std::string(VLayout::name)
+              << std::endl;
 
     float ave_time = 0;
     // clang-format off
-    if(!ck::select_arg([&] { return options.hdim_q == options.hdim_v && options.hdim_q == 64; },  ck::type_identity<FmhaKernelHDim64>{},
-                       [&] { return options.hdim_q == options.hdim_v && options.hdim_q == 128; }, ck::type_identity<FmhaKernelHDim128>{},
-                       [&](auto type_carrier) {
-                           using Kernel = typename decltype(type_carrier)::type;
-
-                           ave_time = invoker_fmha_kernel<Kernel>(options.mode,
-                                                                  q_buf.GetDeviceBuffer(),
-                                                                  k_buf.GetDeviceBuffer(),
-                                                                  v_buf.GetDeviceBuffer(),
-                                                                  bias_buf.GetDeviceBuffer(),
-                                                                  o_buf.GetDeviceBuffer(),
-                                                                  seqstart_q.GetDeviceBuffer(),
-                                                                  seqstart_k.GetDeviceBuffer(),
-                                                                  nullptr,
-                                                                  options.work_batch(),
-                                                                  options.nhead,
-                                                                  shape_seqlen_q,
-                                                                  shape_seqlen_k,
-                                                                  options.hdim_q,
-                                                                  options.hdim_v,
-                                                                  max_seqlen_q,
-                                                                  options.scale,
-                                                                  options.i_perm,
-                                                                  options.o_perm,
-                                                                  options.use_bias);
+    if(!ck::select_arg([&] { return options.hdim_q == options.hdim_v && options.hdim_q == 64; },  FmhaKernelTemplateCarrier<FmhaKernelHDim64>{},
+                       [&] { return options.hdim_q == options.hdim_v && options.hdim_q == 128; }, FmhaKernelTemplateCarrier<FmhaKernelHDim128>{},
+                       [&](auto carrier) {
+                           const auto invoker =
+                               get_fmha_kernel_invoker<decltype(carrier)::template Kernel>(
+                                   options.mode);
+                           ave_time = invoker(q_buf.GetDeviceBuffer(),
+                                              k_buf.GetDeviceBuffer(),
+                                              v_buf.GetDeviceBuffer(),
+                                              bias_buf.GetDeviceBuffer(),
+                                              o_buf.GetDeviceBuffer(),
+                                              seqstart_q.GetDeviceBuffer(),
+                                              seqstart_k.GetDeviceBuffer(),
+                                              nullptr,
+                                              options.work_batch(),
+                                              options.nhead,
+                                              shape_seqlen_q,
+                                              shape_seqlen_k,
+                                              options.hdim_q,
+                                              options.hdim_v,
+                                              max_seqlen_q,
+                                              options.scale,
+                                              options.i_perm,
+                                              options.o_perm,
+                                              options.use_bias);
                        },
                        [] { std::cerr << "not support hdim, will not run" << std::endl; }))
     {
