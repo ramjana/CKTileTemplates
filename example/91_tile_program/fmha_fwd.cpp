@@ -341,16 +341,7 @@ struct Options
         return validate();
     }
 
-    bool validate() const
-    {
-        if(!kSupportsBias && use_bias)
-        {
-            std::cerr << "bias function not supported" << std::endl;
-            return false;
-        }
-
-        return true;
-    }
+    bool validate() const { return true; }
 
     ck::index_t shape_batch() const noexcept { return mode == Mode::Batch ? batch : 1; }
 
@@ -621,7 +612,8 @@ int main(int argc, char* argv[])
             q_host_ref, k_host_ref, s_host_ref,
             ck::identity{}, ck::identity{},
             [scale = options.scale](SaccDataType x) { return scale * x; });
-        if(options.use_bias)
+
+        if(kSupportsBias && options.use_bias)
         {
             Tensor<BiasDataType> bias_host_ref({1, real_seqlen_q, real_seqlen_k});
             if(options.i_perm)
@@ -633,6 +625,7 @@ int main(int argc, char* argv[])
             reference_batched_elementwise<SMPLComputeDataType, BiasDataType, SMPLComputeDataType, SMPLComputeDataType>(
                 s_host_ref, bias_host_ref, s_host_ref);
         }
+
         reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref);
 
         reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
