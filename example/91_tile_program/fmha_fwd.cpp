@@ -207,7 +207,7 @@ float fmha_kernel_invoker(const void* q_ptr,
 
     // create group mode kernel arguments
     const auto kargs = [&] {
-        if(FmhaKernel::kIsGroupMode)
+        if constexpr(FmhaKernel::kIsGroupMode)
         {
             std::optional<std::tuple<const void*, ck::index_t, ck::index_t>> bias;
             if(use_bias)
