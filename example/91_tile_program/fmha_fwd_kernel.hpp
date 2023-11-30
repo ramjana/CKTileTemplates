@@ -10,6 +10,8 @@
 #include "ck/tensor/tensor_view.hpp"
 #include "ck/tile_program/tile/tile_window.hpp"
 
+#include "ck/tile_program/block_tile/block_masking_specialization.hpp"
+
 // S[seqlen_q, seqlen_k] = Q[seqlen_q, hdim_q] * K[seqlen_k, hdim_q]
 // S'[seqlen_q, seqlen_k] = S[seqlen_q, seqlen_k] * Scale[1]
 // S''[seqlen_q, seqlen_k] = S'[seqlen_q, seqlen_k] + Bias[seqlen_q, seqlen_k]
@@ -36,6 +38,8 @@ struct FmhaFwdKernel
     using ODataType    = ck::remove_cvref_t<typename FmhaPipeline::ODataType>;
 
     using VLayout = ck::remove_cvref_t<typename FmhaPipeline::VLayout>;
+
+    using C0MatrixMask = ck::tile_program::block::C0MatrixMask_impl<ck::remove_cvref_t<typename FmhaPipeline::BlockFmhaMask>>;
 
     struct KargsCommon
     {
@@ -466,14 +470,15 @@ struct FmhaFwdKernel
                 }
             }();
 
+            C0MatrixMask casual_mask{kargs.seqlen_q, kargs.seqlen_k};
+
             return FmhaPipeline{}(q_dram_window,
                                   k_dram_window,
                                   v_dram_window,
                                   bias_dram_window,
+                                  casual_mask,
                                   s_mask,
                                   kargs.scale,
-                                  kargs.seqlen_q,
-                                  kargs.seqlen_k,
                                   ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0),
                                   ck::math::integer_divide_ceil(kargs.hdim_q, FmhaPipeline::kK0),
                                   smem_ptr);

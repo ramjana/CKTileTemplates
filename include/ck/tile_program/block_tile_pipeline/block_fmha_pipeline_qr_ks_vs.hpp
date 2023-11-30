@@ -41,7 +41,7 @@ struct BlockFmhaPipelineQRKSVS
     using PDataType           = remove_cvref_t<typename Problem::PDataType>;
     using OaccDataType        = remove_cvref_t<typename Problem::OaccDataType>;
     using ODataType           = remove_cvref_t<typename Problem::ODataType>;
-    using C0MatrixMask        = C0MatrixMask_impl<remove_cvref_t<typename Problem::BlockFmhaMask>>;
+    using BlockFmhaMask       = remove_cvref_t<typename Problem::BlockFmhaMask>;
 
     using BlockFmhaShape             = remove_cvref_t<typename Problem::BlockFmhaShape>;
     using VLayout                    = remove_cvref_t<typename BlockFmhaShape::VLayout>;
@@ -69,6 +69,7 @@ struct BlockFmhaPipelineQRKSVS
               typename KElementFunction,
               typename VElementFunction,
               typename BiasElementFunction,
+              typename CasualMask,
               typename SMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
@@ -79,10 +80,9 @@ struct BlockFmhaPipelineQRKSVS
                const VElementFunction& v_element_func,
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
                const BiasElementFunction& bias_element_func,
+               CasualMask casual_mask,
                SMask s_mask,
                float scale,
-               index_t seqlen_q,
-               index_t seqlen_k,
                index_t num_total_loop,
                index_t /*num_sub_loop_qk*/, // in this pipeline, the 1st gemm loop must be static
                void* smem_ptr) const
@@ -101,8 +101,6 @@ struct BlockFmhaPipelineQRKSVS
                           kM0 == BiasDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kN0 == BiasDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}],
                       "wrong!");
-        
-        C0MatrixMask sacc_matrix_mask{seqlen_q, seqlen_k};
 
         // K tile in LDS
         KDataType* k_lds_ptr = static_cast<KDataType*>(static_cast<void*>(
@@ -186,7 +184,7 @@ struct BlockFmhaPipelineQRKSVS
         {
             const auto k_origin = k_dram_block_window.GetWindowOrigin();
             const auto n_block_data_idx_on_grid = k_origin.At(Number<0>{});         
-            if(sacc_matrix_mask.IsTileSkippable(
+            if(casual_mask.IsTileSkippable(
                    m_block_data_idx_on_grid, n_block_data_idx_on_grid, kM0, kN0))
             {
                 continue;
@@ -251,15 +249,17 @@ struct BlockFmhaPipelineQRKSVS
                                       Sequence<kM0, k0_loops * kK0>{}),
                        k_lds_window);
             }
+            if constexpr(!is_same_v<CasualMask, MaskDisabledPredicate>)
+            {
+                set_value_if(
+                    s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
 
-            set_value_if(
-                s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
+                        const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
+                        const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
 
-                    const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
-                    const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
-
-                return sacc_matrix_mask.IsMaskedElement(row, col);
-            });
+                    return casual_mask.IsMaskedElement(row, col);
+                });
+            }
 
             // STAGE 2, scale, add bias, softmax
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
@@ -407,16 +407,16 @@ struct BlockFmhaPipelineQRKSVS
               typename KDramBlockWindowTmp,
               typename VDramBlockWindowTmp,
               typename BiasDramBlockWindowTmp,
+              typename CasualMask,
               typename SMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
                const KDramBlockWindowTmp& k_dram_block_window_tmp,       // N0*K0 tile
                const VDramBlockWindowTmp& v_dram_block_window_tmp,       // N1*K1 tile
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
+               CasualMask casual_mask,
                SMask s_mask,
                float scale,
-               index_t seqlen_q,
-               index_t seqlen_k,
                index_t num_total_loop,
                index_t num_sub_loop_qk,
                void* smem_ptr) const
@@ -429,10 +429,9 @@ struct BlockFmhaPipelineQRKSVS
                           identity{},
                           bias_dram_block_window_tmp,
                           identity{},
+                          casual_mask,
                           s_mask,
                           scale,
-                          seqlen_q,
-                          seqlen_k,
                           num_total_loop,
                           num_sub_loop_qk,
                           smem_ptr);
