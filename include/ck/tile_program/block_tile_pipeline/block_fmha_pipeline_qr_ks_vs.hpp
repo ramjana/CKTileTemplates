@@ -176,17 +176,16 @@ struct BlockFmhaPipelineQRKSVS
         auto q_tile           = tile_elementwise_in(q_element_func, q);
         index_t i_total_loops = 0;
 
-        const auto q_origin                 = q_dram_window.GetWindowOrigin();
-        const auto m_block_data_idx_on_grid = q_origin.At(Number<0>{});
+        const auto q_origin = q_dram_window.GetWindowOrigin();
         do
         {
-            const auto k_origin                 = k_dram_block_window.GetWindowOrigin();
-            const auto n_block_data_idx_on_grid = k_origin.At(Number<0>{});
+            const auto k_origin = k_dram_block_window.GetWindowOrigin();
             if(casual_mask.IsTileSkippable(
-                   m_block_data_idx_on_grid, n_block_data_idx_on_grid, kM0, kN0))
+                   q_origin.At(Number<0>{}), k_origin.At(Number<0>{}), kM0, kN0))
             {
                 continue;
             }
+
             // STAGE 1, QK gemm
             auto k_dram_window = make_tile_window(
                 k_dram_block_window.GetBottomTensorView(),
@@ -257,7 +256,8 @@ struct BlockFmhaPipelineQRKSVS
                 s_acc,
                 bias_tile);
             move_tile_window(bias_dram_window, {0, kN0});
-            if constexpr(kNeedPadding || !is_same_v<CasualMask, MaskDisabledPredicate>)
+            if constexpr(kNeedPadding ||
+                         !is_same_v<typename CasualMask::MaskOutPredicate, MaskDisabledPredicate>)
             {
                 set_value_if(
                     s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
