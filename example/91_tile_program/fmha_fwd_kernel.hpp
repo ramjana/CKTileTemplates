@@ -256,17 +256,9 @@ struct FmhaFwdKernel
         index_t batch_offset_bias = 0;
         index_t batch_offset_o    = 0;
 
-        if constexpr(!kIsGroupMode)
+        if constexpr(kIsGroupMode)
         {
-            batch_offset_q    = i_batch * kargs.batch_stride_q;
-            batch_offset_k    = i_batch * kargs.batch_stride_k;
-            batch_offset_v    = i_batch * kargs.batch_stride_v;
-            batch_offset_bias = i_batch * kargs.batch_stride_bias;
-            batch_offset_o    = i_batch * kargs.batch_stride_o;
-        }
-        else
-        { // ck::is_same_v<Kargs, KargsGroupMode>
-            // get starting offset for each work batch
+            // get starting offset for each batch
             const index_t query_start = kargs.seqstart_q_ptr[i_batch];
             const index_t key_start   = kargs.seqstart_k_ptr[i_batch];
 
@@ -296,6 +288,14 @@ struct FmhaFwdKernel
                 const auto adjusted_seqstart_k_ptr = kargs.seqstart_k_ptr + i_batch;
                 kargs.seqlen_k = adjusted_seqstart_k_ptr[1] - adjusted_seqstart_k_ptr[0];
             }
+        }
+        else
+        {
+            batch_offset_q    = i_batch * kargs.batch_stride_q;
+            batch_offset_k    = i_batch * kargs.batch_stride_k;
+            batch_offset_v    = i_batch * kargs.batch_stride_v;
+            batch_offset_bias = i_batch * kargs.batch_stride_bias;
+            batch_offset_o    = i_batch * kargs.batch_stride_o;
         }
 
         // for simplicity, batch stride we just modify the pointer
