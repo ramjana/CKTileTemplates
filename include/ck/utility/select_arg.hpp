@@ -12,6 +12,29 @@
 
 namespace ck {
 
+template <typename Pred, typename Arg, typename ArgReceiver>
+__host__ auto select_arg(Pred pred,
+                         Arg&& arg,
+                         ArgReceiver&& arg_receiver,
+                         std::optional<std::function<void()>> error_handler = std::nullopt)
+    -> std::enable_if_t<std::is_invocable_r_v<bool, Pred> &&
+                            std::is_invocable_v<remove_reference_t<ArgReceiver>, Arg&&>,
+                        bool>
+{
+    if(pred())
+    {
+        arg_receiver(std::forward<Arg>(arg));
+        return true;
+    }
+
+    if(error_handler.has_value())
+    {
+        std::invoke(*error_handler);
+    }
+
+    return false;
+}
+
 template <typename FirstPred,
           typename FirstArg,
           typename SecondPred,
@@ -41,29 +64,6 @@ __host__ auto select_arg(FirstPred first_pred,
                       std::forward<RestPredArgs>(rest_pred_args)...,
                       arg_receiver,
                       std::move(error_handler));
-}
-
-template <typename Pred, typename Arg, typename ArgReceiver>
-__host__ auto select_arg(Pred pred,
-                         Arg&& arg,
-                         ArgReceiver&& arg_receiver,
-                         std::optional<std::function<void()>> error_handler = std::nullopt)
-    -> std::enable_if_t<std::is_invocable_r_v<bool, Pred> &&
-                            std::is_invocable_v<remove_reference_t<ArgReceiver>, Arg&&>,
-                        bool>
-{
-    if(pred())
-    {
-        arg_receiver(std::forward<Arg>(arg));
-        return true;
-    }
-
-    if(error_handler.has_value())
-    {
-        std::invoke(*error_handler);
-    }
-
-    return false;
 }
 
 } // namespace ck
