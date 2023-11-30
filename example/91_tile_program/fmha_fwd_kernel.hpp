@@ -607,15 +607,11 @@ struct FmhaFwdKernel
 
             if constexpr(kSupportsBias)
             {
-                const BiasDataType* bias_ptr = nullptr;
                 if(kargs.bias_ptr != nullptr)
                 {
-                    bias_ptr =
+                    const BiasDataType* bias_ptr =
                         kargs.bias_ptr + i_nhead_ * kargs.nhead_stride_bias + batch_offset_bias;
-                }
 
-                if(bias_ptr != nullptr)
-                {
                     const auto bias_dram = [&]() {
                         const auto bias_dram_naive =
                             make_naive_tensor_view<AddressSpaceEnum::Global>(
@@ -630,21 +626,22 @@ struct FmhaFwdKernel
                                                Sequence<kNeedPadding, kNeedPadding>{});
                     }();
 
-                    auto bias_dram_window =
+                    const auto bias_dram_window =
                         make_tile_window(bias_dram, bias_dram_window_lengths, {i_m0, 0});
 
                     return run_pipeline_with(bias_dram_window);
                 }
                 else
                 {
-                    auto dummy_bias_dram_window = make_null_tile_window(bias_dram_window_lengths);
+                    const auto dummy_bias_dram_window =
+                        make_null_tile_window(bias_dram_window_lengths);
 
                     return run_pipeline_with(dummy_bias_dram_window);
                 }
             }
             else
             {
-                auto dummy_bias_dram_window = make_null_tile_window(bias_dram_window_lengths);
+                const auto dummy_bias_dram_window = make_null_tile_window(bias_dram_window_lengths);
 
                 return run_pipeline_with(dummy_bias_dram_window);
             }
