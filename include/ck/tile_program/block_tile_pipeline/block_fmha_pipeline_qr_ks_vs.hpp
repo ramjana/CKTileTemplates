@@ -56,8 +56,9 @@ struct BlockFmhaPipelineQRKSVS
     static constexpr index_t kK1            = BlockFmhaShape::kK1;
     static constexpr index_t kK0BlockLength = BlockFmhaShape::kK0BlockLength;
 
-    static constexpr bool kIsGroupMode = Problem::kIsGroupMode;
-    static constexpr bool kNeedPadding = Problem::kNeedPadding;
+    static constexpr bool kIsGroupMode  = Problem::kIsGroupMode;
+    static constexpr bool kNeedPadding  = Problem::kNeedPadding;
+    static constexpr bool kSupportsBias = Problem::kSupportsBias;
 
     __host__ __device__ static constexpr ck::index_t GetSmemSize()
     {

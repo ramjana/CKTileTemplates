@@ -34,8 +34,9 @@ struct FmhaFwdKernel
 
     using VLayout = ck::remove_cvref_t<typename FmhaPipeline::VLayout>;
 
-    static constexpr bool kIsGroupMode = FmhaPipeline::kIsGroupMode;
-    static constexpr bool kNeedPadding = FmhaPipeline::kNeedPadding;
+    static constexpr bool kIsGroupMode  = FmhaPipeline::kIsGroupMode;
+    static constexpr bool kNeedPadding  = FmhaPipeline::kNeedPadding;
+    static constexpr bool kSupportsBias = FmhaPipeline::kSupportsBias;
 
     using C0MatrixMask = ck::tile_program::block::C0MatrixMask_impl<
         ck::remove_cvref_t<typename FmhaPipeline::BlockFmhaMask>>;
@@ -302,12 +303,7 @@ struct FmhaFwdKernel
         const QDataType* q_ptr = kargs.q_ptr + i_nhead * kargs.nhead_stride_q + batch_offset_q;
         const KDataType* k_ptr = kargs.k_ptr + i_nhead * kargs.nhead_stride_k + batch_offset_k;
         const VDataType* v_ptr = kargs.v_ptr + i_nhead * kargs.nhead_stride_v + batch_offset_v;
-        const BiasDataType* bias_ptr = nullptr;
-        if(kargs.bias_ptr != nullptr)
-        {
-            bias_ptr = kargs.bias_ptr + i_nhead * kargs.nhead_stride_bias + batch_offset_bias;
-        }
-        ODataType* o_ptr = kargs.o_ptr + i_nhead * kargs.nhead_stride_o + batch_offset_o;
+        ODataType* o_ptr       = kargs.o_ptr + i_nhead * kargs.nhead_stride_o + batch_offset_o;
 
         // Q/K/V DRAM and DRAM window
         const auto q_dram = [&]() {
@@ -437,29 +433,49 @@ struct FmhaFwdKernel
                                   smem_ptr);
         };
 
-        auto o_acc_tile = [&]() {
+        /// FIXME: Before C++20, capturing structured binding variables is not supported. Remove
+        /// following copy capture of the 'i_nhead'
+        ///        if compiled in C++20
+        auto o_acc_tile = [&, i_nhead_ = i_nhead]() {
             constexpr auto bias_dram_window_lengths =
                 make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kN0>{});
 
-            if(bias_ptr != nullptr)
+            if constexpr(kSupportsBias)
             {
-                const auto bias_dram = [&]() {
-                    const auto bias_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
-                        bias_ptr,
-                        make_tuple(kargs.seqlen_q, kargs.seqlen_k),
-                        make_tuple(kargs.stride_bias, 1),
-                        Number<32>{},
-                        Number<1>{});
+                const BiasDataType* bias_ptr = nullptr;
+                if(kargs.bias_ptr != nullptr)
+                {
+                    bias_ptr =
+                        kargs.bias_ptr + i_nhead_ * kargs.nhead_stride_bias + batch_offset_bias;
+                }
 
-                    return pad_tensor_view(bias_dram_naive,
-                                           bias_dram_window_lengths,
-                                           Sequence<kNeedPadding, kNeedPadding>{});
-                }();
+                if(bias_ptr != nullptr)
+                {
+                    const auto bias_dram = [&]() {
+                        const auto bias_dram_naive =
+                            make_naive_tensor_view<AddressSpaceEnum::Global>(
+                                bias_ptr,
+                                make_tuple(kargs.seqlen_q, kargs.seqlen_k),
+                                make_tuple(kargs.stride_bias, 1),
+                                Number<32>{},
+                                Number<1>{});
 
-                auto bias_dram_window =
-                    make_tile_window(bias_dram, bias_dram_window_lengths, {i_m0, 0});
+                        return pad_tensor_view(bias_dram_naive,
+                                               bias_dram_window_lengths,
+                                               Sequence<kNeedPadding, kNeedPadding>{});
+                    }();
 
-                return run_pipeline_with(bias_dram_window);
+                    auto bias_dram_window =
+                        make_tile_window(bias_dram, bias_dram_window_lengths, {i_m0, 0});
+
+                    return run_pipeline_with(bias_dram_window);
+                }
+                else
+                {
+                    auto dummy_bias_dram_window = make_null_tile_window(bias_dram_window_lengths);
+
+                    return run_pipeline_with(dummy_bias_dram_window);
+                }
             }
             else
             {

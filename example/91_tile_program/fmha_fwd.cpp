@@ -77,7 +77,8 @@ using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
 using FmhaTilePartitionerHDim64  = FmhaFwdTilePartitioner<FmhaShapeHDim64>;
 using FmhaTilePartitionerHDim128 = FmhaFwdTilePartitioner<FmhaShapeHDim128>;
 
-inline constexpr bool NeedPadding = true;
+inline constexpr bool kNeedPadding  = true;
+inline constexpr bool kSupportsBias = true;
 
 template <bool kIsGroupMode>
 using FmhaPipelineProblemHDim64 =
@@ -93,7 +94,8 @@ using FmhaPipelineProblemHDim64 =
                                                       256, // BlockSize
                                                       FmhaShapeHDim64,
                                                       kIsGroupMode,
-                                                      NeedPadding,
+                                                      kNeedPadding,
+                                                      kSupportsBias,
                                                       FmhaMask>;
 template <bool kIsGroupMode>
 using FmhaPipelineProblemHDim128 =
@@ -109,7 +111,8 @@ using FmhaPipelineProblemHDim128 =
                                                       256, // BlockSize
                                                       FmhaShapeHDim128,
                                                       kIsGroupMode,
-                                                      NeedPadding,
+                                                      kNeedPadding,
+                                                      kSupportsBias,
                                                       FmhaMask>;
 
 // using FmhaPipeline        = ck::tile_program::block::BlockFmhaPipelineQKVS<FmhaPipelineProblem>;
@@ -338,7 +341,16 @@ struct Options
         return validate();
     }
 
-    bool validate() { return true; }
+    bool validate() const
+    {
+        if(!kSupportsBias && use_bias)
+        {
+            std::cerr << "bias function not supported" << std::endl;
+            return false;
+        }
+
+        return true;
+    }
 
     ck::index_t shape_batch() const noexcept { return mode == Mode::Batch ? batch : 1; }
 

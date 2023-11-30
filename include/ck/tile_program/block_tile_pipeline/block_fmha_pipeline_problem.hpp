@@ -23,6 +23,7 @@ template <typename QDataType_,
           typename BlockFmhaShape_,
           bool kIsGroupMode_,
           bool kNeedPadding_,
+          bool kSupportsBias_,
           typename BlockFmhaMask_>
 struct BlockFmhaPipelineProblem
 {
@@ -41,6 +42,7 @@ struct BlockFmhaPipelineProblem
     static constexpr index_t kBlockSize = kBlockSize_;
     static constexpr bool kIsGroupMode  = kIsGroupMode_;
     static constexpr bool kNeedPadding  = kNeedPadding_;
+    static constexpr bool kSupportsBias = kSupportsBias_;
 };
 
 } // namespace block
