@@ -443,8 +443,15 @@ struct FmhaFwdKernel
             {
                 batch_offset_v = key_start;
             }
-            batch_offset_bias = query_start * kargs.stride_bias + key_start;
-            batch_offset_o    = query_start * kargs.stride_o;
+            if constexpr(kSupportsBias)
+            {
+                batch_offset_bias = query_start * kargs.stride_bias + key_start;
+            }
+            else
+            {
+                batch_offset_bias = key_start;
+            }
+            batch_offset_o = query_start * kargs.stride_o;
 
             // get real # queries & # keys under group mode
             const auto adjusted_seqstart_q_ptr = kargs.seqstart_q_ptr + i_batch;
@@ -462,11 +469,14 @@ struct FmhaFwdKernel
         }
         else
         {
-            batch_offset_q    = i_batch * kargs.batch_stride_q;
-            batch_offset_k    = i_batch * kargs.batch_stride_k;
-            batch_offset_v    = i_batch * kargs.batch_stride_v;
-            batch_offset_bias = i_batch * kargs.batch_stride_bias;
-            batch_offset_o    = i_batch * kargs.batch_stride_o;
+            batch_offset_q = i_batch * kargs.batch_stride_q;
+            batch_offset_k = i_batch * kargs.batch_stride_k;
+            batch_offset_v = i_batch * kargs.batch_stride_v;
+            if constexpr(kSupportsBias)
+            {
+                batch_offset_bias = i_batch * kargs.batch_stride_bias;
+            }
+            batch_offset_o = i_batch * kargs.batch_stride_o;
         }
 
         // for simplicity, batch stride we just modify the pointer

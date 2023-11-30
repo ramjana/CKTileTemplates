@@ -209,62 +209,114 @@ float fmha_kernel_invoker(const void* q_ptr,
     const auto kargs = [&] {
         if constexpr(FmhaKernel::kIsGroupMode)
         {
-            std::optional<std::tuple<const void*, ck::index_t, ck::index_t>> bias;
-            if(use_bias)
+            if constexpr(FmhaKernel::kSupportsBias)
             {
-                bias = std::make_tuple(bias_ptr, stride_bias, nhead_stride_bias);
-            }
+                std::optional<std::tuple<const void*, ck::index_t, ck::index_t>> bias;
+                if(use_bias)
+                {
+                    bias = std::make_tuple(bias_ptr, stride_bias, nhead_stride_bias);
+                }
 
-            return FmhaKernel::MakeKargs(q_ptr,
-                                         k_ptr,
-                                         v_ptr,
-                                         o_ptr,
-                                         seqstart_q_ptr,
-                                         seqstart_k_ptr,
-                                         seqlen_k_ptr,
-                                         hdim_q,
-                                         hdim_v,
-                                         scale,
-                                         stride_q,
-                                         stride_k,
-                                         stride_v,
-                                         stride_o,
-                                         nhead_stride_q,
-                                         nhead_stride_k,
-                                         nhead_stride_v,
-                                         nhead_stride_o,
-                                         bias);
+                return FmhaKernel::MakeKargs(q_ptr,
+                                             k_ptr,
+                                             v_ptr,
+                                             o_ptr,
+                                             seqstart_q_ptr,
+                                             seqstart_k_ptr,
+                                             seqlen_k_ptr,
+                                             hdim_q,
+                                             hdim_v,
+                                             scale,
+                                             stride_q,
+                                             stride_k,
+                                             stride_v,
+                                             stride_o,
+                                             nhead_stride_q,
+                                             nhead_stride_k,
+                                             nhead_stride_v,
+                                             nhead_stride_o,
+                                             bias);
+            }
+            else
+            {
+                return FmhaKernel::MakeKargs(q_ptr,
+                                             k_ptr,
+                                             v_ptr,
+                                             o_ptr,
+                                             seqstart_q_ptr,
+                                             seqstart_k_ptr,
+                                             seqlen_k_ptr,
+                                             hdim_q,
+                                             hdim_v,
+                                             scale,
+                                             stride_q,
+                                             stride_k,
+                                             stride_v,
+                                             stride_o,
+                                             nhead_stride_q,
+                                             nhead_stride_k,
+                                             nhead_stride_v,
+                                             nhead_stride_o);
+            }
         }
         else
         { // create batch mode kernel arguments
-            std::optional<std::tuple<const void*, ck::index_t, ck::index_t, ck::index_t>> bias;
-            if(use_bias)
+            if constexpr(FmhaKernel::kSupportsBias)
             {
-                bias = std::make_tuple(bias_ptr, stride_bias, nhead_stride_bias, batch_stride_bias);
-            }
+                std::optional<std::tuple<const void*, ck::index_t, ck::index_t, ck::index_t>> bias;
+                if(use_bias)
+                {
+                    bias = std::make_tuple(
+                        bias_ptr, stride_bias, nhead_stride_bias, batch_stride_bias);
+                }
 
-            return FmhaKernel::MakeKargs(q_ptr,
-                                         k_ptr,
-                                         v_ptr,
-                                         o_ptr,
-                                         seqlen_q,
-                                         seqlen_k,
-                                         hdim_q,
-                                         hdim_v,
-                                         scale,
-                                         stride_q,
-                                         stride_k,
-                                         stride_v,
-                                         stride_o,
-                                         nhead_stride_q,
-                                         nhead_stride_k,
-                                         nhead_stride_v,
-                                         nhead_stride_o,
-                                         batch_stride_q,
-                                         batch_stride_k,
-                                         batch_stride_v,
-                                         batch_stride_o,
-                                         bias);
+                return FmhaKernel::MakeKargs(q_ptr,
+                                             k_ptr,
+                                             v_ptr,
+                                             o_ptr,
+                                             seqlen_q,
+                                             seqlen_k,
+                                             hdim_q,
+                                             hdim_v,
+                                             scale,
+                                             stride_q,
+                                             stride_k,
+                                             stride_v,
+                                             stride_o,
+                                             nhead_stride_q,
+                                             nhead_stride_k,
+                                             nhead_stride_v,
+                                             nhead_stride_o,
+                                             batch_stride_q,
+                                             batch_stride_k,
+                                             batch_stride_v,
+                                             batch_stride_o,
+                                             bias);
+            }
+            else
+            {
+                return FmhaKernel::MakeKargs(q_ptr,
+                                             k_ptr,
+                                             v_ptr,
+                                             o_ptr,
+                                             seqlen_q,
+                                             seqlen_k,
+                                             hdim_q,
+                                             hdim_v,
+                                             scale,
+                                             stride_q,
+                                             stride_k,
+                                             stride_v,
+                                             stride_o,
+                                             nhead_stride_q,
+                                             nhead_stride_k,
+                                             nhead_stride_v,
+                                             nhead_stride_o,
+                                             batch_stride_q,
+                                             batch_stride_k,
+                                             batch_stride_v,
+                                             batch_stride_o);
+            }
         }
     }();
 
