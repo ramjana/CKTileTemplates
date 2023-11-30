@@ -56,6 +56,8 @@ struct BlockFmhaPipelineQRKSVS
     static constexpr index_t kK1            = BlockFmhaShape::kK1;
     static constexpr index_t kK0BlockLength = BlockFmhaShape::kK0BlockLength;
 
+    static constexpr bool kNeedPadding = Problem::kNeedPadding;
+
     __host__ __device__ static constexpr ck::index_t GetSmemSize()
     {
         return Policy::template GetSmemSize<Problem>();
@@ -177,13 +179,13 @@ struct BlockFmhaPipelineQRKSVS
 
         auto q_tile           = tile_elementwise_in(q_element_func, q);
         index_t i_total_loops = 0;
-        
-        const auto q_origin = q_dram_window.GetWindowOrigin();
+
+        const auto q_origin                 = q_dram_window.GetWindowOrigin();
         const auto m_block_data_idx_on_grid = q_origin.At(Number<0>{});
         do
         {
-            const auto k_origin = k_dram_block_window.GetWindowOrigin();
-            const auto n_block_data_idx_on_grid = k_origin.At(Number<0>{});         
+            const auto k_origin                 = k_dram_block_window.GetWindowOrigin();
+            const auto n_block_data_idx_on_grid = k_origin.At(Number<0>{});
             if(casual_mask.IsTileSkippable(
                    m_block_data_idx_on_grid, n_block_data_idx_on_grid, kM0, kN0))
             {
@@ -259,11 +261,11 @@ struct BlockFmhaPipelineQRKSVS
                 s_acc,
                 bias_tile);
             move_tile_window(bias_dram_window, {0, kN0});
-            if constexpr(!is_same_v<SMask, NullMask> || !is_same_v<CasualMask, MaskDisabledPredicate>)
+            if constexpr(!is_same_v<SMask, NullMask> ||
+                         !is_same_v<CasualMask, MaskDisabledPredicate>)
             {
                 set_value_if(
                     s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
-
                         const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
                         const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
 
@@ -366,7 +368,6 @@ struct BlockFmhaPipelineQRKSVS
             }
             // move K tile windows
             move_tile_window(k_dram_block_window, {kN0, 0});
-            //i_total_loops++;
             // tail
             {
                 block_sync_lds();

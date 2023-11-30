@@ -21,6 +21,7 @@ template <typename QDataType_,
           typename ODataType_,
           index_t kBlockSize_,
           typename BlockFmhaShape_,
+          bool kNeedPadding_,
           typename BlockFmhaMask_>
 struct BlockFmhaPipelineProblem
 {
@@ -37,6 +38,7 @@ struct BlockFmhaPipelineProblem
     using BlockFmhaMask       = remove_cvref_t<BlockFmhaMask_>;
 
     static constexpr index_t kBlockSize = kBlockSize_;
+    static constexpr bool kNeedPadding  = kNeedPadding_;
 };
 
 } // namespace block

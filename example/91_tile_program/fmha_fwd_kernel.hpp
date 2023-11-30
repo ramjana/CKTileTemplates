@@ -18,10 +18,7 @@
 
 #define C_LOG2E 1.44269504088896340736 // log2(e)
 
-template <typename TilePartitioner_,
-          typename FmhaPipeline_,
-          typename EpiloguePipeline_,
-          bool NeedPadding>
+template <typename TilePartitioner_, typename FmhaPipeline_, typename EpiloguePipeline_>
 struct FmhaFwdKernel
 {
     using TilePartitioner                   = ck::remove_cvref_t<TilePartitioner_>;
@@ -37,7 +34,10 @@ struct FmhaFwdKernel
 
     using VLayout = ck::remove_cvref_t<typename FmhaPipeline::VLayout>;
 
-    using C0MatrixMask = ck::tile_program::block::C0MatrixMask_impl<ck::remove_cvref_t<typename FmhaPipeline::BlockFmhaMask>>;
+    static constexpr bool kNeedPadding = FmhaPipeline::kNeedPadding;
+
+    using C0MatrixMask = ck::tile_program::block::C0MatrixMask_impl<
+        ck::remove_cvref_t<typename FmhaPipeline::BlockFmhaMask>>;
 
     struct KargsCommon
     {
@@ -365,7 +365,7 @@ struct FmhaFwdKernel
 
             return pad_tensor_view(q_dram_naive,
                                    make_tuple(Number<FmhaPipeline::kM0>{}, Number<1>{}),
-                                   Sequence<NeedPadding, false>{});
+                                   Sequence<kNeedPadding, false>{});
         }();
         const auto k_dram = [&]() {
             const auto k_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
@@ -377,7 +377,7 @@ struct FmhaFwdKernel
 
             return pad_tensor_view(k_dram_naive,
                                    make_tuple(Number<FmhaPipeline::kN0>{}, Number<1>{}),
-                                   Sequence<NeedPadding, false>{});
+                                   Sequence<kNeedPadding, false>{});
         }();
         const auto v_dram = [&]() {
             if constexpr(ck::is_same_v<VLayout, ck::tensor_layout::gemm::RowMajor>)
@@ -400,7 +400,7 @@ struct FmhaFwdKernel
                 /// same as
                 ///   v_dram_transposed.GetTensorDescriptor().GetLength(). Replace following
                 ///   if-clause by pad_tensor_view() call after fixing this issue.
-                if constexpr(!NeedPadding)
+                if constexpr(!kNeedPadding)
                 {
                     return v_dram_transposed;
                 }
@@ -430,7 +430,7 @@ struct FmhaFwdKernel
 
                 return pad_tensor_view(v_dram_naive,
                                        make_tuple(Number<1>{}, Number<FmhaPipeline::kK1>{}),
-                                       Sequence<false, NeedPadding>{});
+                                       Sequence<false, kNeedPadding>{});
             }
         }();
 
@@ -455,7 +455,7 @@ struct FmhaFwdKernel
 
         const auto run_pipeline_with = [&](auto bias_dram_window) {
             const auto s_mask = [&]() {
-                if constexpr(NeedPadding)
+                if constexpr(kNeedPadding)
                 {
                     return [&](index_t /* m */, index_t n) {
                         const bool is_out_of_bound = !(n < kargs.seqlen_k);
@@ -498,7 +498,7 @@ struct FmhaFwdKernel
 
                     return pad_tensor_view(bias_dram_naive,
                                            bias_dram_window_lengths,
-                                           Sequence<NeedPadding, NeedPadding>{});
+                                           Sequence<kNeedPadding, kNeedPadding>{});
                 }();
 
                 auto bias_dram_window =
@@ -525,7 +525,7 @@ struct FmhaFwdKernel
 
             return pad_tensor_view(o_dram_naive,
                                    make_tuple(Number<FmhaPipeline::kM0>{}, Number<1>{}),
-                                   Sequence<NeedPadding, false>{});
+                                   Sequence<kNeedPadding, false>{});
         }();
 
         auto o_dram_window =

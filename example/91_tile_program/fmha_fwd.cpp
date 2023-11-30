@@ -70,12 +70,14 @@ using FmhaShapeHDim128     = ck::tile_program::TileFmhaShape<FmhaBlockTileHdim12
                                                          FmhaWarpTile,
                                                          VLayout>;
 
-//using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromTopLeftPredicate;
-//using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
+// using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromTopLeftPredicate;
 using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromBottomRightPredicate;
+// using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
 
 using FmhaTilePartitionerHDim64  = FmhaFwdTilePartitioner<FmhaShapeHDim64>;
 using FmhaTilePartitionerHDim128 = FmhaFwdTilePartitioner<FmhaShapeHDim128>;
+
+inline constexpr bool NeedPadding = true;
 using FmhaPipelineProblemHDim64 =
     ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
                                                       KDataType,
@@ -88,7 +90,9 @@ using FmhaPipelineProblemHDim64 =
                                                       ODataType,
                                                       256, // BlockSize
                                                       FmhaShapeHDim64,
+                                                      NeedPadding,
                                                       FmhaMask>;
+
 using FmhaPipelineProblemHDim128 =
     ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
                                                       KDataType,
@@ -101,6 +105,7 @@ using FmhaPipelineProblemHDim128 =
                                                       ODataType,
                                                       256, // BlockSize
                                                       FmhaShapeHDim128,
+                                                      NeedPadding,
                                                       FmhaMask>;
 // using FmhaPipeline        = ck::tile_program::block::BlockFmhaPipelineQKVS<FmhaPipelineProblem>;
 using FmhaPipelineHDim64 =
@@ -108,13 +113,10 @@ using FmhaPipelineHDim64 =
 using FmhaPipelineHDim128 =
     ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblemHDim128>;
 
-inline constexpr bool NeedPadding = true;
-
-using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
-using FmhaKernelHDim64 =
-    FmhaFwdKernel<FmhaTilePartitionerHDim64, FmhaPipelineHDim64, FmhaEpilogue, NeedPadding>;
+using FmhaEpilogue     = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
+using FmhaKernelHDim64 = FmhaFwdKernel<FmhaTilePartitionerHDim64, FmhaPipelineHDim64, FmhaEpilogue>;
 using FmhaKernelHDim128 =
-    FmhaFwdKernel<FmhaTilePartitionerHDim128, FmhaPipelineHDim128, FmhaEpilogue, NeedPadding>;
+    FmhaFwdKernel<FmhaTilePartitionerHDim128, FmhaPipelineHDim128, FmhaEpilogue>;
 
 enum class Mode : unsigned
 {
