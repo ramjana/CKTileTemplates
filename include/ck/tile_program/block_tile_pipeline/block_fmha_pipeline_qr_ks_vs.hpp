@@ -249,17 +249,6 @@ struct BlockFmhaPipelineQRKSVS
                                       Sequence<kM0, k0_loops * kK0>{}),
                        k_lds_window);
             }
-            if constexpr(!is_same_v<CasualMask, MaskDisabledPredicate>)
-            {
-                set_value_if(
-                    s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
-
-                        const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
-                        const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
-
-                    return casual_mask.IsMaskedElement(row, col);
-                });
-            }
 
             // STAGE 2, scale, add bias, softmax
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
@@ -270,7 +259,7 @@ struct BlockFmhaPipelineQRKSVS
                 s_acc,
                 bias_tile);
             move_tile_window(bias_dram_window, {0, kN0});
-            if constexpr(!is_same_v<SMask, NullMask>)
+            if constexpr(!is_same_v<SMask, NullMask> || !is_same_v<CasualMask, MaskDisabledPredicate>)
             {
                 set_value_if(
                     s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
@@ -278,7 +267,7 @@ struct BlockFmhaPipelineQRKSVS
                         const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
                         const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
 
-                        return s_mask(row, col);
+                        return s_mask(row, col) || casual_mask.IsMaskedElement(row, col);
                     });
             }
 
