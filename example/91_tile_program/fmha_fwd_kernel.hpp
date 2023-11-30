@@ -472,6 +472,8 @@ struct FmhaFwdKernel
                                   bias_dram_window,
                                   s_mask,
                                   kargs.scale,
+                                  kargs.seqlen_q,
+                                  kargs.seqlen_k,
                                   ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0),
                                   ck::math::integer_divide_ceil(kargs.hdim_q, FmhaPipeline::kK0),
                                   smem_ptr);

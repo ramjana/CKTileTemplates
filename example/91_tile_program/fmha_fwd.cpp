@@ -26,10 +26,12 @@
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qr_ks_vs.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qr_ks_vs_default_policy.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_problem.hpp"
+#include "ck/tile_program/block_tile/block_masking_specialization.hpp"
 #include "ck/tile_program/tile/tile_fmha_shape.hpp"
 
 #include "reference_batched_elementwise.hpp"
 #include "reference_batched_gemm.hpp"
+#include "reference_batched_masking.hpp"
 #include "reference_batched_softmax.hpp"
 #include "fmha_fwd_kernel.hpp"
 #include "fmha_fwd_tile_partitioner.hpp"
@@ -68,6 +70,10 @@ using FmhaShapeHDim128     = ck::tile_program::TileFmhaShape<FmhaBlockTileHdim12
                                                          FmhaWarpTile,
                                                          VLayout>;
 
+//using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromTopLeftPredicate;
+//using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
+using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromBottomRightPredicate;
+
 using FmhaTilePartitionerHDim64  = FmhaFwdTilePartitioner<FmhaShapeHDim64>;
 using FmhaTilePartitionerHDim128 = FmhaFwdTilePartitioner<FmhaShapeHDim128>;
 using FmhaPipelineProblemHDim64 =
@@ -81,7 +87,8 @@ using FmhaPipelineProblemHDim64 =
                                                       OaccDataType,
                                                       ODataType,
                                                       256, // BlockSize
-                                                      FmhaShapeHDim64>;
+                                                      FmhaShapeHDim64,
+                                                      FmhaMask>;
 using FmhaPipelineProblemHDim128 =
     ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
                                                       KDataType,
@@ -93,7 +100,8 @@ using FmhaPipelineProblemHDim128 =
                                                       OaccDataType,
                                                       ODataType,
                                                       256, // BlockSize
-                                                      FmhaShapeHDim128>;
+                                                      FmhaShapeHDim128,
+                                                      FmhaMask>;
 // using FmhaPipeline        = ck::tile_program::block::BlockFmhaPipelineQKVS<FmhaPipelineProblem>;
 using FmhaPipelineHDim64 =
     ck::tile_program::block::BlockFmhaPipelineQRKSVS<FmhaPipelineProblemHDim64>;
@@ -609,6 +617,8 @@ int main(int argc, char* argv[])
             reference_batched_elementwise<SMPLComputeDataType, BiasDataType, SMPLComputeDataType, SMPLComputeDataType>(
                 s_host_ref, bias_host_ref, s_host_ref);
         }
+        reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref);
+
         reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
                                                                                        p_host_ref);
         reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
