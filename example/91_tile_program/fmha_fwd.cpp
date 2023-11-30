@@ -341,7 +341,15 @@ struct Options
         return validate();
     }
 
-    bool validate() const { return true; }
+    bool validate() const
+    {
+        if(!kSupportsBias && use_bias)
+        {
+            std::cerr << "bias function is disabled. will ignore the bias" << std::endl;
+        }
+
+        return true;
+    }
 
     ck::index_t shape_batch() const noexcept { return mode == Mode::Batch ? batch : 1; }
 
