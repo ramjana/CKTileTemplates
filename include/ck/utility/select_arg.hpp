@@ -27,7 +27,7 @@ __host__ auto select_arg(FirstPred first_pred,
                          std::optional<std::function<void()>> error_handler = std::nullopt)
     -> std::enable_if_t<sizeof...(RestPredArgs) % 2 == 0 &&
                             std::is_invocable_r_v<bool, FirstPred> &&
-                            std::is_invocable_v<remove_reference_t<ArgReceiver>&, FirstArg&&>,
+                            std::is_invocable_v<remove_reference_t<ArgReceiver>, FirstArg&&>,
                         bool>
 {
     if(first_pred())
@@ -49,7 +49,7 @@ __host__ auto select_arg(Pred pred,
                          ArgReceiver&& arg_receiver,
                          std::optional<std::function<void()>> error_handler = std::nullopt)
     -> std::enable_if_t<std::is_invocable_r_v<bool, Pred> &&
-                            std::is_invocable_v<remove_reference_t<ArgReceiver>&, Arg&&>,
+                            std::is_invocable_v<remove_reference_t<ArgReceiver>, Arg&&>,
                         bool>
 {
     if(pred())
