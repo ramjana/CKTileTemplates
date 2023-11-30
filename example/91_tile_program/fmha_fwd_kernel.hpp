@@ -46,14 +46,7 @@ struct FmhaFwdKernel
     {
     };
 
-    struct CommonBiasKargs
-    {
-        const BiasDataType* bias_ptr  = nullptr;
-        ck::index_t stride_bias       = 0;
-        ck::index_t nhead_stride_bias = 0;
-    };
-
-    struct CommonKargs : std::conditional_t<kSupportsBias, CommonBiasKargs, EmptyKargs>
+    struct CommonKargs
     {
         __host__ constexpr CommonKargs(const void* q_ptr_,
                                        const void* k_ptr_,
@@ -115,7 +108,14 @@ struct FmhaFwdKernel
         ck::index_t nhead_stride_o;
     };
 
-    struct BatchModeBiasKargs
+    struct CommonBiasKargs
+    {
+        const BiasDataType* bias_ptr  = nullptr;
+        ck::index_t stride_bias       = 0;
+        ck::index_t nhead_stride_bias = 0;
+    };
+
+    struct BatchModeBiasKargs : CommonBiasKargs
     {
         ck::index_t batch_stride_bias = 0;
     };
@@ -174,7 +174,8 @@ struct FmhaFwdKernel
         ck::index_t batch_stride_o;
     };
 
-    struct GroupModeKargs : CommonKargs
+    struct GroupModeKargs : CommonKargs,
+                            std::conditional_t<kSupportsBias, CommonBiasKargs, EmptyKargs>
     {
         __host__ constexpr GroupModeKargs(const void* q_ptr_,
                                           const void* k_ptr_,
@@ -574,20 +575,6 @@ struct FmhaFwdKernel
                              {i_n1, 0});
 
         const auto run_pipeline_with = [&](auto bias_dram_window) {
-            const auto s_mask = [&]() {
-                if constexpr(kNeedPadding)
-                {
-                    return [&](index_t /* m */, index_t n) {
-                        const bool is_out_of_bound = !(n < kargs.seqlen_k);
-                        return is_out_of_bound;
-                    };
-                }
-                else
-                {
-                    return NullMask{};
-                }
-            }();
-
             C0MatrixMask casual_mask{kargs.seqlen_q, kargs.seqlen_k};
 
             return FmhaPipeline{}(q_dram_window,
@@ -595,7 +582,6 @@ struct FmhaFwdKernel
                                   v_dram_window,
                                   bias_dram_window,
                                   casual_mask,
-                                  s_mask,
                                   kargs.scale,
                                   ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0),
                                   ck::math::integer_divide_ceil(kargs.hdim_q, FmhaPipeline::kK0),
