@@ -504,6 +504,7 @@ struct GridwiseGemmBiasAddReduce_k0mk1_k0nk1_mn_xdl_cshuffle_v1
         auto blockwise_gemm = BlockwiseGemmXdlops_k0mk1_k0nk1_m0n0m1n1m2m3m4n2_Selector<
             BlockSize,
             FloatAB,
+            FloatAB,
             FloatGemmAcc,
             decltype(a_block_desc_ak0_m_ak1),
             decltype(b_block_desc_bk0_n_bk1),
@@ -972,7 +973,7 @@ struct GridwiseGemmBiasAddReduce_k0mk1_k0nk1_mn_xdl_cshuffle_v1
                             constexpr auto c_global_step = sfc_c_global.GetForwardStep(access_id);
                             reduce_thread_copy_vgpr_to_global.MoveDstSliceWindow(
                                 reduce_grid_desc_mblock_mperblock,
-                                make_tuple(c_global_step[I0], c_global_step[I1]));
+                                make_multi_index(c_global_step[I0], c_global_step[I1]));
                         }
                     });
                 }

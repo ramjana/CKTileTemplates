@@ -491,6 +491,7 @@ struct GridwiseGemm_bk0mk1_bk0nk1_mn_xdlops_streamk
         auto blockwise_gemm =
             BlockwiseGemmXdlops_k0mk1_k0nk1_m0n0m1n1m2m3m4n2_v1<BlockSize,
                                                                 FloatAB,
+                                                                FloatAB,
                                                                 FloatAcc,
                                                                 decltype(a_block_desc_k0_m_k1),
                                                                 decltype(b_block_desc_k0_n_k1),
@@ -1040,7 +1041,7 @@ struct GridwiseGemm_bk0mk1_bk0nk1_mn_xdlops_streamk
 
                         c_block_copy_lds_to_global.SetSrcSliceOrigin(
                             c_block_desc_mblock_mpershuffle_nblock_npershuffle,
-                            make_tuple(0, 0, 0, 0));
+                            make_multi_index(0, 0, 0, 0));
 
                         // LDS to global
                         if(is_dp_block)
@@ -1059,11 +1060,11 @@ struct GridwiseGemm_bk0mk1_bk0nk1_mn_xdlops_streamk
                                 // constexpr offset
                                 c_block_copy_lds_to_partial_acc.SetSrcSliceOrigin(
                                     c_block_desc_mblock_mpershuffle_nblock_npershuffle,
-                                    make_tuple(0, 0, 0, 0));
+                                    make_multi_index(0, 0, 0, 0));
 
                                 c_block_copy_lds_to_partial_acc.SetDstSliceOrigin(
                                     c_block_desc_mshuffle_mpershuffle_nshuffle_npershuffle,
-                                    make_tuple(mxdlperwave.value, 0, nxdlperwave.value, 0));
+                                    make_multi_index(mxdlperwave.value, 0, nxdlperwave.value, 0));
 
                                 c_block_copy_lds_to_partial_acc
                                     .template Run<decltype(c_block_buf),
