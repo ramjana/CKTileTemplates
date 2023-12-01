@@ -77,8 +77,9 @@ using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
 using FmhaTilePartitionerHDim64  = FmhaFwdTilePartitioner<FmhaShapeHDim64>;
 using FmhaTilePartitionerHDim128 = FmhaFwdTilePartitioner<FmhaShapeHDim128>;
 
-inline constexpr bool kNeedPadding  = true;
-inline constexpr bool kSupportsBias = true;
+inline constexpr bool kM0NeedPadding = true;
+inline constexpr bool kN0NeedPadding = true;
+inline constexpr bool kSupportsBias  = true;
 
 template <bool kIsGroupMode>
 using FmhaPipelineProblemHDim64 =
@@ -94,7 +95,8 @@ using FmhaPipelineProblemHDim64 =
                                                       256, // BlockSize
                                                       FmhaShapeHDim64,
                                                       kIsGroupMode,
-                                                      kNeedPadding,
+                                                      kM0NeedPadding,
+                                                      kN0NeedPadding,
                                                       kSupportsBias,
                                                       FmhaMask>;
 template <bool kIsGroupMode>
@@ -111,7 +113,8 @@ using FmhaPipelineProblemHDim128 =
                                                       256, // BlockSize
                                                       FmhaShapeHDim128,
                                                       kIsGroupMode,
-                                                      kNeedPadding,
+                                                      kM0NeedPadding,
+                                                      kN0NeedPadding,
                                                       kSupportsBias,
                                                       FmhaMask>;
 
