@@ -22,8 +22,8 @@ template <typename QDataType_,
           index_t kBlockSize_,
           typename BlockFmhaShape_,
           bool kIsGroupMode_,
-          bool kM0NeedPadding_,
-          bool kN0NeedPadding_,
+          bool kM0NeedPadding_ /* padding for seqlen_q */,
+          bool kN0K1NeedPadding_ /* padding for seqlen_k */,
           bool kSupportsBias_,
           typename BlockFmhaMask_>
 struct BlockFmhaPipelineProblem
@@ -40,11 +40,11 @@ struct BlockFmhaPipelineProblem
     using BlockFmhaShape      = remove_cvref_t<BlockFmhaShape_>;
     using BlockFmhaMask       = remove_cvref_t<BlockFmhaMask_>;
 
-    static constexpr index_t kBlockSize  = kBlockSize_;
-    static constexpr bool kIsGroupMode   = kIsGroupMode_;
-    static constexpr bool kM0NeedPadding = kM0NeedPadding_;
-    static constexpr bool kN0NeedPadding = kN0NeedPadding_;
-    static constexpr bool kSupportsBias  = kSupportsBias_;
+    static constexpr index_t kBlockSize    = kBlockSize_;
+    static constexpr bool kIsGroupMode     = kIsGroupMode_;
+    static constexpr bool kM0NeedPadding   = kM0NeedPadding_;
+    static constexpr bool kN0K1NeedPadding = kN0K1NeedPadding_;
+    static constexpr bool kSupportsBias    = kSupportsBias_;
 };
 
 } // namespace block

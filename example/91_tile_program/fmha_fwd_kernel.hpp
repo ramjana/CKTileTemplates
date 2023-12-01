@@ -34,10 +34,10 @@ struct FmhaFwdKernel
 
     using VLayout = ck::remove_cvref_t<typename FmhaPipeline::VLayout>;
 
-    static constexpr bool kIsGroupMode   = FmhaPipeline::kIsGroupMode;
-    static constexpr bool kM0NeedPadding = FmhaPipeline::kM0NeedPadding;
-    static constexpr bool kN0NeedPadding = FmhaPipeline::kN0NeedPadding;
-    static constexpr bool kSupportsBias  = FmhaPipeline::kSupportsBias;
+    static constexpr bool kIsGroupMode     = FmhaPipeline::kIsGroupMode;
+    static constexpr bool kM0NeedPadding   = FmhaPipeline::kM0NeedPadding;
+    static constexpr bool kN0K1NeedPadding = FmhaPipeline::kN0K1NeedPadding;
+    static constexpr bool kSupportsBias    = FmhaPipeline::kSupportsBias;
 
     using C0MatrixMask = ck::tile_program::block::C0MatrixMask_impl<
         ck::remove_cvref_t<typename FmhaPipeline::BlockFmhaMask>>;
@@ -509,7 +509,7 @@ struct FmhaFwdKernel
 
             return pad_tensor_view(k_dram_naive,
                                    make_tuple(Number<FmhaPipeline::kN0>{}, Number<1>{}),
-                                   Sequence<kN0NeedPadding, false>{});
+                                   Sequence<kN0K1NeedPadding, false>{});
         }();
         const auto v_dram = [&]() {
             if constexpr(ck::is_same_v<VLayout, ck::tensor_layout::gemm::RowMajor>)
@@ -532,7 +532,7 @@ struct FmhaFwdKernel
                 /// same as
                 ///   v_dram_transposed.GetTensorDescriptor().GetLength(). Replace following
                 ///   if-clause by pad_tensor_view() call after fixing this issue.
-                if constexpr(kN0NeedPadding)
+                if constexpr(kN0K1NeedPadding)
                 {
                     const index_t pad_length =
                         FmhaPipeline::kK1 *
@@ -562,7 +562,7 @@ struct FmhaFwdKernel
 
                 return pad_tensor_view(v_dram_naive,
                                        make_tuple(Number<1>{}, Number<FmhaPipeline::kK1>{}),
-                                       Sequence<false, kN0NeedPadding>{});
+                                       Sequence<false, kN0K1NeedPadding>{});
             }
         }();
 
@@ -624,7 +624,7 @@ struct FmhaFwdKernel
 
                         return pad_tensor_view(bias_dram_naive,
                                                bias_dram_window_lengths,
-                                               Sequence<kM0NeedPadding, kN0NeedPadding>{});
+                                               Sequence<kM0NeedPadding, kN0K1NeedPadding>{});
                     }();
 
                     const auto bias_dram_window =

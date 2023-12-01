@@ -52,10 +52,10 @@ struct BlockFmhaPipelineQRKSVS
     static constexpr index_t kK1            = BlockFmhaShape::kK1;
     static constexpr index_t kK0BlockLength = BlockFmhaShape::kK0BlockLength;
 
-    static constexpr bool kIsGroupMode   = Problem::kIsGroupMode;
-    static constexpr bool kM0NeedPadding = Problem::kM0NeedPadding;
-    static constexpr bool kN0NeedPadding = Problem::kN0NeedPadding;
-    static constexpr bool kSupportsBias  = Problem::kSupportsBias;
+    static constexpr bool kIsGroupMode     = Problem::kIsGroupMode;
+    static constexpr bool kM0NeedPadding   = Problem::kM0NeedPadding;
+    static constexpr bool kN0K1NeedPadding = Problem::kN0K1NeedPadding;
+    static constexpr bool kSupportsBias    = Problem::kSupportsBias;
 
     __host__ __device__ static constexpr ck::index_t GetSmemSize()
     {
@@ -257,7 +257,7 @@ struct BlockFmhaPipelineQRKSVS
                 s_acc,
                 bias_tile);
             move_tile_window(bias_dram_window, {0, kN0});
-            if constexpr(kN0NeedPadding ||
+            if constexpr(kN0K1NeedPadding ||
                          !is_same_v<typename CasualMask::MaskOutPredicate, MaskDisabledPredicate>)
             {
                 set_value_if(
