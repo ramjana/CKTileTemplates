@@ -29,7 +29,7 @@ __host__ auto select_arg(Pred pred,
 
     if(error_handler.has_value())
     {
-        std::invoke(*error_handler);
+        (*error_handler)();
     }
 
     return false;
