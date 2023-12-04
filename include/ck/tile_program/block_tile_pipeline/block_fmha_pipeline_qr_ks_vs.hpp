@@ -70,7 +70,7 @@ struct BlockFmhaPipelineQRKSVS
               typename KElementFunction,
               typename VElementFunction,
               typename BiasElementFunction,
-              typename CasualMask>
+              typename CausalMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
                const QElementFunction& q_element_func,
@@ -80,7 +80,7 @@ struct BlockFmhaPipelineQRKSVS
                const VElementFunction& v_element_func,
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
                const BiasElementFunction& bias_element_func,
-               CasualMask casual_mask,
+               CausalMask causal_mask,
                float scale,
                index_t num_total_loop,
                index_t /*num_sub_loop_qk*/, // in this pipeline, the 1st gemm loop must be static
@@ -181,7 +181,7 @@ struct BlockFmhaPipelineQRKSVS
         do
         {
             const auto k_origin = k_dram_block_window.GetWindowOrigin();
-            if(casual_mask.IsTileSkippable(
+            if(causal_mask.IsTileSkippable(
                    q_origin.At(Number<0>{}), k_origin.At(Number<0>{}), kM0, kN0))
             {
                 continue;
@@ -258,14 +258,14 @@ struct BlockFmhaPipelineQRKSVS
                 bias_tile);
             move_tile_window(bias_dram_window, {0, kN0});
             if constexpr(kN0K1NeedPadding ||
-                         !is_same_v<typename CasualMask::MaskOutPredicate, MaskDisabledPredicate>)
+                         !is_same_v<typename CausalMask::MaskOutPredicate, MaskDisabledPredicate>)
             {
                 set_value_if(
                     s_acc, -NumericLimits<SMPLComputeDataType>::Infinity(), [&](auto tile_idx) {
                         const auto row = q_origin.At(Number<0>{}) + tile_idx.At(Number<0>{});
                         const auto col = k_origin.At(Number<0>{}) + tile_idx.At(Number<1>{});
 
-                        return casual_mask.IsMaskedElement(row, col);
+                        return causal_mask.IsMaskedElement(row, col);
                     });
             }
 
@@ -393,13 +393,13 @@ struct BlockFmhaPipelineQRKSVS
               typename KDramBlockWindowTmp,
               typename VDramBlockWindowTmp,
               typename BiasDramBlockWindowTmp,
-              typename CasualMask>
+              typename CausalMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
                const KDramBlockWindowTmp& k_dram_block_window_tmp,       // N0*K0 tile
                const VDramBlockWindowTmp& v_dram_block_window_tmp,       // N1*K1 tile
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
-               CasualMask casual_mask,
+               CausalMask causal_mask,
                float scale,
                index_t num_total_loop,
                index_t num_sub_loop_qk,
@@ -413,7 +413,7 @@ struct BlockFmhaPipelineQRKSVS
                           identity{},
                           bias_dram_block_window_tmp,
                           identity{},
-                          casual_mask,
+                          causal_mask,
                           scale,
                           num_total_loop,
                           num_sub_loop_qk,
