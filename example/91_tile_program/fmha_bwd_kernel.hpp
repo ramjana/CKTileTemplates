@@ -28,18 +28,18 @@ struct FmhaBwdKernel
     using SMPLComputeDataType = ck::remove_cvref_t<typename FmhaPipeline::SMPLComputeDataType>;
     using DDataType           = ck::remove_cvref_t<typename FmhaPipeline::DDataType>;
     using ZDataType           = ck::remove_cvref_t<typename FmhaPipeline::ZDataType>;
-    using ODataType           = ck::remove_cvref_t<typename FmhaPipeline::ODataType>;
-    using OGradDataType       = ck::remove_cvref_t<typename FmhaPipeline::OGradDataType>;
-    using QGradDataType       = ck::remove_cvref_t<typename FmhaPipeline::QGradDataType>;
-    using KGradDataType       = ck::remove_cvref_t<typename FmhaPipeline::KGradDataType>;
-    using VGradDataType       = ck::remove_cvref_t<typename FmhaPipeline::VGradDataType>;
+    // using ODataType           = ck::remove_cvref_t<typename FmhaPipeline::ODataType>;
+    using OGradDataType = ck::remove_cvref_t<typename FmhaPipeline::OGradDataType>;
+    using QGradDataType = ck::remove_cvref_t<typename FmhaPipeline::QGradDataType>;
+    using KGradDataType = ck::remove_cvref_t<typename FmhaPipeline::KGradDataType>;
+    using VGradDataType = ck::remove_cvref_t<typename FmhaPipeline::VGradDataType>;
 
     struct Kargs
     {
         const void* q_ptr;
         const void* k_ptr;
         const void* v_ptr;
-        const void* o_ptr;
+        // const void* o_ptr;
         const void* lse_ptr;
         const void* do_ptr;
         // void* d_ptr;
@@ -88,10 +88,10 @@ struct FmhaBwdKernel
     __host__ static constexpr Kargs MakeKargs(const void* q_ptr,
                                               const void* k_ptr,
                                               const void* v_ptr,
-                                              const void* o_ptr,
+                                              // const void* o_ptr,
                                               const void* lse_ptr,
                                               const void* do_ptr,
-                                              // void* d_ptr,
+                                              void* d_ptr,
                                               // void* z_ptr,
                                               void* dq_ptr,
                                               void* dk_ptr,
@@ -116,8 +116,8 @@ struct FmhaBwdKernel
                                               ck::index_t batch_stride_o,
                                               ck::index_t batch_stride_lse)
     {
-        return Kargs{q_ptr,          k_ptr,          v_ptr,          o_ptr,          lse_ptr,
-                     do_ptr,         dq_ptr,         dk_ptr,         dv_ptr,         seqlen_q,
+        return Kargs{q_ptr,          k_ptr,          v_ptr,          lse_ptr,        do_ptr,
+                     d_ptr,          dq_ptr,         dk_ptr,         dv_ptr,         seqlen_q,
                      seqlen_k,       hdim_q,         hdim_v,         scale,          stride_q,
                      stride_k,       stride_v,       stride_o,       nhead_stride_q, nhead_stride_k,
                      nhead_stride_v, nhead_stride_o, batch_stride_q, batch_stride_k, batch_stride_v,
@@ -158,11 +158,14 @@ struct FmhaBwdKernel
                                  i_nhead * kargs.nhead_stride_k + i_batch * kargs.batch_stride_k;
         const VDataType* v_ptr = reinterpret_cast<const VDataType*>(kargs.v_ptr) +
                                  i_nhead * kargs.nhead_stride_v + i_batch * kargs.batch_stride_v;
-        const ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
-                                 i_nhead * kargs.nhead_stride_o + i_batch * kargs.batch_stride_o;
+        // const ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
+        //                          i_nhead * kargs.nhead_stride_o + i_batch * kargs.batch_stride_o;
         const LSEDataType* lse_ptr = reinterpret_cast<LSEDataType*>(kargs.lse_ptr) +
                                      i_nhead * kargs.nhead_stride_lse +
                                      i_batch * kargs.batch_stride_lse;
+        const DDataType* d_ptr = reinterpret_cast<DDataType*>(kargs.d_ptr) +
+                                 i_nhead * kargs.nhead_stride_lse +
+                                 i_batch * kargs.batch_stride_lse;
         const OGradDataType* do_ptr = reinterpret_cast<OGradDataType*>(kargs.do_ptr) +
                                       i_nhead * kargs.nhead_stride_o +
                                       i_batch * kargs.batch_stride_o;
@@ -173,13 +176,20 @@ struct FmhaBwdKernel
         VGradDataType* dv_ptr = reinterpret_cast<const VGradDataType*>(kargs.dv_ptr) +
                                 i_nhead * kargs.nhead_stride_v + i_batch * kargs.batch_stride_v;
 
-        // Q/K/V/O/LSE/dO/dQ/dK/dV DRAM and DRAM window
+        // Q/K/V/LSE/D/dO/dQ/dK/dV DRAM and DRAM window
         const auto q_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             q_ptr,
             make_tuple(kargs.seqlen_q, kargs.hdim_q),
             make_tuple(kargs.stride_q, 1),
             Number<32>{},
             Number<1>{});
+
+        const auto qt_dram =
+            transform_tensor_view(q_dram,
+                                  make_tuple(make_pass_through_transform(kargs.hdim_q),
+                                             make_pass_through_transform(kargs.seqlen_q)),
+                                  make_tuple(Sequence<1>{}, Sequence<0>{}),
+                                  make_tuple(Sequence<0>{}, Sequence<1>{}));
 
         const auto k_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             k_ptr,
@@ -188,6 +198,13 @@ struct FmhaBwdKernel
             Number<32>{},
             Number<1>{});
 
+        const auto kt_dram =
+            transform_tensor_view(k_dram,
+                                  make_tuple(make_pass_through_transform(kargs.hdim_q),
+                                             make_pass_through_transform(kargs.seqlen_k)),
+                                  make_tuple(Sequence<1>{}, Sequence<0>{}),
+                                  make_tuple(Sequence<0>{}, Sequence<1>{}));
+
         const auto v_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             v_ptr,
             make_tuple(kargs.seqlen_k, kargs.hdim_v),
@@ -195,15 +212,18 @@ struct FmhaBwdKernel
             Number<32>{},
             Number<1>{});
 
-        auto o_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            o_ptr,
-            make_tuple(kargs.seqlen_q, kargs.hdim_v),
-            make_tuple(kargs.stride_o, 1),
-            Number<32>{},
-            Number<1>{});
+        // auto o_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+        //     o_ptr,
+        //     make_tuple(kargs.seqlen_q, kargs.hdim_v),
+        //     make_tuple(kargs.stride_o, 1),
+        //     Number<32>{},
+        //     Number<1>{});
 
         auto lse_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             lse_ptr, make_tuple(kargs.seqlen_q), make_tuple(1));
+
+        auto d_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            d_ptr, make_tuple(kargs.seqlen_q), make_tuple(1));
 
         auto do_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             do_ptr,
@@ -212,12 +232,126 @@ struct FmhaBwdKernel
             Number<32>{},
             Number<1>{});
 
+        const auto dot_dram =
+            transform_tensor_view(do_dram,
+                                  make_tuple(make_pass_through_transform(kargs.hdim_v),
+                                             make_pass_through_transform(kargs.seqlen_q)),
+                                  make_tuple(Sequence<1>{}, Sequence<0>{}),
+                                  make_tuple(Sequence<0>{}, Sequence<1>{}));
+
         const auto dq_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             dq_ptr,
             make_tuple(kargs.seqlen_q, kargs.hdim_q),
             make_tuple(kargs.stride_q, 1),
             Number<32>{},
             Number<1>{});
+
+        auto q_dram_window = make_tile_window(
+            q_dram,
+            [&]() {
+                if constexpr(FmhaPipeline::kQLoadOnce)
+                    return make_tuple(Number<FmhaPipeline::kM0>{},
+                                      Number<FmhaPipeline::kQKHeaddim>{});
+                else
+                    return make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kK0>{});
+            }(),
+            {0, 0});
+
+        auto qt_dram_window =
+            make_tile_window(qt_dram,
+                             [&]() {
+                                 if constexpr(FmhaPipeline::kQTLoadOnce)
+                                     return make_tuple(Number<FmhaPipeline::kQKHeaddim>{},
+                                                       Number<FmhaPipeline::kM0>{});
+                                 else
+                                     return make_tuple(Number<FmhaPipeline::kQKHeaddim>{},
+                                                       Number<FmhaPipeline::kK1>{});
+                             }(),
+                             {0, 0});
+
+        auto k_dram_window = make_tile_window(
+            k_dram,
+            [&]() {
+                if constexpr(FmhaPipeline::kKLoadOnce)
+                    return make_tuple(Number<FmhaPipeline::kN0>{},
+                                      Number<FmhaPipeline::kQKHeaddim>{});
+                else
+                    return make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kK0>{});
+            }(),
+            {i_n0, 0});
+
+        auto kt_dram_window =
+            make_tile_window(kt_dram,
+                             [&]() {
+                                 if constexpr(FmhaPipeline::kKTLoadOnce)
+                                     return make_tuple(Number<FmhaPipeline::kQKHeaddim>{},
+                                                       Number<FmhaPipeline::kN0>{});
+                                 else
+                                     return make_tuple(Number<FmhaPipeline::kQKHeaddim>{},
+                                                       Number<FmhaPipeline::kK2>{});
+                             }(),
+                             {0, i_n0});
+
+        auto v_dram_window = make_tile_window(
+            v_dram,
+            [&]() {
+                if constexpr(FmhaPipeline::kVLoadOnce)
+                    return make_tuple(Number<FmhaPipeline::kN0>{},
+                                      Number<FmhaPipeline::kVHeaddim>{});
+                else
+                    return make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kK0>{});
+            }(),
+            {i_n0, 0});
+
+        auto do_dram_window = make_tile_window(
+            do_dram,
+            [&]() {
+                if constexpr(FmhaPipeline::kOGradLoadOnce)
+                    return make_tuple(Number<FmhaPipeline::kM0>{},
+                                      Number<FmhaPipeline::kVHeaddim>{});
+                else
+                    return make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kK0>{});
+            }(),
+            {0, 0});
+
+        auto dot_dram_window =
+            make_tile_window(dot_dram,
+                             [&]() {
+                                 if constexpr(FmhaPipeline::kOGradTLoadOnce)
+                                     return make_tuple(Number<FmhaPipeline::kVHeaddim>{},
+                                                       Number<FmhaPipeline::kM0>{});
+                                 else
+                                     return make_tuple(Number<FmhaPipeline::kVHeaddim>{},
+                                                       Number<FmhaPipeline::kK1>{});
+                             }(),
+                             {0, 0});
+
+        auto dq_dram_window = make_tile_window(
+            dq_dram,
+            make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kQKHeaddim>{}),
+            {0, 0});
+
+        auto lse_dram_window =
+            make_tile_window(lse_dram, make_tuple(Number<FmhaPipeline::kM0>{}), {0});
+
+        auto d_dram_window = make_tile_window(d_dram, make_tuple(Number<FmhaPipeline::kM0>{}), {0});
+
+        auto dk_acc_tile, dv_acc_tile = FmhaPipeline{}(q_dram_window,
+                                                       qt_dram_window,
+                                                       k_dram_window,
+                                                       kt_dram_window,
+                                                       v_dram_window,
+                                                       do_dram_window,
+                                                       dot_dram_window,
+                                                       dq_dram_window,
+                                                       lse_dram_window,
+                                                       d_dram_window,
+                                                       kargs.scale,
+                                                       kargs.seqlen_q / FmhaPipeline::kM0,
+                                                       FmhaPipeline::kQKHeaddim / FmhaPipeline::kK0,
+                                                       FmhaPipeline::kM0 / FmhaPipeline::kK1,
+                                                       FmhaPipeline::kN0 / FmhaPipeline::kK2,
+                                                       smem_ptr);
 
         const auto dk_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             dk_ptr,
@@ -233,75 +367,16 @@ struct FmhaBwdKernel
             Number<32>{},
             Number<1>{});
 
-        // const auto v_dram = [&]() {
-        //     if constexpr(ck::is_same_v<VLayout, ck::tensor_layout::gemm::RowMajor>)
-        //     {
-        //         const auto v_dram_tmp = make_naive_tensor_view<AddressSpaceEnum::Global>(
-        //             v_ptr,
-        //             make_tuple(kargs.seqlen_k, kargs.hdim_v),
-        //             make_tuple(kargs.stride_v, 1),
-        //             Number<32>{},
-        //             Number<1>{});
-        //         return transform_tensor_view(
-        //             v_dram_tmp,
-        //             make_tuple(make_pass_through_transform(kargs.hdim_v),
-        //                        make_pass_through_transform(kargs.seqlen_k)),
-        //             make_tuple(Sequence<1>{}, Sequence<0>{}),
-        //             make_tuple(Sequence<0>{}, Sequence<1>{}));
-        //     }
-        //     else
-        //     {
-        //         return make_naive_tensor_view<AddressSpaceEnum::Global>(
-        //             v_ptr,
-        //             make_tuple(kargs.hdim_v, kargs.seqlen_k),
-        //             make_tuple(kargs.stride_v, 1),
-        //             Number<32>{},
-        //             Number<1>{});
-        //     }
-        // }();
+        auto dk_dram_window = make_tile_window(
+            dk_dram,
+            make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kVHeaddim>{}),
+            {i_n0, 0});
 
-        auto q_dram_window = make_tile_window(
-            q_dram,
-            [&]() {
-                if constexpr(FmhaPipeline::kQLoadOnce)
-                    return make_tuple(Number<FmhaPipeline::kM0>{},
-                                      Number<FmhaPipeline::kK0BlockLength>{});
-                else
-                    return make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kK0>{});
-            }(),
-            {0, 0});
+        auto dv_dram_window = make_tile_window(
+            dv_dram,
+            make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kVHeaddim>{}),
+            {i_n0, 0});
 
-        auto k_dram_window =
-            make_tile_window(k_dram,
-                             make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kK0>{}),
-                             {i_n0, 0});
-
-        auto v_dram_window =
-            make_tile_window(v_dram,
-                             make_tuple(Number<FmhaPipeline::kN1>{}, Number<FmhaPipeline::kK1>{}),
-                             {i_n0, 0});
-
-        auto o_acc_tile = FmhaPipeline{}(q_dram_window,
-                                         k_dram_window,
-                                         v_dram_window,
-                                         kargs.scale,
-                                         kargs.seqlen_k / FmhaPipeline::kN0,
-                                         kargs.hdim_q / FmhaPipeline::kK0,
-                                         smem_ptr);
-
-        // O DRAM and O DRAM window
-        auto o_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            o_ptr,
-            make_tuple(kargs.seqlen_q, kargs.hdim_v),
-            make_tuple(kargs.stride_o, 1),
-            Number<32>{},
-            Number<1>{});
-
-        auto o_dram_window =
-            make_tile_window(o_dram,
-                             make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kN1>{}),
-                             {i_m0, i_n1});
-
-        EpiloguePipeline{}(o_dram_window, o_acc_tile);
+        EpiloguePipeline{}(dk_dram_window, dv_dram_window, dk_acc_tile, dv_acc_tile);
     }
 };
