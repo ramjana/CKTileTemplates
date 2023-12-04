@@ -193,6 +193,7 @@ template <typename ALayout,
           index_t CShuffleNXdlPerWavePerShuffle,
           typename CDEBlockTransferClusterLengths_MBlock_MPerBlock_NBlock_NPerBlock,
           index_t CDEBlockTransferScalarPerVector_NPerBlock,
+          typename ComputeType    = ADataType,
           LoopScheduler LoopSched = make_default_loop_scheduler()>
 struct DeviceGroupedGemm_Xdl_Fixed_NK : public DeviceGroupedGemmFixedNK<ALayout,
                                                                         BLayout,
@@ -217,6 +218,8 @@ struct DeviceGroupedGemm_Xdl_Fixed_NK : public DeviceGroupedGemmFixedNK<ALayout,
     // GridwiseGemm
     using GridwiseGemm = GridwiseGemmMultipleD_xdl_splitk_cshuffle<
         ADataType, // TODO: distinguish A/B datatype
+        BDataType,
+        ComputeType,
         AccDataType,
         CShuffleDataType,
         DsDataType,
@@ -814,12 +817,15 @@ struct DeviceGroupedGemm_Xdl_Fixed_NK : public DeviceGroupedGemmFixedNK<ALayout,
         return arg.group_count_ * sizeof(GroupedGemmKernelArgument<NumDTensor>);
     }
 
-    void SetWorkSpacePointer(BaseArgument* p_arg, void* p_workspace) const override
+    void SetWorkSpacePointer(BaseArgument* p_arg,
+                             void* p_workspace,
+                             const StreamConfig& stream_config = StreamConfig{}) const override
     {
         auto p_arg_          = dynamic_cast<Argument*>(p_arg);
         p_arg_->p_workspace_ = p_workspace;
 
-        hip_check_error(hipMemset(p_workspace, 0, GetWorkSpaceSize(p_arg)));
+        hip_check_error(
+            hipMemsetAsync(p_workspace, 0, GetWorkSpaceSize(p_arg), stream_config.stream_id_));
     }
 
     static void SetKBatch(Argument& arg, index_t k_batch) { arg.UpdateKBatch(k_batch); }
