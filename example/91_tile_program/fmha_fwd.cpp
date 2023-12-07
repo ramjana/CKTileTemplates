@@ -592,13 +592,10 @@ int main(int argc, char* argv[])
                 reference_batched_elementwise<SMPLComputeDataType, BiasDataType, SMPLComputeDataType, SMPLComputeDataType>(
                     s_host_ref, bias_host_ref, s_host_ref);
             }
-
+            
             reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref);
-
-            reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
-                                                                                        p_host_ref);
-            reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
-                p_host_ref, v_host_ref, o_host_ref);
+            reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, p_host_ref);
+            reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(p_host_ref, v_host_ref, o_host_ref);
             
             Tensor<ODataType> o_host_result({nhead, real_seqlen_q, hdim_v});
             // permute
