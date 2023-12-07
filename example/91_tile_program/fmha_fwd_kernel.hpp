@@ -572,7 +572,8 @@ struct FmhaFwdKernel
             if constexpr(kHasBias)
             {
                 const BiasDataType* bias_ptr =
-                    kargs.bias_ptr + i_nhead_ * kargs.nhead_stride_bias + batch_offset_bias;
+                    kargs.bias_ptr + static_cast<long_index_t>(i_nhead_) * kargs.nhead_stride_bias +
+                    batch_offset_bias;
 
                 const auto bias_dram = [&]() {
                     const auto bias_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
