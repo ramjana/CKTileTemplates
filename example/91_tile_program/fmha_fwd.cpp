@@ -5,6 +5,7 @@
 #include <cstring>
 #include <numeric>
 #include <ostream>
+#include <tuple>
 
 #include "ck/utility/common_header.hpp"
 #include "ck/tensor_description/tensor_descriptor_helper.hpp"
@@ -38,7 +39,6 @@
 #include "fmha_fwd_epilogue.hpp"
 #include "fmha_utils.hpp"
 #include "arg_parser.hpp"
-#include <tuple>
 
 using QDataType           = ck::half_t;
 using KDataType           = ck::half_t;
@@ -165,12 +165,12 @@ float invoker_fmha_kernel(const void* q_ptr,
     ///       are 0.
     // setup stride_* arguments
     const ck::index_t stride_q = (i_perm ? hdim_q : nhead * hdim_q);
-    const ck::index_t stride_k = (i_perm ? hdim_q : nhead * hdim_q);
+    const ck::index_t stride_k = (i_perm ? hdim_q : nhead_k * hdim_q);
     const ck::index_t stride_v = [&]() {
         if constexpr(is_v_rowmajor)
-            return i_perm ? hdim_v : nhead * hdim_v;
+            return i_perm ? hdim_v : nhead_k * hdim_v;
         else
-            return i_perm ? seqlen_k : nhead * seqlen_k;
+            return i_perm ? seqlen_k : nhead_k * seqlen_k;
     }();
     const ck::index_t stride_bias = (i_perm ? seqlen_k : 1 * seqlen_k);
     const ck::index_t stride_o    = (o_perm ? hdim_v : nhead * hdim_v);
@@ -187,8 +187,8 @@ float invoker_fmha_kernel(const void* q_ptr,
     const ck::index_t nhead_stride_o    = (o_perm ? seqlen_q * hdim_v : hdim_v);
     // setup batch_stride_* arguments
     const ck::index_t batch_stride_q    = (nhead * seqlen_q * hdim_q);
-    const ck::index_t batch_stride_k    = (nhead * seqlen_k * hdim_q);
-    const ck::index_t batch_stride_v    = (nhead * hdim_v * seqlen_k);
+    const ck::index_t batch_stride_k    = (nhead_k * seqlen_k * hdim_q);
+    const ck::index_t batch_stride_v    = (nhead_k * hdim_v * seqlen_k);
     const ck::index_t batch_stride_bias = (0 * nhead * seqlen_q * seqlen_k);
     const ck::index_t batch_stride_o    = (nhead * seqlen_q * hdim_v);
 
@@ -206,6 +206,7 @@ float invoker_fmha_kernel(const void* q_ptr,
                                           seqlen_k_ptr,
                                           hdim_q,
                                           hdim_v,
+                                          nhead / nhead_k,
                                           scale,
                                           stride_q,
                                           stride_k,
@@ -229,6 +230,7 @@ float invoker_fmha_kernel(const void* q_ptr,
                                           seqlen_k,
                                           hdim_q,
                                           hdim_v,
+                                          nhead / nhead_k,
                                           scale,
                                           stride_q,
                                           stride_k,
@@ -392,10 +394,10 @@ int main(int argc, char* argv[])
     const ck::index_t shape_seqlen_k = (mode == Mode::Batch ? seqlen_k : seqstart_k_host.back());
 
     Tensor<QDataType> q_host(get_lengths(i_perm, shape_batch, nhead, shape_seqlen_q, hdim_q));
-    Tensor<KDataType> k_host(get_lengths(i_perm, shape_batch, nhead, shape_seqlen_k, hdim_q));
-    Tensor<VDataType> v_host(is_v_rowmajor
-                                 ? get_lengths(i_perm, shape_batch, nhead, shape_seqlen_k, hdim_v)
-                                 : get_lengths(i_perm, shape_batch, nhead, hdim_v, shape_seqlen_k));
+    Tensor<KDataType> k_host(get_lengths(i_perm, shape_batch, nhead_k, shape_seqlen_k, hdim_q));
+    Tensor<VDataType> v_host(
+        is_v_rowmajor ? get_lengths(i_perm, shape_batch, nhead_k, shape_seqlen_k, hdim_v)
+                      : get_lengths(i_perm, shape_batch, nhead_k, hdim_v, shape_seqlen_k));
     // use bias shape = [1, 1, shape_seqlen_q, shape_seqlen_k]. if use_bias=false, the bias_host
     // will not be used for verification at all (but will be copied to device anyway).
     Tensor<KDataType> bias_host(
@@ -550,55 +552,57 @@ int main(int argc, char* argv[])
             Tensor<SMPLComputeDataType> s_host_ref({nhead, real_seqlen_q, real_seqlen_k});
             Tensor<PDataType> p_host_ref({nhead, real_seqlen_q, real_seqlen_k});
 
+            ck::index_t nr = nhead / nhead_k;
+
             // clang-format off
-        // permute
-        if(i_perm) q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[0], idx[1] + query_offset, idx[2]); });
-        else       q_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = q_host(b, idx[1] + query_offset, idx[0], idx[2]); });
+            // permute
+            if(i_perm) q_host_ref.ForEach([&](auto& self, auto i) { self(i) = q_host(b, i[0], i[1] + query_offset, i[2]); });
+            else       q_host_ref.ForEach([&](auto& self, auto i) { self(i) = q_host(b, i[1] + query_offset, i[0], i[2]); });
 
-        if(i_perm) k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[0], idx[1] + key_offset, idx[2]); });
-        else       k_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = k_host(b, idx[1] + key_offset, idx[0], idx[2]); });
+            if(i_perm) k_host_ref.ForEach([&](auto& self, auto i) { self(i) = k_host(b, i[0] / nr, i[1] + key_offset, i[2]); });
+            else       k_host_ref.ForEach([&](auto& self, auto i) { self(i) = k_host(b, i[1] + key_offset, i[0] / nr, i[2]); });
 
-        if constexpr (is_v_rowmajor) {
-            //                                                        v_host_ref: [nhead, hdim, seq], v_host: [b, h, s, d] 
-            if(i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[2] + key_offset, idx[1]); });
-            //                                                        v_host_ref: [nhead, hdim, seq], v_host: [b, s, h, d]
-            else       v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[2] + key_offset, idx[0], idx[1]); });
-        }
-        else {
-            if(i_perm) v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[0], idx[1], idx[2] + key_offset); });
-            else       v_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = v_host(b, idx[1], idx[0], idx[2] + key_offset); });
-        }
+            if constexpr (is_v_rowmajor) {
+                //                                                             v_host_ref: [nhead, hdim, seq], v_host: [b, h_k, s, d] 
+                if(i_perm) v_host_ref.ForEach([&](auto& self, auto i) { self(i) = v_host(b, i[0] / nr, i[2] + key_offset, i[1]); });
+                //                                                             v_host_ref: [nhead, hdim, seq], v_host: [b, s, h_k, d]
+                else       v_host_ref.ForEach([&](auto& self, auto i) { self(i) = v_host(b, i[2] + key_offset, i[0] / nr, i[1]); });
+            }
+            else {
+                if(i_perm) v_host_ref.ForEach([&](auto& self, auto i) { self(i) = v_host(b, i[0] / nr, i[1], i[2] + key_offset); });
+                else       v_host_ref.ForEach([&](auto& self, auto i) { self(i) = v_host(b, i[1], i[0] / nr, i[2] + key_offset); });
+            }
 
-        // reference
-        reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
-            q_host_ref, k_host_ref, s_host_ref,
-            ck::identity{}, ck::identity{},
-            [&](SaccDataType x) { return scale * x; });
+            // reference
+            reference_batched_gemm<QDataType, KDataType, SaccDataType, SMPLComputeDataType>(
+                q_host_ref, k_host_ref, s_host_ref,
+                ck::identity{}, ck::identity{},
+                [&](SaccDataType x) { return scale * x; });
 
-        if(use_bias)
-        {
-            Tensor<BiasDataType> bias_host_ref({1, real_seqlen_q, real_seqlen_k});
-            if(i_perm)
-                bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, 0, idx[1] + query_offset, idx[2] + key_offset); });
-            else
-                bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, idx[1] + query_offset, 0, idx[2] + key_offset); });
+            if(use_bias)
+            {
+                Tensor<BiasDataType> bias_host_ref({1, real_seqlen_q, real_seqlen_k});
+                if(i_perm)
+                    bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, 0, idx[1] + query_offset, idx[2] + key_offset); });
+                else
+                    bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, idx[1] + query_offset, 0, idx[2] + key_offset); });
+                
+                // broadcast from [1, real_seqlen_q, real_seqlen_k] to [nhead, real_seqlen_q, real_seqlen_k]
+                reference_batched_elementwise<SMPLComputeDataType, BiasDataType, SMPLComputeDataType, SMPLComputeDataType>(
+                    s_host_ref, bias_host_ref, s_host_ref);
+            }
+
+            reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref);
+
+            reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
+                                                                                        p_host_ref);
+            reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
+                p_host_ref, v_host_ref, o_host_ref);
             
-            // broadcast from [1, real_seqlen_q, real_seqlen_k] to [nhead, real_seqlen_q, real_seqlen_k]
-            reference_batched_elementwise<SMPLComputeDataType, BiasDataType, SMPLComputeDataType, SMPLComputeDataType>(
-                s_host_ref, bias_host_ref, s_host_ref);
-        }
-
-        reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref);
-
-        reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
-                                                                                       p_host_ref);
-        reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(
-            p_host_ref, v_host_ref, o_host_ref);
-        
-        Tensor<ODataType> o_host_result({nhead, real_seqlen_q, hdim_v});
-        // permute
-        if(o_perm) o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], idx[1] + query_offset, idx[2]); });
-        else       o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[1] + query_offset, idx[0], idx[2]); });
+            Tensor<ODataType> o_host_result({nhead, real_seqlen_q, hdim_v});
+            // permute
+            if(o_perm) o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[0], idx[1] + query_offset, idx[2]); });
+            else       o_host_result.ForEach([&](auto& self, auto idx) { self(idx) = o_host(b, idx[1] + query_offset, idx[0], idx[2]); });
             // clang-format on
 
             if(!ck::utils::check_err(o_host_result, o_host_ref))
