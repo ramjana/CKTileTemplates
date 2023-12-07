@@ -193,8 +193,8 @@ float invoker_fmha_kernel(const void* q_ptr,
     const ck::index_t batch_stride_bias = (0 * nhead * seqlen_q * seqlen_k);
     const ck::index_t batch_stride_o    = (nhead * seqlen_q * hdim_v);
 
-    // create group mode kernel arguments
     const auto kargs = [&] {
+        // create group mode kernel arguments
         if constexpr(FmhaKernel_::kIsGroupMode)
         {
             return FmhaKernel_::MakeKargs(q_ptr,
