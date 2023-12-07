@@ -237,10 +237,11 @@ struct BlockFmhaPipelineQRKSVS
                        k_lds_window);
             }
 
-            // STAGE 2, scale, add bias, softmax
+            // STAGE 2, scale, add bias, mask, softmax
 #if !CK_FMHA_FWD_FAST_EXP2
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
 #endif
+            /// FIXME: make sure bias & mask work well if CK_FMHA_FWD_FAST_EXP2=1
             tile_elementwise_inout(
                 [&](auto& x, const auto& y) {
                     x = x + type_convert<SMPLComputeDataType>(bias_element_func(y));
