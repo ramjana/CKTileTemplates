@@ -301,41 +301,6 @@ auto create_args(int argc, char* argv[])
     return std::make_tuple(result, arg_parser);
 }
 
-static inline int env_get_int(const char* var_name, int default_int)
-{
-    char* v = getenv(var_name);
-    int r   = default_int;
-    if(v)
-        r = atoi(v);
-    return r;
-}
-
-auto create_args(int argc, char* argv[])
-{
-    ArgParser arg_parser;
-    arg_parser.insert("v", "1", "weather do cpu validation or not")
-        .insert("b", "2", "batch size")
-        .insert("h", "8", "num of head, for q")
-        .insert("h_k",
-                "0",
-                "num of head, for k/v, 0 means equal to h\n"
-                "if not equal to h, then this is GQA/MQA case")
-        .insert("s", "3328", "seqlen_q")
-        .insert("s_k", "0", "seqlen_k, 0 means equal to s")
-        .insert("d", "128", "head dim for q, k")
-        .insert("d_v", "0", "head dim for v, 0 means equal to d")
-        .insert("scale", "0", "scale factor. 0 means equal to 1/sqrt(seqlen)")
-        .insert("iperm",
-                "1",
-                "permute input\n"
-                "if true, will be b*h*s*d, else b*s*h*d")
-        .insert("operm", "1", "permute output")
-        .insert("init", "1", "init method. 0:random int, 1:random float, 2:trig float");
-
-    bool result = arg_parser.parse(argc, argv);
-    return std::make_tuple(result, arg_parser);
-}
-
 int main(int argc, char* argv[])
 {
     auto [result, arg_parser] = create_args(argc, argv);
