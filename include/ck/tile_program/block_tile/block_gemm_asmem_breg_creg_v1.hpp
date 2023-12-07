@@ -156,17 +156,16 @@ struct BlockGemmASmemBRegCRegV1
 
         // hot loop:
         static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
-            static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
-                // read B warp tensor from B block tensor
-                BWarpTensor b_warp_tensor;
+            static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
+                // read A warp tensor from A Block window
+                const auto a_warp_tensor = load_tile(a_warp_windows(mIter)(kIter));
+                static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
+                    // read B warp tensor from B block tensor
+                    BWarpTensor b_warp_tensor;
 
-                b_warp_tensor.GetThreadBuffer() = b_block_tensor.GetYSlicedThreadData(
-                    merge_sequences(Sequence<nIter, kIter>{}, b_warp_y_index_zeros),
-                    merge_sequences(Sequence<1, 1>{}, b_warp_y_lengths));
-
-                static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
-                    // read A warp tensor from A Block window
-                    const auto a_warp_tensor = load_tile(a_warp_windows(mIter)(kIter));
+                    b_warp_tensor.GetThreadBuffer() = b_block_tensor.GetYSlicedThreadData(
+                        merge_sequences(Sequence<nIter, kIter>{}, b_warp_y_index_zeros),
+                        merge_sequences(Sequence<1, 1>{}, b_warp_y_lengths));
 
                     // read C warp tensor from C block tensor
                     CWarpTensor c_warp_tensor;
@@ -280,7 +279,7 @@ struct BlockGemmASmemBRegCRegV1
 
         static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
             static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
-                a_warp_windows(nIter)(kIter) = a_warp_window_tmp;
+                a_warp_windows(mIter)(kIter) = a_warp_window_tmp;
 
                 move_tile_window(a_warp_windows(mIter)(kIter),
                                  {mIter * MPerBlockPerIter, kIter * KPerBlockPerIter});
@@ -305,17 +304,16 @@ struct BlockGemmASmemBRegCRegV1
 
         // hot loop:
         static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
-            static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
-                // read B warp tensor from B block tensor
-                BWarpTensor b_warp_tensor;
+            static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
+                // read A warp tensor from A Block window
+                const auto a_warp_tensor = load_tile(a_warp_windows(mIter)(kIter));
+                static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
+                    // read B warp tensor from B block tensor
+                    BWarpTensor b_warp_tensor;
 
-                b_warp_tensor.GetThreadBuffer() = b_block_tensor.GetYSlicedThreadData(
-                    merge_sequences(Sequence<nIter, kIter>{}, b_warp_y_index_zeros),
-                    merge_sequences(Sequence<1, 1>{}, b_warp_y_lengths));
-
-                static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
-                    // read A warp tensor from A Block window
-                    const auto a_warp_tensor = load_tile(a_warp_windows(mIter)(kIter));
+                    b_warp_tensor.GetThreadBuffer() = b_block_tensor.GetYSlicedThreadData(
+                        merge_sequences(Sequence<nIter, kIter>{}, b_warp_y_index_zeros),
+                        merge_sequences(Sequence<1, 1>{}, b_warp_y_lengths));
 
                     // read C warp tensor from C block tensor
                     CWarpTensor c_warp_tensor;
