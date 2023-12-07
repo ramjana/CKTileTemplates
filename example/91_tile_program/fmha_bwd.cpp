@@ -40,31 +40,49 @@ using QGradDataType       = ck::half_t;
 using KGradDataType       = ck::half_t;
 using VGradDataType       = ck::half_t;
 
+// GEMM0: Q@K^T=S
+// GEMM1: P^T@dO=dV(This was chosen as G1 to match fwd, but N1 must be equal to headdim_v)
+// GEMM2: dO@V^T=dP(This was chosen as G2 because of the calculation order)
+// GEMM3: dS^T@Q=dK(Similar to G1, but N3 must be equal to headdim_qk)
+// GEMM4: dS@K=dQ(N4 must be equal to headdim_qk)
+// Is it necessary to distinguish between K0~K4?
 // clang-format off
-// #####################################|  M0|  N0|  K0|  N1|  K1|  K2| QKHD|  VHD|
-using FmhaBlockTileHdim32 = ck::Sequence< 128, 128,  32,  32,  32,  32,   32,   32>;
-using FmhaBlockTileHdim64 = ck::Sequence<  64, 128,  32,  64,  32,  32,   64,   64>;
+// ######################################|  M0|  N0|  K0|  K1|  K2|  K3|  K4| QKHD|  VHD|
+using FmhaBlockTileHdim32  = ck::Sequence< 128, 128,  32,  32,  32,  32,  32,   32,   32>;
+using FmhaBlockTileHdim64  = ck::Sequence<  64, 128,  32,  32,  32,  32,  32,   64,   64>;
+using FmhaBlockTileHdim128 = ck::Sequence<  64, 128,  32,  32,  32,  32,  32,  128,  128>;
 // clang-format on
-using FmhaBlockWarps  = ck::Sequence<4, 1, 1>;
-using FmhaWarpTile    = ck::Sequence<32, 32, 16>;
+using FmhaBlockWarps0 = ck::Sequence<1, 4, 1>;
+using FmhaBlockWarps1 = ck::Sequence<4, 1, 1>;
+using FmhaBlockWarps2 = ck::Sequence<2, 2, 1>;
+using FmhaWarpTile0   = ck::Sequence<32, 32, 16>;
+using FmhaWarpTile1   = ck::Sequence<16, 16, 16>;
+// TODO: simplify Gemm0~4BlockWarps in TileFmhaBwdShape
+//       G0&G2 -> GSdP
+//       G1&G3 -> GdKV
+//       G4    -> GdQ
 using FmhaShapeHDim32 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim32,
-                                                           FmhaBlockWarps,
-                                                           FmhaWarpTile,
-                                                           FmhaBlockWarps,
-                                                           FmhaWarpTile,
-                                                           FmhaBlockWarps,
-                                                           FmhaWarpTile,
-                                                           FmhaBlockWarps,
-                                                           FmhaWarpTile>;
+                                                           FmhaBlockWarps0,
+                                                           FmhaWarpTile0,
+                                                           FmhaBlockWarps1,
+                                                           FmhaWarpTile0,
+                                                           FmhaBlockWarps0,
+                                                           FmhaWarpTile0,
+                                                           FmhaBlockWarps1,
+                                                           FmhaWarpTile0,
+                                                           FmhaBlockWarps1,
+                                                           FmhaWarpTile0>;
 using FmhaShapeHDim64 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim64,
-                                                           FmhaBlockWarps,
-                                                           FmhaWarpTile,
-                                                           FmhaBlockWarps,
-                                                           FmhaWarpTile,
-                                                           FmhaBlockWarps,
-                                                           FmhaWarpTile,
-                                                           FmhaBlockWarps,
-                                                           FmhaWarpTile>;
+                                                           FmhaBlockWarps0,
+                                                           FmhaWarpTile0,
+                                                           FmhaBlockWarps1,
+                                                           FmhaWarpTile0,
+                                                           FmhaBlockWarps0,
+                                                           FmhaWarpTile0,
+                                                           FmhaBlockWarps1,
+                                                           FmhaWarpTile0,
+                                                           FmhaBlockWarps2,
+                                                           FmhaWarpTile0>;
 
 using FmhaBwdTilePartitionerHDim32 = FmhaBwdTilePartitioner<FmhaShapeHDim32>;
 using FmhaBwdTilePartitionerHDim64 = FmhaBwdTilePartitioner<FmhaShapeHDim64>;

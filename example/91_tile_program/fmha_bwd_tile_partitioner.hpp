@@ -12,12 +12,7 @@ struct FmhaBwdTilePartitioner
 {
     using BlockFmhaBwdShape = ck::remove_cvref_t<BlockFmhaBwdShape_>;
 
-    static constexpr ck::index_t kM0 = BlockFmhaBwdShape::kM0;
     static constexpr ck::index_t kN0 = BlockFmhaBwdShape::kN0;
-    static constexpr ck::index_t kK0 = BlockFmhaBwdShape::kK0;
-    static constexpr ck::index_t kN1 = BlockFmhaBwdShape::kN1;
-    static constexpr ck::index_t kK1 = BlockFmhaBwdShape::kK1;
-    static constexpr ck::index_t kK2 = BlockFmhaBwdShape::kK2;
 
     __host__ static constexpr auto
     GridSize(ck::index_t batch_size_, ck::index_t nhead_, ck::index_t seqlen_k_)
