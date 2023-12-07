@@ -72,7 +72,8 @@ using FmhaShapeHDim128     = ck::tile_program::TileFmhaShape<FmhaBlockTileHdim12
 
 // using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromTopLeftPredicate;
 // using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromBottomRightPredicate;
-using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
+using FmhaMask = ck::tile_program::block::MaskLocalAttentionPredicate;
+// using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
 
 using FmhaTilePartitionerHDim64  = FmhaFwdTilePartitioner<FmhaShapeHDim64>;
 using FmhaTilePartitionerHDim128 = FmhaFwdTilePartitioner<FmhaShapeHDim128>;
@@ -704,7 +705,7 @@ int main(int argc, char* argv[])
                 s_host_ref, bias_host_ref, s_host_ref);
         }
 
-        reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref);
+        reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref, options.window_size_left, options.window_size_right);
 
         reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref,
                                                                                        p_host_ref);

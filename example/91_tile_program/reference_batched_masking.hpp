@@ -8,7 +8,9 @@
 #include "ck/tile_program/block_tile/block_masking_specialization.hpp"
 
 template <typename CDataType, typename MaskingType>
-void reference_batched_masking(Tensor<CDataType>& c_b_m_n)
+void reference_batched_masking(Tensor<CDataType>& c_b_m_n,
+                               ck::index_t left_window_size,
+                               ck::index_t right_window_size)
 {
     const int M = c_b_m_n.mDesc.GetLengths()[1];
     const int N = c_b_m_n.mDesc.GetLengths()[2];
@@ -36,6 +38,25 @@ void reference_batched_masking(Tensor<CDataType>& c_b_m_n)
                     if(n > m - MNDiff)
                     {
                         c_b_m_n(batch, m, n) = -ck::NumericLimits<CDataType>::Infinity();
+                    }
+                }
+                else if constexpr(std::is_same_v<
+                                      MaskingType,
+                                      ck::tile_program::block::MaskLocalAttentionPredicate>)
+                {
+                    if(left_window_size < 0)
+                    {
+                        if(n > m - MNDiff + right_window_size)
+                        {
+                            c_b_m_n(batch, m, n) = -ck::NumericLimits<CDataType>::Infinity();
+                        }
+                    }
+                    else
+                    {
+                        if(n > m - MNDiff + right_window_size || n < m - MNDiff - left_window_size)
+                        {
+                            c_b_m_n(batch, m, n) = -ck::NumericLimits<CDataType>::Infinity();
+                        }
                     }
                 }
             }
