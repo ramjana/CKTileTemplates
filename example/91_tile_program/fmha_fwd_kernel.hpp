@@ -77,7 +77,11 @@ struct FmhaFwdKernel
               hdim_q{hdim_q_},
               hdim_v{hdim_v_},
               nhead_ratio_qk{nhead_ratio_qk_},
+#if CK_FMHA_FWD_FAST_EXP2
+              scale{static_cast<float>(scale_ * C_LOG2E)},
+#else
               scale{scale_},
+#endif
               stride_q{stride_q_},
               stride_k{stride_k_},
               stride_v{stride_v_},
