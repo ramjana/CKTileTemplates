@@ -16,9 +16,9 @@
 #include "ck/tile_program/tile/slice_tile.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qr_ks_vs_default_policy.hpp"
+#include "ck/tile_program/block_tile/block_masking_specialization.hpp"
 #include "ck/tile_program/block_tile/block_reduce.hpp"
 #include "ck/tile_program/tile/shuffle_distributed_tensor.hpp"
-#include "ck/tile_program/block_tile/block_masking_specialization.hpp"
 
 namespace ck {
 namespace tile_program {
