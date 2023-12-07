@@ -583,9 +583,9 @@ int main(int argc, char* argv[])
             {
                 Tensor<BiasDataType> bias_host_ref({1, real_seqlen_q, real_seqlen_k});
                 if(i_perm)
-                    bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, 0, idx[1] + query_offset, idx[2] + key_offset); });
+                    bias_host_ref.ForEach([&](auto& self, auto i) { self(i) = bias_host(0, 0, i[1] + query_offset, i[2] + key_offset); });
                 else
-                    bias_host_ref.ForEach([&](auto& self, auto idx) { self(idx) = bias_host(0, idx[1] + query_offset, 0, idx[2] + key_offset); });
+                    bias_host_ref.ForEach([&](auto& self, auto i) { self(i) = bias_host(0, i[1] + query_offset, 0, i[2] + key_offset); });
                 
                 // broadcast from [1, real_seqlen_q, real_seqlen_k] to [nhead, real_seqlen_q, real_seqlen_k]
                 reference_batched_elementwise<SMPLComputeDataType, BiasDataType, SMPLComputeDataType, SMPLComputeDataType>(
