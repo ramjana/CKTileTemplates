@@ -26,6 +26,7 @@ struct BlockGemmARegBSmemCRegProblem
     static constexpr index_t kBlockSize = kBlockSize_;
 };
 
+
 } // namespace block
 } // namespace tile_program
 } // namespace ck
