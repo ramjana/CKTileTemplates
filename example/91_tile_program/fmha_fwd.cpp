@@ -80,7 +80,6 @@ struct FmhaShape</* HDim = */ 64> : ck::tile_program::TileFmhaShape<FmhaBlockTil
                                                                     FmhaWarpTile,
                                                                     FmhaBlockWarps,
                                                                     FmhaWarpTile,
-                                                                    3, // occupancy
                                                                     VLayout>
 {
 };
@@ -91,7 +90,6 @@ struct FmhaShape</* HDim = */ 128>
                                       FmhaWarpTile,
                                       FmhaBlockWarps,
                                       FmhaWarpTile,
-                                      2, // occupancy
                                       VLayout>
 {
 };
@@ -102,27 +100,31 @@ using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
 
 inline constexpr bool kM0NeedPadding   = true;
 inline constexpr bool kN0K1NeedPadding = true;
-template <bool kHasBias>
-using FmhaTraits = ck::tile_program::TileFmhaTraits<kM0NeedPadding, kN0K1NeedPadding, kHasBias>;
+template <ck::index_t HDim, bool kHasBias>
+using FmhaTraits = ck::tile_program::TileFmhaTraits<kM0NeedPadding,
+                                                    kN0K1NeedPadding,
+                                                    kHasBias,
+                                                    HDim == 64 ? /* occupancy = */ 3 : 2>;
 
 template <ck::index_t HDim>
 using FmhaTilePartitioner = FmhaFwdTilePartitioner<FmhaShape<HDim>>;
 
 template <ck::index_t HDim, bool kIsGroupMode, bool kHasBias>
-using FmhaPipelineProblem = ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
-                                                                              KDataType,
-                                                                              VDataType,
-                                                                              SaccDataType,
-                                                                              SMPLComputeDataType,
-                                                                              BiasDataType,
-                                                                              PDataType,
-                                                                              OaccDataType,
-                                                                              ODataType,
-                                                                              256, // BlockSize
-                                                                              FmhaShape<HDim>,
-                                                                              kIsGroupMode,
-                                                                              FmhaMask,
-                                                                              FmhaTraits<kHasBias>>;
+using FmhaPipelineProblem =
+    ck::tile_program::block::BlockFmhaPipelineProblem<QDataType,
+                                                      KDataType,
+                                                      VDataType,
+                                                      SaccDataType,
+                                                      SMPLComputeDataType,
+                                                      BiasDataType,
+                                                      PDataType,
+                                                      OaccDataType,
+                                                      ODataType,
+                                                      /* BlockSize = */ 256,
+                                                      FmhaShape<HDim>,
+                                                      kIsGroupMode,
+                                                      FmhaMask,
+                                                      FmhaTraits<HDim, kHasBias>>;
 
 template <ck::index_t HDim, bool kIsGroupMode, bool kHasBias>
 using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVS<
@@ -592,7 +594,7 @@ int main(int argc, char* argv[])
                 reference_batched_elementwise<SMPLComputeDataType, BiasDataType, SMPLComputeDataType, SMPLComputeDataType>(
                     s_host_ref, bias_host_ref, s_host_ref);
             }
-            
+
             reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref);
             reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, p_host_ref);
             reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(p_host_ref, v_host_ref, o_host_ref);

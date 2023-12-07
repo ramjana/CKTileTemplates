@@ -46,6 +46,7 @@ struct BlockFmhaPipelineProblem
     static constexpr bool kM0NeedPadding   = Traits::kM0NeedPadding;
     static constexpr bool kN0K1NeedPadding = Traits::kN0K1NeedPadding;
     static constexpr bool kHasBias         = Traits::kHasBias;
+    static constexpr index_t kBlockPerCu   = Traits::kBlockPerCu;
 };
 
 } // namespace block
