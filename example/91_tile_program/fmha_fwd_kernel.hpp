@@ -58,6 +58,8 @@ struct FmhaFwdKernel
                                        ck::index_t hdim_q_,
                                        ck::index_t hdim_v_,
                                        float scale_,
+                                       ck::index_t window_size_left_,
+                                       ck::index_t window_size_right_,
                                        ck::index_t stride_q_,
                                        ck::index_t stride_k_,
                                        ck::index_t stride_v_,
@@ -75,6 +77,8 @@ struct FmhaFwdKernel
               hdim_q{hdim_q_},
               hdim_v{hdim_v_},
               scale{scale_},
+              window_size_left{window_size_left_},
+              window_size_right{window_size_right_},
               stride_q{stride_q_},
               stride_k{stride_k_},
               stride_v{stride_v_},
@@ -97,6 +101,9 @@ struct FmhaFwdKernel
         ck::index_t hdim_v;
 
         float scale;
+
+        ck::index_t window_size_left;
+        ck::index_t window_size_right;
 
         ck::index_t stride_q;
         ck::index_t stride_k;
@@ -133,6 +140,8 @@ struct FmhaFwdKernel
                                           ck::index_t hdim_q_,
                                           ck::index_t hdim_v_,
                                           float scale_,
+                                          ck::index_t window_size_left_,
+                                          ck::index_t window_size_right_,
                                           ck::index_t stride_q_,
                                           ck::index_t stride_k_,
                                           ck::index_t stride_v_,
@@ -154,6 +163,8 @@ struct FmhaFwdKernel
                           hdim_q_,
                           hdim_v_,
                           scale_,
+                          window_size_left_,
+                          window_size_right_,
                           stride_q_,
                           stride_k_,
                           stride_v_,
@@ -188,6 +199,8 @@ struct FmhaFwdKernel
                                           ck::index_t hdim_q_,
                                           ck::index_t hdim_v_,
                                           float scale_,
+                                          ck::index_t window_size_left_,
+                                          ck::index_t window_size_right_,
                                           ck::index_t stride_q_,
                                           ck::index_t stride_k_,
                                           ck::index_t stride_v_,
@@ -205,6 +218,8 @@ struct FmhaFwdKernel
                           hdim_q_,
                           hdim_v_,
                           scale_,
+                          window_size_left_,
+                          window_size_right_,
                           stride_q_,
                           stride_k_,
                           stride_v_,
@@ -237,6 +252,8 @@ struct FmhaFwdKernel
                                                                       ck::index_t hdim_q,
                                                                       ck::index_t hdim_v,
                                                                       float scale,
+                                                                      ck::index_t window_size_left,
+                                                                      ck::index_t window_size_right,
                                                                       ck::index_t stride_q,
                                                                       ck::index_t stride_k,
                                                                       ck::index_t stride_v,
@@ -250,10 +267,28 @@ struct FmhaFwdKernel
                                                                       ck::index_t batch_stride_v,
                                                                       ck::index_t batch_stride_o)
     {
-        return Kargs{q_ptr,          k_ptr,          v_ptr,          o_ptr,          seqlen_q,
-                     seqlen_k,       hdim_q,         hdim_v,         scale,          stride_q,
-                     stride_k,       stride_v,       stride_o,       nhead_stride_q, nhead_stride_k,
-                     nhead_stride_v, nhead_stride_o, batch_stride_q, batch_stride_k, batch_stride_v,
+        return Kargs{q_ptr,
+                     k_ptr,
+                     v_ptr,
+                     o_ptr,
+                     seqlen_q,
+                     seqlen_k,
+                     hdim_q,
+                     hdim_v,
+                     scale,
+                     window_size_left,
+                     window_size_right,
+                     stride_q,
+                     stride_k,
+                     stride_v,
+                     stride_o,
+                     nhead_stride_q,
+                     nhead_stride_k,
+                     nhead_stride_v,
+                     nhead_stride_o,
+                     batch_stride_q,
+                     batch_stride_k,
+                     batch_stride_v,
                      batch_stride_o};
     }
 
@@ -268,6 +303,8 @@ struct FmhaFwdKernel
               ck::index_t hdim_q,
               ck::index_t hdim_v,
               float scale,
+              ck::index_t window_size_left,
+              ck::index_t window_size_right,
               ck::index_t stride_q,
               ck::index_t stride_k,
               ck::index_t stride_v,
@@ -283,10 +320,28 @@ struct FmhaFwdKernel
               std::optional<std::tuple<const void*, ck::index_t, ck::index_t, ck::index_t>> bias =
                   std::nullopt)
     {
-        Kargs kargs{q_ptr,          k_ptr,          v_ptr,          o_ptr,          seqlen_q,
-                    seqlen_k,       hdim_q,         hdim_v,         scale,          stride_q,
-                    stride_k,       stride_v,       stride_o,       nhead_stride_q, nhead_stride_k,
-                    nhead_stride_v, nhead_stride_o, batch_stride_q, batch_stride_k, batch_stride_v,
+        Kargs kargs{q_ptr,
+                    k_ptr,
+                    v_ptr,
+                    o_ptr,
+                    seqlen_q,
+                    seqlen_k,
+                    hdim_q,
+                    hdim_v,
+                    scale,
+                    window_size_left,
+                    window_size_right,
+                    stride_q,
+                    stride_k,
+                    stride_v,
+                    stride_o,
+                    nhead_stride_q,
+                    nhead_stride_k,
+                    nhead_stride_v,
+                    nhead_stride_o,
+                    batch_stride_q,
+                    batch_stride_k,
+                    batch_stride_v,
                     batch_stride_o};
 
         if(bias.has_value())
@@ -311,6 +366,8 @@ struct FmhaFwdKernel
                                                                       ck::index_t hdim_q,
                                                                       ck::index_t hdim_v,
                                                                       float scale,
+                                                                      ck::index_t window_size_left,
+                                                                      ck::index_t window_size_right,
                                                                       ck::index_t stride_q,
                                                                       ck::index_t stride_k,
                                                                       ck::index_t stride_v,
@@ -320,27 +377,14 @@ struct FmhaFwdKernel
                                                                       ck::index_t nhead_stride_v,
                                                                       ck::index_t nhead_stride_o)
     {
-        return Kargs{q_ptr,
-                     k_ptr,
-                     v_ptr,
-                     o_ptr,
-                     seqstart_q_ptr,
-                     seqstart_k_ptr,
-                     seqlen_k_ptr,
-                     hdim_q,
-                     hdim_v,
-                     scale,
-                     stride_q,
-                     stride_k,
-                     stride_v,
-                     stride_o,
-                     nhead_stride_q,
-                     nhead_stride_k,
-                     nhead_stride_v,
-                     nhead_stride_o};
+        return Kargs{
+            q_ptr,          k_ptr,         v_ptr,    o_ptr,    seqstart_q_ptr,   seqstart_k_ptr,
+            seqlen_k_ptr,   hdim_q,        hdim_v,   scale,    window_size_left, window_size_right,
+            stride_q,       stride_k,      stride_v, stride_o, nhead_stride_q,   nhead_stride_k,
+            nhead_stride_v, nhead_stride_o};
     }
 
-    template <bool Cond = kIsGroupMode&& kSupportsBias>
+    template <bool Cond = kIsGroupMode && kSupportsBias>
     __host__ static constexpr std::enable_if_t<Cond, Kargs>
     MakeKargs(const void* q_ptr,
               const void* k_ptr,
@@ -352,6 +396,8 @@ struct FmhaFwdKernel
               ck::index_t hdim_q,
               ck::index_t hdim_v,
               float scale,
+              ck::index_t window_size_left,
+              ck::index_t window_size_right,
               ck::index_t stride_q,
               ck::index_t stride_k,
               ck::index_t stride_v,
@@ -362,24 +408,11 @@ struct FmhaFwdKernel
               ck::index_t nhead_stride_o,
               std::optional<std::tuple<const void*, ck::index_t, ck::index_t>> bias = std::nullopt)
     {
-        Kargs kargs{q_ptr,
-                    k_ptr,
-                    v_ptr,
-                    o_ptr,
-                    seqstart_q_ptr,
-                    seqstart_k_ptr,
-                    seqlen_k_ptr,
-                    hdim_q,
-                    hdim_v,
-                    scale,
-                    stride_q,
-                    stride_k,
-                    stride_v,
-                    stride_o,
-                    nhead_stride_q,
-                    nhead_stride_k,
-                    nhead_stride_v,
-                    nhead_stride_o};
+        Kargs kargs{
+            q_ptr,          k_ptr,         v_ptr,    o_ptr,    seqstart_q_ptr,   seqstart_k_ptr,
+            seqlen_k_ptr,   hdim_q,        hdim_v,   scale,    window_size_left, window_size_right,
+            stride_q,       stride_k,      stride_v, stride_o, nhead_stride_q,   nhead_stride_k,
+            nhead_stride_v, nhead_stride_o};
 
         if(bias.has_value())
         {
@@ -593,7 +626,8 @@ struct FmhaFwdKernel
                              {i_n1, 0});
 
         const auto run_pipeline_with = [&](auto bias_dram_window) {
-            C0MatrixMask casual_mask{kargs.seqlen_q, kargs.seqlen_k};
+            C0MatrixMask casual_mask(
+                kargs.seqlen_q, kargs.seqlen_k, kargs.window_size_left, kargs.window_size_right);
 
             return FmhaPipeline{}(q_dram_window,
                                   k_dram_window,

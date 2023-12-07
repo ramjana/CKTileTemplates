@@ -72,11 +72,11 @@ struct BlockFmhaPipelineQRKSVS
               typename BiasElementFunction,
               typename CausalMask>
     __host__ __device__ auto
-    operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
+    operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
                const QElementFunction& q_element_func,
-               const KDramBlockWindowTmp& k_dram_block_window_tmp, // N0*K0 tile
+               const KDramBlockWindowTmp& k_dram_block_window_tmp,       // N0*K0 tile
                const KElementFunction& k_element_func,
-               const VDramBlockWindowTmp& v_dram_block_window_tmp, // N1*K1 tile
+               const VDramBlockWindowTmp& v_dram_block_window_tmp,       // N1*K1 tile
                const VElementFunction& v_element_func,
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
                const BiasElementFunction& bias_element_func,
@@ -278,7 +278,7 @@ struct BlockFmhaPipelineQRKSVS
                 NumericLimits<SMPLComputeDataType>::Lowest()); // m_local = rowmax(S{j})
             block_tile_reduce_sync(m_local, f_max);
 
-            const auto m_old = m; // m{j-1}
+            const auto m_old = m;                                                         // m{j-1}
             tile_elementwise_inout(
                 [](auto& e0, auto e1, auto e2) { e0 = max(e1, e2); }, m, m_old, m_local); // m{j}
 

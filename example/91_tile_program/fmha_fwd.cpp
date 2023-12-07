@@ -170,6 +170,8 @@ float fmha_kernel_invoker(const void* q_ptr,
                           ck::index_t hdim_v,
                           ck::index_t max_seqlen_q,
                           float scale,
+                          ck::index_t window_size_left,
+                          ck::index_t window_size_right,
                           bool i_perm,
                           bool o_perm,
                           bool use_bias)
@@ -230,6 +232,8 @@ float fmha_kernel_invoker(const void* q_ptr,
                                              hdim_q,
                                              hdim_v,
                                              scale,
+                                             window_size_left,
+                                             window_size_right,
                                              stride_q,
                                              stride_k,
                                              stride_v,
@@ -252,6 +256,8 @@ float fmha_kernel_invoker(const void* q_ptr,
                                              hdim_q,
                                              hdim_v,
                                              scale,
+                                             window_size_left,
+                                             window_size_right,
                                              stride_q,
                                              stride_k,
                                              stride_v,
@@ -282,6 +288,8 @@ float fmha_kernel_invoker(const void* q_ptr,
                                              hdim_q,
                                              hdim_v,
                                              scale,
+                                             window_size_left,
+                                             window_size_right,
                                              stride_q,
                                              stride_k,
                                              stride_v,
@@ -307,6 +315,8 @@ float fmha_kernel_invoker(const void* q_ptr,
                                              hdim_q,
                                              hdim_v,
                                              scale,
+                                             window_size_left,
+                                             window_size_right,
                                              stride_q,
                                              stride_k,
                                              stride_v,
@@ -357,6 +367,9 @@ struct Options
     ck::index_t hdim_v   = 128;
 
     float scale = .0f;
+
+    ck::index_t window_size_left  = -1;
+    ck::index_t window_size_right = -1;
 
     // for following flag values, if their value is true, the shape input/output tensor will be
     // [batch, nhead, seqlen, hdim]; otherwise: [batch, seqlen, nhead, hdim]
@@ -602,6 +615,8 @@ int main(int argc, char* argv[])
                                               options.hdim_v,
                                               max_seqlen_q,
                                               options.scale,
+                                              options.window_size_left,
+                                              options.window_size_right,
                                               options.i_perm,
                                               options.o_perm,
                                               options.use_bias);
