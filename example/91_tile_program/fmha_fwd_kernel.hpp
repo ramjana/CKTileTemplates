@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <type_traits>
 
 #include "ck/utility/common_header.hpp"
