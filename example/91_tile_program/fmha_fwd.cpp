@@ -459,7 +459,7 @@ int main(int argc, char* argv[])
     if(hdim_q == hdim_v && hdim_q == 64)
     {
         BOOL_SWITCH_2(mode == Mode::Group, kIsGroupMode, use_bias, kHasBias, [&] {
-            using Kernel = FmhaKernel</* HDim = */ 128, kIsGroupMode, kHasBias>;
+            using Kernel = FmhaKernel</* HDim = */ 64, kIsGroupMode, kHasBias>;
 
             ave_time = invoker_fmha_kernel<Kernel>(q_buf.GetDeviceBuffer(),
                                                    k_buf.GetDeviceBuffer(),
