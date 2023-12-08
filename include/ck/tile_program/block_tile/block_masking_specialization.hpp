@@ -97,8 +97,10 @@ struct MaskLocalAttentionPredicate
         }
         else
         {
-            return operator()(m_tile_orig + m_tile_size - 1, n_tile_orig) ||
-                   operator()(m_tile_orig, n_tile_orig + n_tile_size - 1);
+            return (n_tile_orig >
+                    ((m_tile_orig + m_tile_size - 1) - diagonal_offset_ + right_window_size_)) ||
+                   ((n_tile_orig + n_tile_size - 1) <
+                    (m_tile_orig - diagonal_offset_ - left_window_size_));
         }
     }
 
