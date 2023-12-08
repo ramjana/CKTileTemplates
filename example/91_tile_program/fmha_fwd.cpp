@@ -98,8 +98,8 @@ struct FmhaShape</* HDim = */ 128>
 // using FmhaMask = ck::tile_program::block::MaskUpperTriangleFromBottomRightPredicate;
 using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
 
-inline constexpr bool kM0NeedPadding   = true;
-inline constexpr bool kN0K1NeedPadding = true;
+inline constexpr bool kM0NeedPadding   = false;
+inline constexpr bool kN0K1NeedPadding = false;
 template <ck::index_t HDim, bool kHasBias>
 using FmhaTraits = ck::tile_program::TileFmhaTraits<kM0NeedPadding,
                                                     kN0K1NeedPadding,
@@ -127,7 +127,7 @@ using FmhaPipelineProblem =
                                                       FmhaTraits<HDim, kHasBias>>;
 
 template <ck::index_t HDim, bool kIsGroupMode, bool kHasBias>
-using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVS<
+using FmhaPipeline = ck::tile_program::block::BlockFmhaPipelineQRKSVSAsync<
     FmhaPipelineProblem<HDim, kIsGroupMode, kHasBias>>;
 
 using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataType>>;
@@ -452,7 +452,7 @@ int main(int argc, char* argv[])
     };
     // clang-format on
 
-    std::cout << "mode:" << mode << ", b:" << batch << ", h:" << nhead << ", h_k:" << nhead_k
+    std::cout << "[" << mode << "] b:" << batch << ", h:" << nhead << ", h_k:" << nhead_k
               << ", s:" << seqlen_q << ", s_k:" << seqlen_k << ", d:" << hdim_q
               << ", d_v:" << hdim_v << ", scale:" << scale << ", i:" << layout_str(i_perm)
               << ", o:" << layout_str(o_perm) << ", bias:" << use_bias
@@ -523,7 +523,8 @@ int main(int argc, char* argv[])
 
     float gb_per_sec = num_byte / 1.E6 / ave_time;
 
-    std::cout << ", " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
+    std::cout << std::fixed << ", " << std::setprecision(3) << ave_time << " ms, "
+                << std::setprecision(2) << tflops << " TFlops, " << std::setprecision(2) << gb_per_sec << " GB/s"
               << std::flush << std::endl;
 
     if(do_validation)
