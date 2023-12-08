@@ -729,10 +729,9 @@ struct BlockFmhaBwdPipelineDefaultPolicy
                                                    Problem::BlockFmhaShape::kN0,
                                                    Problem::BlockFmhaShape::kK0>>;
 
-        using WarpGemm =
-            warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateKCDistribution_SwizzleB<
-                warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
-                2>>;
+        using WarpGemm = warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleB<
+            warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
+            2>>;
 
         using BlockGemmPolicy =
             BlockGemmASmemBSmemCRegV1CustomPolicy<typename Problem::QDataType,
@@ -757,7 +756,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     //                                                Problem::BlockFmhaShape::kK0>>;
 
     //     using WarpGemm =
-    //         warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateKCDistribution_SwizzleB<
+    //         warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleB<
     //             warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
     //             2>>;
 
@@ -813,10 +812,9 @@ struct BlockFmhaBwdPipelineDefaultPolicy
                                                    Problem::BlockFmhaShape::kN0,
                                                    Problem::BlockFmhaShape::kK2>>;
 
-        using WarpGemm =
-            warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateKCDistribution_SwizzleB<
-                warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
-                2>>;
+        using WarpGemm = warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleB<
+            warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
+            2>>;
 
         using BlockGemmPolicy =
             BlockGemmASmemBRegCRegV1CustomPolicy<typename Problem::OGradDataType,
@@ -840,7 +838,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     //                                                Problem::BlockFmhaShape::kN0,
     //                                                Problem::BlockFmhaShape::kK2>>;
     //     using WarpGemm =
-    //         warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateKCDistribution_SwizzleB<
+    //         warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleB<
     //             warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
     //             2>>;
 

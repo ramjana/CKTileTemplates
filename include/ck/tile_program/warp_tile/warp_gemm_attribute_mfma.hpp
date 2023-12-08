@@ -372,7 +372,7 @@ struct WarpGemmAtrributeMfmaIterateKAndTransposedCDistribution_SwizzleB
 };
 
 template <typename WarpGemmAttributeMfmaImpl_, index_t kKIter>
-struct WarpGemmAtrributeMfmaIterateKCDistribution_SwizzleB
+struct WarpGemmAtrributeMfmaIterateK_SwizzleB
 {
     using Impl = remove_cvref_t<WarpGemmAttributeMfmaImpl_>;
 
