@@ -20,6 +20,10 @@
 #include "ck/tile_program/block_tile/block_reduce.hpp"
 #include "ck/tile_program/tile/shuffle_distributed_tensor.hpp"
 
+#ifndef C_LOG2E
+#define C_LOG2E 1.44269504088896340736 // log2(e)
+#endif
+
 namespace ck {
 namespace tile_program {
 namespace block {
@@ -238,16 +242,26 @@ struct BlockFmhaPipelineQRKSVS
             }
 
             // STAGE 2, scale, add bias, mask, softmax
+            if constexpr(is_null_tile_window(bias_dram_window))
+            {
 #if !CK_FMHA_FWD_FAST_EXP2
-            tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
+                tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
 #endif
-            /// FIXME: make sure bias & mask work well if CK_FMHA_FWD_FAST_EXP2=1
-            tile_elementwise_inout(
-                [&](auto& x, const auto& y) {
-                    x = x + type_convert<SMPLComputeDataType>(bias_element_func(y));
-                },
-                s_acc,
-                bias_tile);
+            }
+            else
+            {
+                tile_elementwise_inout(
+                    [&](auto& x, const auto& y) {
+#if !CK_FMHA_FWD_FAST_EXP2
+                        x = scale * x + type_convert<SMPLComputeDataType>(bias_element_func(y));
+#else
+                        x = scale * x +
+                            C_LOG2E * type_convert<SMPLComputeDataType>(bias_element_func(y));
+#endif
+                    },
+                    s_acc,
+                    bias_tile);
+            }
             move_tile_window(bias_dram_window, {0, kN0});
             if constexpr(kN0K1NeedPadding ||
                          !is_same_v<typename CausalMask::MaskOutPredicate, MaskDisabledPredicate>)
@@ -285,7 +299,14 @@ struct BlockFmhaPipelineQRKSVS
                 sweep_tile_span(p_spans[Number<1>{}], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 #if CK_FMHA_FWD_FAST_EXP2
-                    p_compute(i_j_idx) = math::exp2(scale * s[i_j_idx] - row_max);
+                    if constexpr(is_null_tile_window(bias_dram_window))
+                    {
+                        p_compute(i_j_idx) = math::exp2(scale * s[i_j_idx] - row_max);
+                    }
+                    else
+                    {
+                        p_compute(i_j_idx) = math::exp2(s[i_j_idx] - m[i_idx]);
+                    }
 #else
                     p_compute(i_j_idx)     = math::exp(s[i_j_idx] - m[i_idx]);
 #endif
@@ -301,8 +322,17 @@ struct BlockFmhaPipelineQRKSVS
             sweep_tile_span(o_spans[Number<0>{}], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
 #if CK_FMHA_FWD_FAST_EXP2
-                auto row_max   = scale * m[i_idx];
-                const auto tmp = math::exp2(scale * m_old[i_idx] - row_max);
+                const auto tmp = [&]() {
+                    if constexpr(is_null_tile_window(bias_dram_window))
+                    {
+                        auto row_max = scale * m[i_idx];
+                        return math::exp2(scale * m_old[i_idx] - row_max);
+                    }
+                    else
+                    {
+                        return math::exp2(m_old[i_idx] - m[i_idx]);
+                    }
+                }();
 #else
                 const auto tmp       = math::exp(m_old[i_idx] - m[i_idx]);
 #endif

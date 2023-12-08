@@ -5,6 +5,7 @@
 
 #include "ck/tensor/tensor_view.hpp"
 #include "ck/utility/common_header.hpp"
+#include <type_traits>
 
 namespace ck {
 namespace tile_program {
@@ -33,6 +34,25 @@ struct NullTileWindow
 
     WindowLengths window_lengths_;
 };
+
+// utility to check if this is a Null Tile Window
+namespace impl {
+template <typename>
+struct IsNullTileWindow : public std::false_type
+{
+};
+
+template <typename T>
+struct IsNullTileWindow<NullTileWindow<T>> : public std::true_type
+{
+};
+} // namespace impl
+
+template <typename T>
+__device__ constexpr auto is_null_tile_window(const T&)
+{
+    return impl::IsNullTileWindow<remove_cvref_t<T>>::value;
+}
 
 template <typename WindowLengths>
 __device__ constexpr auto make_null_tile_window(const WindowLengths& window_lengths)
