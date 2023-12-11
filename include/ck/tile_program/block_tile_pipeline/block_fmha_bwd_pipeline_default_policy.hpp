@@ -122,8 +122,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     __host__ __device__ static constexpr auto MakeQLdsBlockDescriptor()
     {
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK0; // Problem::BlockFmhaShape::kQKHeaddim;
+        if constexpr(Problem::BlockFmhaShape::kQLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
+        }
         constexpr index_t kKPack = GetSmemKPackQ<Problem>();
 
         constexpr auto q_lds_block_desc_0 = make_naive_tensor_descriptor(
@@ -147,8 +153,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     __host__ __device__ static constexpr auto MakeKLdsBlockDescriptor()
     {
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK0; // Problem::BlockFmhaShape::kQKHeaddim;
+        if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
+        }
         constexpr index_t kKPack = GetSmemKPackK<Problem>();
 
         constexpr auto k_lds_block_desc_0 = make_naive_tensor_descriptor(
@@ -198,8 +210,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     __host__ __device__ static constexpr auto MakeOGradLdsBlockDescriptor()
     {
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK2; // Problem::BlockFmhaShape::kVHeaddim;
+        if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK2;
+        }
         constexpr index_t kKPack = GetSmemKPackOGrad<Problem>();
 
         constexpr auto do_lds_block_desc_0 = make_naive_tensor_descriptor(
@@ -252,8 +270,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         static_assert(PixelsPerRow % kKPack == 0);
         constexpr index_t NPerRow    = PixelsPerRow / kKPack;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK3; // Problem::BlockFmhaShape::kM0;
+        if constexpr(Problem::BlockFmhaShape::kQTLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK3;
+        }
         static_assert(kNPerBlock % NPerRow == 0);
         static_assert(kKPerBlock % kKPack == 0);
 
@@ -290,8 +314,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         static_assert(PixelsPerRow % kKPack == 0);
         constexpr index_t NPerRow    = PixelsPerRow / kKPack;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK4; // Problem::BlockFmhaShape::kN0;
+        if constexpr(Problem::BlockFmhaShape::kKTLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kN0;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK4;
+        }
         static_assert(kNPerBlock % NPerRow == 0);
         static_assert(kKPerBlock % kKPack == 0);
 
@@ -328,8 +358,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         static_assert(PixelsPerRow % kKPack == 0);
         constexpr index_t NPerRow    = PixelsPerRow / kKPack;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK1; // Problem::BlockFmhaShape::kM0;
+        if constexpr(Problem::BlockFmhaShape::kOGradTLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
+        }
         static_assert(kNPerBlock % NPerRow == 0);
         static_assert(kKPerBlock % kKPack == 0);
 
@@ -356,51 +392,179 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         return dot_lds_block_desc;
     }
 
-    // template <typename Problem>
-    // __host__ __device__ static constexpr ck::index_t GetSmemSize()
-    // {
-    //     constexpr index_t smem_size_gemm_0 =
-    //         GetSmemSizeQ<Problem>() + sizeof(typename Problem::KDataType) *
-    //                                       MakeKLdsBlockDescriptor<Problem>().GetElementSpaceSize();
-    //     constexpr index_t smem_size_gemm_1 =
-    //         MakeVLdsBlockDescriptor<Problem>().GetElementSpaceSize() *
-    //         sizeof(typename Problem::VDataType);
+    template <typename Problem>
+    __host__ __device__ static constexpr ck::index_t GetSmemSizeQ()
+    {
+        constexpr index_t smem_size_q = sizeof(typename Problem::QDataType) *
+                                        MakeQLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        return smem_size_q;
+    }
 
-    //     // TODO: consider shuffle requirement
-    //     return math::max(smem_size_gemm_0, smem_size_gemm_1);
-    // }
+    template <typename Problem>
+    __host__ __device__ static constexpr ck::index_t GetSmemSizeQT()
+    {
+        constexpr index_t smem_size_qt = sizeof(typename Problem::QDataType) *
+                                         MakeQTLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        return smem_size_qt;
+    }
+
+    template <typename Problem>
+    __host__ __device__ static constexpr ck::index_t GetSmemSizeK()
+    {
+        constexpr index_t smem_size_k = sizeof(typename Problem::KDataType) *
+                                        MakeKLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        return smem_size_k;
+    }
+
+    template <typename Problem>
+    __host__ __device__ static constexpr ck::index_t GetSmemSizeKT()
+    {
+        constexpr index_t smem_size_kt = sizeof(typename Problem::KDataType) *
+                                         MakeKTLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        return smem_size_kt;
+    }
+
+    template <typename Problem>
+    __host__ __device__ static constexpr ck::index_t GetSmemSizeV()
+    {
+        constexpr index_t smem_size_v = sizeof(typename Problem::VDataType) *
+                                        MakeVLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        return smem_size_v;
+    }
+
+    template <typename Problem>
+    __host__ __device__ static constexpr ck::index_t GetSmemSizeOGrad()
+    {
+        constexpr index_t smem_size_do =
+            sizeof(typename Problem::OGradDataType) *
+            MakeOGradLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        return smem_size_do;
+    }
+
+    template <typename Problem>
+    __host__ __device__ static constexpr ck::index_t GetSmemSizeOGradT()
+    {
+        constexpr index_t smem_size_dot =
+            sizeof(typename Problem::OGradDataType) *
+            MakeOGradTLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        return smem_size_dot;
+    }
+
+    template <typename Problem>
+    __host__ __device__ static constexpr ck::index_t GetSmemSizeSGrad()
+    {
+        constexpr index_t smem_size_ds =
+            sizeof(typename Problem::GemmDataType) *
+            MakeSGradLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        return smem_size_ds;
+    }
 
     template <typename Problem>
     __host__ __device__ static constexpr ck::index_t GetSmemSize()
     {
-        constexpr index_t smem_size_gemm_q =
-            sizeof(typename Problem::QDataType) *
-            MakeQLdsBlockDescriptor<Problem>().GetElementSpaceSize();
-        constexpr index_t smem_size_gemm_qt =
-            sizeof(typename Problem::QDataType) *
-            MakeQTLdsBlockDescriptor<Problem>().GetElementSpaceSize();
-        constexpr index_t smem_size_gemm_k =
-            sizeof(typename Problem::KDataType) *
-            MakeKLdsBlockDescriptor<Problem>().GetElementSpaceSize();
-        constexpr index_t smem_size_gemm_kt =
-            sizeof(typename Problem::KDataType) *
-            MakeKTLdsBlockDescriptor<Problem>().GetElementSpaceSize();
-        constexpr index_t smem_size_gemm_do =
-            sizeof(typename Problem::OGradDataType) *
-            MakeOGradLdsBlockDescriptor<Problem>().GetElementSpaceSize();
-        constexpr index_t smem_size_gemm_dot =
-            sizeof(typename Problem::OGradDataType) *
-            MakeOGradTLdsBlockDescriptor<Problem>().GetElementSpaceSize();
-        constexpr index_t smem_size_gemm_v =
-            sizeof(typename Problem::VDataType) *
-            MakeVLdsBlockDescriptor<Problem>().GetElementSpaceSize();
-        constexpr index_t smem_size_gemm_ds =
-            sizeof(typename Problem::GemmDataType) *
-            MakeSGradLdsBlockDescriptor<Problem>().GetElementSpaceSize();
+        constexpr index_t smem_size_q = GetSmemSizeQ();
+        if constexpr(Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce)
+        {
+            constexpr index_t smem_size_qt = 0;
+        }
+        else
+        {
+            constexpr index_t smem_size_qt = GetSmemSizeQT();
+        }
 
-        // TODO: consider shuffle requirement
-        return smem_size_gemm_q + smem_size_gemm_qt + smem_size_gemm_k + smem_size_gemm_kt +
-               smem_size_gemm_do + smem_size_gemm_dot + smem_size_gemm_v + smem_size_gemm_ds;
+        constexpr index_t smem_size_k = GetSmemSizeK();
+        if constexpr(Problem::BlockFmhaShape::kKLoadOnce && !Problem::BlockFmhaShape::kKTLoadOnce)
+        {
+            constexpr index_t smem_size_kt = 0;
+        }
+        else
+        {
+            constexpr index_t smem_size_kt = GetSmemSizeKT();
+        }
+
+        if constexpr(Problem::BlockFmhaShape::kVLoadOnce)
+        {
+            constexpr index_t smem_size_v = 0;
+        }
+        else
+        {
+            constexpr index_t smem_size_v = GetSmemSizeV();
+        }
+
+        constexpr index_t smem_size_do = GetSmemSizeOGrad();
+        if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce &&
+                     !Problem::BlockFmhaShape::kOGradTLoadOnce)
+        {
+            constexpr index_t smem_size_dot = 0;
+        }
+        else
+        {
+            constexpr index_t smem_size_dot = GetSmemSizeOGradT();
+        }
+
+        constexpr index_t smem_size_ds = GetSmemSizeSGrad();
+
+        constexpr index_t smem_size = 0;
+
+        if constexpr(Problem::BlockFmhaShape::kQLoadOnce && Problem::BlockFmhaShape::kQTLoadOnce &&
+                     Problem::BlockFmhaShape::kOGradLoadOnce &&
+                     Problem::BlockFmhaShape::kOGradTLoadOnce)
+            smem_size +=
+                smem_size_q + smem_size_qt + smem_size_do + smem_size_dot + smem_size_ds; // 1
+        else if(Problem::BlockFmhaShape::kQLoadOnce && Problem::BlockFmhaShape::kQTLoadOnce &&
+                Problem::BlockFmhaShape::kOGradLoadOnce &&
+                !Problem::BlockFmhaShape::kOGradTLoadOnce)
+            smem_size += smem_size_q + smem_size_qt + smem_size_do + smem_size_ds; // 2
+        else if(Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
+                Problem::BlockFmhaShape::kOGradLoadOnce && Problem::BlockFmhaShape::kOGradTLoadOnce)
+            smem_size += smem_size_q + smem_size_do + smem_size_dot + smem_size_ds; // 3
+        else if(Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
+                Problem::BlockFmhaShape::kOGradLoadOnce &&
+                !Problem::BlockFmhaShape::kOGradTLoadOnce)
+            smem_size += smem_size_q + smem_size_do + smem_size_ds; // 4/10
+        else if(Problem::BlockFmhaShape::kQLoadOnce && Problem::BlockFmhaShape::kQTLoadOnce &&
+                !Problem::BlockFmhaShape::kOGradLoadOnce &&
+                !Problem::BlockFmhaShape::kOGradTLoadOnce)
+            smem_size += smem_size_q + smem_size_qt +
+                         math::max(smem_size_do,
+                                   smem_size_dot,
+                                   smem_size_ds); // 5 TODO: Multiple buffers strategy
+        else if(!Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
+                Problem::BlockFmhaShape::kOGradLoadOnce && Problem::BlockFmhaShape::kOGradTLoadOnce)
+            smem_size += smem_size_do + smem_size_dot +
+                         math::max(smem_size_q,
+                                   smem_size_qt,
+                                   smem_size_ds); // 6 TODO: Multiple buffers strategy
+        else if(Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
+                !Problem::BlockFmhaShape::kOGradLoadOnce &&
+                !Problem::BlockFmhaShape::kOGradTLoadOnce)
+            smem_size +=
+                smem_size_q + math::max(smem_size_do,
+                                        smem_size_dot,
+                                        smem_size_ds); // 7/11 TODO: Multiple buffers strategy
+        else if(!Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
+                Problem::BlockFmhaShape::kOGradLoadOnce &&
+                !Problem::BlockFmhaShape::kOGradTLoadOnce)
+            smem_size +=
+                smem_size_do + math::max(smem_size_q,
+                                         smem_size_qt,
+                                         smem_size_ds); // 8/12 TODO: Multiple buffers strategy
+        else if(!Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
+                !Problem::BlockFmhaShape::kOGradLoadOnce &&
+                !Problem::BlockFmhaShape::kOGradTLoadOnce)
+            smem_size += math::max(smem_size_q,
+                                   smem_size_qt,
+                                   smem_size_do,
+                                   smem_size_dot,
+                                   smem_size_ds); // 9/13 TODO: Multiple buffers strategy
+
+        if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
+            smem_size += (smem_size_k + smem_size_kt); // 1~13
+        else
+            smem_size = math::max(
+                smem_size_k, smem_size_kt, smem_size); // 14/15 TODO: Multiple buffers strategy
+
+        return math::max(smem_size, smem_size_v); // 15
     }
 
     template <typename Problem, typename BlockGemm>
