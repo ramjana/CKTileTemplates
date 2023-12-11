@@ -14,9 +14,9 @@
 #include "ck/library/utility/host_tensor.hpp"
 #include "ck/library/utility/host_tensor_generator.hpp"
 
-#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_default_policy.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_problem.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_dispatcher.hpp"
 #include "ck/tile_program/tile/tile_fmha_bwd_shape.hpp"
 
 #include "reference_batched_gemm.hpp"
@@ -51,6 +51,8 @@ using VGradDataType       = ck::half_t;
 using FmhaBlockTileHdim32  = ck::Sequence< 128, 128,  32,  32,  32,  32,  32,   32,   32>;
 using FmhaBlockTileHdim64  = ck::Sequence<  64, 128,  32,  32,  32,  32,  32,   64,   64>;
 using FmhaBlockTileHdim128 = ck::Sequence<  64, 128,  32,  32,  32,  32,  32,  128,  128>;
+// ###################################| QLoadOnce| QTLoadOnce| KLoadOnce| KTLoadOnce| VLoadOnce| OGradLoadOnce| OGradTLoadOnce|
+using FmhaLoadStrategy  = ck::Sequence<     false,      false,      true,       true,      true,         false,          false>;
 // clang-format on
 using FmhaBlockWarps0 = ck::Sequence<1, 4, 1>;
 using FmhaBlockWarps1 = ck::Sequence<4, 1, 1>;
@@ -62,6 +64,7 @@ using FmhaWarpTile1   = ck::Sequence<16, 16, 16>;
 //       G1&G3 -> GdKV
 //       G4    -> GdQ
 using FmhaShapeHDim32 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim32,
+                                                           FmhaLoadStrategy,
                                                            FmhaBlockWarps0,
                                                            FmhaWarpTile0,
                                                            FmhaBlockWarps1,
@@ -73,6 +76,7 @@ using FmhaShapeHDim32 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim32,
                                                            FmhaBlockWarps1,
                                                            FmhaWarpTile0>;
 using FmhaShapeHDim64 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim64,
+                                                           FmhaLoadStrategy,
                                                            FmhaBlockWarps0,
                                                            FmhaWarpTile0,
                                                            FmhaBlockWarps1,
@@ -120,6 +124,15 @@ using FmhaBwdPipelineProblemHDim64 =
                                                          VGradDataType,
                                                          256, // BlockSize
                                                          FmhaShapeHDim64>;
+
+using BlockFmhaBwdPipeline =
+    ck::tile_program::block::BlockFmhaBwdPipelineDispatcher<FmhaLoadStrategy::At(Number<0>{}),
+                                                            FmhaLoadStrategy::At(Number<1>{}),
+                                                            FmhaLoadStrategy::At(Number<2>{}),
+                                                            FmhaLoadStrategy::At(Number<3>{}),
+                                                            FmhaLoadStrategy::At(Number<4>{}),
+                                                            FmhaLoadStrategy::At(Number<5>{}),
+                                                            FmhaLoadStrategy::At(Number<6>{})>;
 
 using FmhaBwdPipelineHDim32 =
     ck::tile_program::block::BlockFmhaBwdPipeline<FmhaBwdPipelineProblemHDim32>;

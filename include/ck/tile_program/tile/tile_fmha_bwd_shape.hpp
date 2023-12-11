@@ -9,7 +9,8 @@
 namespace ck {
 namespace tile_program {
 
-template <typename BlockTile_, // Sequence<...
+template <typename BlockTile_,    // Sequence<...
+          typename LoadStrategy_, // Sequence<...
           typename Gemm0BlockWarps_,
           typename Gemm0WarpTile_,
           typename Gemm1BlockWarps_,
@@ -23,6 +24,7 @@ template <typename BlockTile_, // Sequence<...
 struct TileFmhaBwdShape
 {
     using BlockTile       = remove_cvref_t<BlockTile_>;
+    using LoadStrategy    = remove_cvref_t<LoadStrategy_>;
     using Gemm0BlockWarps = remove_cvref_t<Gemm0BlockWarps_>;
     using Gemm0WarpTile   = remove_cvref_t<Gemm0WarpTile_>;
     using Gemm1BlockWarps = remove_cvref_t<Gemm1BlockWarps_>;
@@ -50,6 +52,14 @@ struct TileFmhaBwdShape
                                     // K/K^T at once
     static constexpr index_t kVHeaddim = BlockTile::At(Number<8>{}); // V headdim, used for pipeline
                                                                      // that need load V at once
+
+    static constexpr bool kQLoadOnce      = LoadStrategy::At(Number<0>{});
+    static constexpr bool kQTLoadOnce     = LoadStrategy::At(Number<1>{});
+    static constexpr bool kKLoadOnce      = LoadStrategy::At(Number<2>{});
+    static constexpr bool kKTLoadOnce     = LoadStrategy::At(Number<3>{});
+    static constexpr bool kVLoadOnce      = LoadStrategy::At(Number<4>{});
+    static constexpr bool kOGradLoadOnce  = LoadStrategy::At(Number<5>{});
+    static constexpr bool kOGradTLoadOnce = LoadStrategy::At(Number<6>{});
 };
 
 } // namespace tile_program

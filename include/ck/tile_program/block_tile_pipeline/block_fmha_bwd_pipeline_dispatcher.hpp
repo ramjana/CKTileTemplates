@@ -4,7 +4,7 @@
 #pragma once
 
 #include "ck/utility/common_header.hpp"
-#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_v9.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -40,13 +40,13 @@ template<> struct BlockFmhaBwdPipelineDispatcher<     false,      false,     fal
 // clang-format o
 } // namespace impl
 
-template <bool QLoadOnce,
-          bool QTLoadOnce,
-          bool KLoadOnce,
-          bool KTLoadOnce,
-          bool VLoadOnce,
-          bool OGradLoadOnce,
-          bool OGradTLoadOnce>
+template <bool QLoadOnce,      // if q load whole block length (qkhdim) to LDS at once
+          bool QTLoadOnce,     // if q^t load whole block length (qkhdim) to LDS at once
+          bool KLoadOnce,      // if k load whole block length (qkhdim) to LDS at once
+          bool KTLoadOnce,     // if k^t load whole block length (qkhdim) to LDS at once
+          bool VLoadOnce,      // if do load whole block length (vhdim) to LDS at once
+          bool OGradLoadOnce,  // if do^t load whole block length (vhdim) to LDS at once
+          bool OGradTLoadOnce> // if v load whole block length (vhdim) to Vgprs at once
 using BlockFmhaBwdPipelineDispatcher = typename impl::
     BlockFmhaBwdPipelineDispatcher<QLoadOnce, QTLoadOnce, KLoadOnce, KTLoadOnce, VLoadOnce, OGradLoadOnce, OGradTLoadOnce>::Type;
 

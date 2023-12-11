@@ -15,7 +15,7 @@
 #include "ck/tile_program/tile/tile_gemm_shape.hpp"
 #include "ck/tile_program/tile/slice_tile.hpp"
 #include "ck/tile_program/warp_tile/warp_gemm.hpp"
-#include "ck/tile_program/block_tile_pipeline/block_fmha_pipeline_qr_ks_vs_default_policy.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_default_policy.hpp"
 #include "ck/tile_program/block_tile/block_reduce.hpp"
 #include "ck/tile_program/tile/shuffle_distributed_tensor.hpp"
 
@@ -25,7 +25,7 @@ namespace block {
 
 // This pipeline is qkv all located in LDS
 template <typename Problem, typename Policy = BlockFmhaBwdPipelineDefaultPolicy>
-struct BlockFmhaBwdPipeline
+struct BlockFmhaBwdPipelineV9
 {
     using QDataType           = remove_cvref_t<typename Problem::QDataType>;
     using KDataType           = remove_cvref_t<typename Problem::KDataType>;
@@ -43,22 +43,16 @@ struct BlockFmhaBwdPipeline
     // using VGradDataType = remove_cvref_t<typename Problem::VGradDataType>;
 
     using BlockFmhaShape                  = remove_cvref_t<typename Problem::BlockFmhaShape>;
-    static constexpr bool kQLoadOnce      = true; // if q load whole block length (hdim) at once
-    static constexpr bool kQTLoadOnce     = true; // if q^t load whole block length (hdim) at once
-    static constexpr bool kKLoadOnce      = true; // if k load whole block length (hdim) at once
-    static constexpr bool kKTLoadOnce     = true; // if k^t load whole block length (hdim) at once
-    static constexpr bool kOGradLoadOnce  = true; // if do load whole block length (hdim) at once
-    static constexpr bool kOGradTLoadOnce = true; // if do^t load whole block length (hdim) at once
-    static constexpr bool kVLoadOnce      = true; // if v load whole block length (hdim) at once
 
     static constexpr index_t kBlockSize = Problem::kBlockSize;
 
     static constexpr index_t kM0        = BlockFmhaShape::kM0;
     static constexpr index_t kN0        = BlockFmhaShape::kN0;
     static constexpr index_t kK0        = BlockFmhaShape::kK0;
-    static constexpr index_t kN1        = BlockFmhaShape::kN1;
     static constexpr index_t kK1        = BlockFmhaShape::kK1;
     static constexpr index_t kK2        = BlockFmhaShape::kK2;
+    static constexpr index_t kK3        = BlockFmhaShape::kK3;
+    static constexpr index_t kK4        = BlockFmhaShape::kK4;
     static constexpr index_t kQKHeaddim = BlockFmhaShape::kQKHeaddim;
     static constexpr index_t kVHeaddim  = BlockFmhaShape::kVHeaddim;
 
@@ -129,24 +123,23 @@ struct BlockFmhaBwdPipeline
 
         // Block GEMM
         constexpr auto gemm_0 = Policy::template GetQKBlockGemm<Problem>();
-        constexpr auto gemm_1 = Policy::template GetKVBlockGemm<Problem>();
+        constexpr auto gemm_1 = Policy::template GetPTOGradBlockGemm<Problem>();
+        constexpr auto gemm_2 = Policy::template GetOGradVTBlockGemm<Problem>();
+        constexpr auto gemm_3 = Policy::template GetSGradTQBlockGemm<Problem>();
+        constexpr auto gemm_4 = Policy::template GetSGradKBlockGemm<Problem>();
 
-        auto q_dram_window = make_tile_window(
-            q_dram_block_window_tmp.GetBottomTensorView(),
-            q_dram_block_window_tmp.GetWindowLengths(),
-            q_dram_block_window_tmp.GetWindowOrigin(),
-            Policy::template MakeQDramTileDistribution<Problem, decltype(gemm_0)>());
+        auto v_dram_window = make_tile_window(
+            v_dram_block_window_tmp.GetBottomTensorView(),
+            v_dram_block_window_tmp.GetWindowLengths(),
+            v_dram_block_window_tmp.GetWindowOrigin(),
+            Policy::template MakeVDramTileDistribution<Problem, decltype(gemm_2)>());
 
-        auto q = load_tile(q_dram_window); // persistent q register tile
+        auto v = load_tile(v_dram_window); // persistent v register tile
 
         auto s_acc = decltype(gemm_0(get_slice_tile(tile_elementwise_in(q_element_func, q),
                                                     Sequence<0, 0>{},
                                                     Sequence<kM0, kK0>{}),
                                      k_lds_window)){};
-
-        // reduction function for softmax
-        const auto f_max = [](auto e0, auto e1) { return max(e0, e1); };
-        const auto f_sum = [](auto e0, auto e1) { return e0 + e1; };
 
         // infer Sacc, S, P, M, L, Oacc type
         using SBlockTileType =
