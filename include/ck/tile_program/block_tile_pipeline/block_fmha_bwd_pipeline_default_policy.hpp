@@ -628,8 +628,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         constexpr index_t kBlockSize = Problem::kBlockSize;
 
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK0; // Problem::BlockFmhaShape::kVHeaddim;
+        if constexpr(Problem::BlockFmhaShape::kQLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
+        }
 
         constexpr index_t K1 = 16 / sizeof(QDataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -655,8 +661,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         constexpr index_t kBlockSize = Problem::kBlockSize;
 
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK0; // Problem::BlockFmhaShape::kQKHeaddim;
+        if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
+        }
 
         constexpr index_t K1 = 16 / sizeof(KDataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -682,8 +694,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         constexpr index_t kBlockSize = Problem::kBlockSize;
 
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK0; // Problem::BlockFmhaShape::kVHeaddim;
+        if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK2;
+        }
 
         constexpr index_t K1 = 16 / sizeof(OGradDataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -708,8 +726,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK3; // Problem::BlockFmhaShape::kM0;
+        if constexpr(Problem::BlockFmhaShape::kQTLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK3;
+        }
 
         constexpr index_t N1 = GetTransposedVectorloadQ<Problem>();
         constexpr index_t N0 = kNPerBlock / N1; // P
@@ -738,8 +762,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     {
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK3; // Problem::BlockFmhaShape::kM0;
+        if constexpr(Problem::BlockFmhaShape::kQTLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK3;
+        }
 
         constexpr index_t N1           = GetTransposedVectorloadQ<Problem>();
         constexpr index_t N0           = kNPerBlock / N1;
@@ -768,8 +798,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK4; // Problem::BlockFmhaShape::kN0;
+        if constexpr(Problem::BlockFmhaShape::kKTLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kN0;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK4;
+        }
 
         constexpr index_t N1 = GetTransposedVectorloadK<Problem>();
         constexpr index_t N0 = kNPerBlock / N1; // P
@@ -798,8 +834,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     {
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK4; // Problem::BlockFmhaShape::kN0;
+        if constexpr(Problem::BlockFmhaShape::kKTLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kN0;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK4;
+        }
 
         constexpr index_t N1           = GetTransposedVectorloadK<Problem>();
         constexpr index_t N0           = kNPerBlock / N1;
@@ -828,8 +870,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK1; // Problem::BlockFmhaShape::kM0;
+        if constexpr(Problem::BlockFmhaShape::kOGradTLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
+        }
 
         constexpr index_t N1 = GetTransposedVectorloadOGrad<Problem>();
         constexpr index_t N0 = kNPerBlock / N1; // P
@@ -858,8 +906,14 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     {
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-        constexpr index_t kKPerBlock =
-            Problem::BlockFmhaShape::kK1; // Problem::BlockFmhaShape::kM0;
+        if constexpr(Problem::BlockFmhaShape::kOGradTLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
+        }
 
         constexpr index_t N1           = GetTransposedVectorloadOGrad<Problem>();
         constexpr index_t N0           = kNPerBlock / N1;
@@ -908,7 +962,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     }
 
     // template <typename Problem>
-    // __host__ __device__ static constexpr auto GetQKTBlockGemm()
+    // __host__ __device__ static constexpr auto GetQKBlockGemm()
     // {
     //     using BlockGemmProblem =
     //         BlockGemmPipelineProblem<typename Problem::QDataType,
@@ -936,7 +990,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     // }
 
     template <typename Problem>
-    __host__ __device__ static constexpr auto GetPTOGradBlockGemm()
+    __host__ __device__ static constexpr auto GetPTOGradTBlockGemm()
     {
         using BlockGemmProblem =
             BlockGemmPipelineProblem<typename Problem::GemmDataType,
@@ -965,7 +1019,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     }
 
     template <typename Problem>
-    __host__ __device__ static constexpr auto GetOGradVTBlockGemm()
+    __host__ __device__ static constexpr auto GetOGradVBlockGemm()
     {
         using BlockGemmProblem =
             BlockGemmPipelineProblem<typename Problem::OGradDataType,
@@ -991,7 +1045,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     }
 
     // template <typename Problem>
-    // __host__ __device__ static constexpr auto GetOGradVTBlockGemm()
+    // __host__ __device__ static constexpr auto GetOGradVBlockGemm()
     // {
     //     using BlockGemmProblem =
     //         BlockGemmPipelineProblem<typename Problem::OGradDataType,
@@ -1018,7 +1072,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     // }
 
     template <typename Problem>
-    __host__ __device__ static constexpr auto GetSGradTQBlockGemm()
+    __host__ __device__ static constexpr auto GetSGradTQTBlockGemm()
     {
         using BlockGemmProblem =
             BlockGemmPipelineProblem<typename Problem::GemmDataType,
@@ -1047,7 +1101,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     }
 
     template <typename Problem>
-    __host__ __device__ static constexpr auto GetSGradKBlockGemm()
+    __host__ __device__ static constexpr auto GetSGradKTBlockGemm()
     {
         using BlockGemmProblem =
             BlockGemmPipelineProblem<typename Problem::GemmDataType,

@@ -265,7 +265,7 @@ struct FmhaBwdKernel
                                                        Number<FmhaPipeline::kM0>{});
                                  else
                                      return make_tuple(Number<FmhaPipeline::kQKHeaddim>{},
-                                                       Number<FmhaPipeline::kK1>{});
+                                                       Number<FmhaPipeline::kK3>{});
                              }(),
                              {0, 0});
 
@@ -288,7 +288,7 @@ struct FmhaBwdKernel
                                                        Number<FmhaPipeline::kN0>{});
                                  else
                                      return make_tuple(Number<FmhaPipeline::kQKHeaddim>{},
-                                                       Number<FmhaPipeline::kK2>{});
+                                                       Number<FmhaPipeline::kK4>{});
                              }(),
                              {0, i_n0});
 
@@ -299,7 +299,7 @@ struct FmhaBwdKernel
                     return make_tuple(Number<FmhaPipeline::kN0>{},
                                       Number<FmhaPipeline::kVHeaddim>{});
                 else
-                    return make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kK0>{});
+                    return make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kK2>{});
             }(),
             {i_n0, 0});
 
@@ -310,7 +310,7 @@ struct FmhaBwdKernel
                     return make_tuple(Number<FmhaPipeline::kM0>{},
                                       Number<FmhaPipeline::kVHeaddim>{});
                 else
-                    return make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kK0>{});
+                    return make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kK2>{});
             }(),
             {0, 0});
 
@@ -343,14 +343,11 @@ struct FmhaBwdKernel
                                                        v_dram_window,
                                                        do_dram_window,
                                                        dot_dram_window,
-                                                       dq_dram_window,
                                                        lse_dram_window,
                                                        d_dram_window,
+                                                       dq_dram_window,
                                                        kargs.scale,
                                                        kargs.seqlen_q / FmhaPipeline::kM0,
-                                                       FmhaPipeline::kQKHeaddim / FmhaPipeline::kK0,
-                                                       FmhaPipeline::kM0 / FmhaPipeline::kK1,
-                                                       FmhaPipeline::kN0 / FmhaPipeline::kK2,
                                                        smem_ptr);
 
         const auto dk_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
