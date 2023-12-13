@@ -23,7 +23,6 @@ namespace ck {
 namespace tile_program {
 namespace block {
 
-// This pipeline is qkv all located in LDS
 template <typename Problem, typename Policy = BlockFmhaBwdPipelineDefaultPolicy>
 struct BlockFmhaBwdPipelineV9
 {
@@ -34,15 +33,13 @@ struct BlockFmhaBwdPipelineV9
     using LSEDataType         = remove_cvref_t<typename Problem::LSEDataType>;
     using AccDataType         = remove_cvref_t<typename Problem::AccDataType>;
     using SMPLComputeDataType = remove_cvref_t<typename Problem::SMPLComputeDataType>;
-    // using DDataType        = remove_cvref_t<typename Problem::DDataType>;
+    using DDataType           = remove_cvref_t<typename Problem::DDataType>;
     // using ZDataType        = remove_cvref_t<typename Problem::ZDataType>;
     using ODataType     = remove_cvref_t<typename Problem::ODataType>;
     using OGradDataType = remove_cvref_t<typename Problem::OGradDataType>;
     using QGradDataType = remove_cvref_t<typename Problem::QGradDataType>;
-    // using KGradDataType = remove_cvref_t<typename Problem::KGradDataType>;
-    // using VGradDataType = remove_cvref_t<typename Problem::VGradDataType>;
 
-    using BlockFmhaShape                  = remove_cvref_t<typename Problem::BlockFmhaShape>;
+    using BlockFmhaShape = remove_cvref_t<typename Problem::BlockFmhaShape>;
 
     static constexpr index_t kBlockSize = Problem::kBlockSize;
 
@@ -56,90 +53,150 @@ struct BlockFmhaBwdPipelineV9
     static constexpr index_t kQKHeaddim = BlockFmhaShape::kQKHeaddim;
     static constexpr index_t kVHeaddim  = BlockFmhaShape::kVHeaddim;
 
+    static constexpr bool kQLoadOnce      = BlockFmhaShape::kQLoadOnce;
+    static constexpr bool kQTLoadOnce     = BlockFmhaShape::kQTLoadOnce;
+    static constexpr bool kKLoadOnce      = BlockFmhaShape::kKLoadOnce;
+    static constexpr bool kKTLoadOnce     = BlockFmhaShape::kKTLoadOnce;
+    static constexpr bool kVLoadOnce      = BlockFmhaShape::kVLoadOnce;
+    static constexpr bool kOGradLoadOnce  = BlockFmhaShape::kOGradLoadOnce;
+    static constexpr bool kOGradTLoadOnce = BlockFmhaShape::kOGradTLoadOnce;
+
     __host__ __device__ static constexpr ck::index_t GetSmemSize()
     {
         return Policy::template GetSmemSize<Problem>();
     }
 
     template <typename QDramBlockWindowTmp,
+              typename QTDramBlockWindowTmp,
               typename KDramBlockWindowTmp,
+              typename KTDramBlockWindowTmp,
               typename VDramBlockWindowTmp,
-              typename ODramBlockWindowTmp,
-              typename LSEDramBlockWindowTmp,
               typename OGradDramBlockWindowTmp,
-              typename QGradDramBlockWindowTmp,
-              typename QElementFunction,
-              typename KElementFunction,
-              typename VElementFunction>
-    __host__ __device__ auto
-    operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
-               const QElementFunction& q_element_func,
-               const KDramBlockWindowTmp& k_dram_block_window_tmp, // N0*K0 tile
-               const KElementFunction& k_element_func,
-               const VDramBlockWindowTmp& v_dram_block_window_tmp, // N1*K1 tile
-               const VElementFunction& v_element_func,
-               const ODramBlockWindowTmp& o_dram_block_window_tmp,      // M0*N1 tile
-               const LSEDramBlockWindowTmp& lse_dram_block_window_tmp,  // M0 tile
-               const OGradDramBlockWindowTmp& do_dram_block_window_tmp, // M0*N1 tile
-               const QDramBlockWindowTmp& dq_dram_block_window_tmp,     // M0*K0 tile
-               float scale,
-               index_t num_total_loop,
-               index_t /*num_sub_loop_qk*/, // in this pipeline, the 1st gemm loop must be static
-               void* smem_ptr) const
+              typename OGradTDramBlockWindowTmp,
+              typename LSEDramBlockWindowTmp,
+              typename DDramBlockWindowTmp,
+              typename QGradDramBlockWindowTmp>
+    __host__ __device__ auto operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,
+                                        const QTDramBlockWindowTmp& qt_dram_block_window_tmp,
+                                        const KDramBlockWindowTmp& k_dram_block_window_tmp,
+                                        const KTDramBlockWindowTmp& kt_dram_block_window_tmp,
+                                        const VDramBlockWindowTmp& v_dram_block_window_tmp,
+                                        const OGradDramBlockWindowTmp& do_dram_block_window_tmp,
+                                        const OGradTDramBlockWindowTmp& dot_dram_block_window_tmp,
+                                        const LSEDramBlockWindowTmp& lse_dram_block_window_tmp,
+                                        const DDramBlockWindowTmp& d_dram_block_window_tmp,
+                                        const QGradDramBlockWindowTmp& dq_dram_block_window_tmp,
+                                        float scale,
+                                        index_t num_total_loop,
+                                        void* smem_ptr) const
     {
         static_assert(
             is_same_v<QDataType, remove_cvref_t<typename QDramBlockWindowTmp::DataType>> &&
+                is_same_v<QDataType, remove_cvref_t<typename QTDramBlockWindowTmp::DataType>> &&
                 is_same_v<KDataType, remove_cvref_t<typename KDramBlockWindowTmp::DataType>> &&
+                is_same_v<KDataType, remove_cvref_t<typename KTDramBlockWindowTmp::DataType>> &&
                 is_same_v<VDataType, remove_cvref_t<typename VDramBlockWindowTmp::DataType>> &&
-                is_same_v<ODataType, remove_cvref_t<typename ODramBlockWindowTmp::DataType>> &&
-                is_same_v<LSEDataType, remove_cvref_t<typename LSEDramBlockWindowTmp::DataType>> &&
                 is_same_v<OGradDataType,
                           remove_cvref_t<typename OGradDramBlockWindowTmp::DataType>> &&
+                is_same_v<OGradDataType,
+                          remove_cvref_t<typename OGradTDramBlockWindowTmp::DataType>> &&
+                is_same_v<LSEDataType, remove_cvref_t<typename LSEDramBlockWindowTmp::DataType>> &&
+                is_same_v<DDataType, remove_cvref_t<typename DDramBlockWindowTmp::DataType>> &&
                 is_same_v<QGradDataType,
                           remove_cvref_t<typename QGradDramBlockWindowTmp::DataType>>,
             "wrong!");
 
         static_assert(kM0 == QDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
+                          kM0 == QTDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}] &&
                           kN0 == KDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
-                          kK0 == KDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}] &&
-                          kN1 == VDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
-                          kK1 == VDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}],
+                          kN0 == KTDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}] &&
+                          kN0 == VDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
+                          kM0 == OGradDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
+                          kM0 == OGradTDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}] &&
+                          kM0 == LSEDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
+                          kM0 == DDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
+                          kM0 == QGradDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}],
                       "wrong!");
 
+        // Q tile in LDS
+        QDataType* q_lds_ptr = static_cast<QDataType*>(static_cast<void*>(
+            static_cast<char*>(smem_ptr) + Policy::template GetSmemSizeK<Problem>() +
+            Policy::template GetSmemSizeKT<Problem>()));
+        auto q_lds           = make_tensor_view<AddressSpaceEnum::Lds>(
+            q_lds_ptr, Policy::template MakeQLdsBlockDescriptor<Problem>());
+        auto q_lds_window =
+            make_tile_window(q_lds, make_tuple(Number<kM0>{}, Number<kK0>{}), {0, 0});
+
+        // QT tile in LDS
+        QDataType* qt_lds_ptr = static_cast<QDataType*>(static_cast<void*>(
+            static_cast<char*>(smem_ptr) + Policy::template GetSmemSizeK<Problem>() +
+            Policy::template GetSmemSizeKT<Problem>()));
+        auto qt_lds           = make_tensor_view<AddressSpaceEnum::Lds>(
+            qt_lds_ptr, Policy::template MakeQTLdsBlockDescriptor<Problem>());
+        auto qt_lds_window =
+            make_tile_window(qt_lds, make_tuple(Number<kQKHeaddim>{}, Number<kK3>{}), {0, 0});
+
         // K tile in LDS
-        KDataType* k_lds_ptr = static_cast<KDataType*>(static_cast<void*>(
-            static_cast<char*>(smem_ptr) + Policy::template GetSmemSizeQ<Problem>()));
-        auto k_lds           = make_tensor_view<AddressSpaceEnum::Lds>(
-            k_lds_ptr, Policy::template MakeKLdsBlockDescriptor<Problem>());
+        auto k_lds = make_tensor_view<AddressSpaceEnum::Lds>(
+            reinterpret_cast<KDataType*>(smem_ptr),
+            Policy::template MakeKLdsBlockDescriptor<Problem>());
         auto k_lds_window =
             make_tile_window(k_lds, make_tuple(Number<kN0>{}, Number<kK0>{}), {0, 0});
 
-        // V tile in LDS
-        auto v_lds = make_tensor_view<AddressSpaceEnum::Lds>(
-            reinterpret_cast<VDataType*>(smem_ptr),
-            Policy::template MakeVLdsBlockDescriptor<Problem>());
-        auto v_lds_window =
-            make_tile_window(v_lds, make_tuple(Number<kN1>{}, Number<kK1>{}), {0, 0});
+        // KT tile in LDS
+        KDataType* kt_lds_ptr = static_cast<KDataType*>(static_cast<void*>(
+            static_cast<char*>(smem_ptr) + Policy::template GetSmemSizeK<Problem>()));
+        auto kt_lds           = make_tensor_view<AddressSpaceEnum::Lds>(
+            kt_lds_ptr, Policy::template MakeKTLdsBlockDescriptor<Problem>());
+        auto kt_lds_window =
+            make_tile_window(kt_lds, make_tuple(Number<kQKHeaddim>{}, Number<kK4>{}), {0, 0});
+
+        // OGrad tile in LDS
+        OGradDataType* do_lds_ptr = static_cast<OGradDataType*>(static_cast<void*>(
+            static_cast<char*>(smem_ptr) + Policy::template GetSmemSizeK<Problem>() +
+            Policy::template GetSmemSizeKT<Problem>()));
+        auto do_lds               = make_tensor_view<AddressSpaceEnum::Lds>(
+            do_lds_ptr, Policy::template MakeOGradLdsBlockDescriptor<Problem>());
+        auto do_lds_window =
+            make_tile_window(do_lds, make_tuple(Number<kM0>{}, Number<kK2>{}), {0, 0});
+
+        // OGradT tile in LDS
+        OGradDataType* dot_lds_ptr = static_cast<OGradDataType*>(static_cast<void*>(
+            static_cast<char*>(smem_ptr) + Policy::template GetSmemSizeK<Problem>() +
+            Policy::template GetSmemSizeKT<Problem>()));
+        auto dot_lds               = make_tensor_view<AddressSpaceEnum::Lds>(
+            dot_lds_ptr, Policy::template MakeOGradTLdsBlockDescriptor<Problem>());
+        auto dot_lds_window =
+            make_tile_window(dot_lds, make_tuple(Number<kVHeaddim>{}, Number<kK1>{}), {0, 0});
 
         // Block GEMM
         constexpr auto gemm_0 = Policy::template GetQKBlockGemm<Problem>();
-        constexpr auto gemm_1 = Policy::template GetPTOGradBlockGemm<Problem>();
-        constexpr auto gemm_2 = Policy::template GetOGradVTBlockGemm<Problem>();
-        constexpr auto gemm_3 = Policy::template GetSGradTQBlockGemm<Problem>();
-        constexpr auto gemm_4 = Policy::template GetSGradKBlockGemm<Problem>();
+        constexpr auto gemm_1 = Policy::template GetPTOGradTBlockGemm<Problem>();
+        constexpr auto gemm_2 = Policy::template GetOGradVBlockGemm<Problem>();
+        constexpr auto gemm_3 = Policy::template GetSGradTQTBlockGemm<Problem>();
+        constexpr auto gemm_4 = Policy::template GetSGradKTBlockGemm<Problem>();
 
         auto v_dram_window = make_tile_window(
             v_dram_block_window_tmp.GetBottomTensorView(),
             v_dram_block_window_tmp.GetWindowLengths(),
             v_dram_block_window_tmp.GetWindowOrigin(),
-            Policy::template MakeVDramTileDistribution<Problem, decltype(gemm_2)>());
+            Policy::template MakeVDramRegStatTileDistribution<Problem, decltype(gemm_2)>());
 
         auto v = load_tile(v_dram_window); // persistent v register tile
 
-        auto s_acc = decltype(gemm_0(get_slice_tile(tile_elementwise_in(q_element_func, q),
-                                                    Sequence<0, 0>{},
-                                                    Sequence<kM0, kK0>{}),
-                                     k_lds_window)){};
+        auto lse_dram_window = make_tile_window(
+            lse_dram_block_window_tmp.GetBottomTensorView(),
+            lse_dram_block_window_tmp.GetWindowLengths(),
+            lse_dram_block_window_tmp.GetWindowOrigin(),
+            Policy::template MakeLSEDDramTileDistribution<Problem, decltype(gemm_0)>());
+
+        auto d_dram_window = make_tile_window(
+            d_dram_block_window_tmp.GetBottomTensorView(),
+            d_dram_block_window_tmp.GetWindowLengths(),
+            d_dram_block_window_tmp.GetWindowOrigin(),
+            Policy::template MakeLSEDDramTileDistribution<Problem, decltype(gemm_0)>());
+
+        auto st_acc = decltype(gemm_0(q_lds_window, k_lds_window)){};
 
         // infer Sacc, S, P, M, L, Oacc type
         using SBlockTileType =
@@ -362,28 +419,42 @@ struct BlockFmhaBwdPipelineV9
     }
 
     template <typename QDramBlockWindowTmp,
+              typename QTDramBlockWindowTmp,
               typename KDramBlockWindowTmp,
-              typename VDramBlockWindowTmp>
-    __host__ __device__ auto
-    operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
-               const KDramBlockWindowTmp& k_dram_block_window_tmp, // N0*K0 tile
-               const VDramBlockWindowTmp& v_dram_block_window_tmp, // N1*K1 tile
-               float scale,
-               index_t num_total_loop,
-               index_t num_sub_loop_qk,
-               void* smem_ptr) const
+              typename KTDramBlockWindowTmp,
+              typename VDramBlockWindowTmp,
+              typename OGradDramBlockWindowTmp,
+              typename OGradTDramBlockWindowTmp,
+              typename LSEDramBlockWindowTmp,
+              typename DDramBlockWindowTmp,
+              typename QGradDramBlockWindowTmp>
+    __host__ __device__ auto operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,
+                                        const QTDramBlockWindowTmp& qt_dram_block_window_tmp,
+                                        const KDramBlockWindowTmp& k_dram_block_window_tmp,
+                                        const KTDramBlockWindowTmp& kt_dram_block_window_tmp,
+                                        const VDramBlockWindowTmp& v_dram_block_window_tmp,
+                                        const OGradDramBlockWindowTmp& do_dram_block_window_tmp,
+                                        const OGradTDramBlockWindowTmp& dot_dram_block_window_tmp,
+                                        const LSEDramBlockWindowTmp& lse_dram_block_window_tmp,
+                                        const DDramBlockWindowTmp& d_dram_block_window_tmp,
+                                        const QGradDramBlockWindowTmp& dq_dram_block_window_tmp,
+                                        float scale,
+                                        index_t num_total_loop,
+                                        void* smem_ptr) const
     {
-        return operator()(
-            q_dram_block_window_tmp,
-            [](const QDataType& x) { return x; },
-            k_dram_block_window_tmp,
-            [](const KDataType& x) { return x; },
-            v_dram_block_window_tmp,
-            [](const VDataType& x) { return x; },
-            scale,
-            num_total_loop,
-            num_sub_loop_qk,
-            smem_ptr);
+        return operator()(q_dram_block_window_tmp,
+                          qt_dram_block_window_tmp,
+                          k_dram_block_window_tmp,
+                          kt_dram_block_window_tmp,
+                          v_dram_block_window_tmp,
+                          do_dram_block_window_tmp,
+                          dot_dram_block_window_tmp,
+                          lse_dram_block_window_tmp,
+                          d_dram_block_window_tmp,
+                          dq_dram_block_window_tmp,
+                          scale,
+                          num_total_loop,
+                          smem_ptr);
     }
 };
 
