@@ -449,12 +449,11 @@ struct DeviceGroupedConvBwdWeight_Wmma_CShuffle
     using DsGridDesc_MBlock_MPerBlock_NBlock_NPerBlock =
         decltype(GridwiseGemm::MakeDsGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(Tuple<>{}));
 
-    using CGridDesc_MBlock_MPerBlock_NBlock_NPerBlock =
-        decltype(GridwiseGemm::MakeEGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
-            CGridDesc_M_N{}));
+    using CGridDesc_MBlock_MPerBlock_NBlock_NPerBlock = decltype(
+        GridwiseGemm::MakeEGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(CGridDesc_M_N{}));
 
-    using Block2CTileMap = decltype(GridwiseGemm::MakeDefaultBlock2CTileMap(
-        CGridDesc_M_N{}, I1 /* M01 */, I1 /* N01 */));
+    using Block2CTileMap = decltype(
+        GridwiseGemm::MakeDefaultBlock2CTileMap(CGridDesc_M_N{}, I1 /* M01 */, I1 /* N01 */));
 
     struct Argument : public BaseArgument
     {

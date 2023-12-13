@@ -291,31 +291,24 @@ struct DeviceGemmMultipleABD_Xdl_CShuffle : public DeviceGemmMultipleABD<AsLayou
         PipelineVer>;
 
     // desc for problem definition
-    using AsGridDesc_M_K =
-        remove_cvref_t<decltype(GridwiseGemm::template MakeAsGridDescriptor_M_K<AsLayout, GemmSpec>(
-            {}, {}, {}))>;
-    using BsGridDesc_N_K =
-        remove_cvref_t<decltype(GridwiseGemm::template MakeBsGridDescriptor_N_K<BsLayout, GemmSpec>(
-            {}, {}, {}))>;
-    using DsGridDesc_M_N =
-        remove_cvref_t<decltype(GridwiseGemm::template MakeDsGridDescriptor_M_N<DsLayout, GemmSpec>(
-            {}, {}, {}))>;
+    using AsGridDesc_M_K = remove_cvref_t<decltype(
+        GridwiseGemm::template MakeAsGridDescriptor_M_K<AsLayout, GemmSpec>({}, {}, {}))>;
+    using BsGridDesc_N_K = remove_cvref_t<decltype(
+        GridwiseGemm::template MakeBsGridDescriptor_N_K<BsLayout, GemmSpec>({}, {}, {}))>;
+    using DsGridDesc_M_N = remove_cvref_t<decltype(
+        GridwiseGemm::template MakeDsGridDescriptor_M_N<DsLayout, GemmSpec>({}, {}, {}))>;
     using EGridDesc_M_N =
         decltype(GridwiseGemm::template MakeEGridDescriptor_M_N<ELayout, GemmSpec>(1, 1, 1));
 
     // desc for blockwise copy
-    using AsGridDesc_AK0_M_AK1 =
-        remove_cvref_t<decltype(GridwiseGemm::MakeDefaultAsGridDescriptor_AK0_M_AK1(
-            AsGridDesc_M_K{}))>;
-    using BsGridDesc_BK0_N_BK1 =
-        remove_cvref_t<decltype(GridwiseGemm::MakeDefaultBsGridDescriptor_BK0_N_BK1(
-            BsGridDesc_N_K{}))>;
-    using DsGridDesc_MBlock_MPerBlock_NBlock_NPerBlock = remove_cvref_t<
-        decltype(GridwiseGemm::MakeDsGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
-            DsGridDesc_M_N{}))>;
-    using EGridDesc_MBlock_MPerBlock_NBlock_NPerBlock =
-        remove_cvref_t<decltype(GridwiseGemm::MakeEGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
-            EGridDesc_M_N{}))>;
+    using AsGridDesc_AK0_M_AK1                         = remove_cvref_t<decltype(
+        GridwiseGemm::MakeDefaultAsGridDescriptor_AK0_M_AK1(AsGridDesc_M_K{}))>;
+    using BsGridDesc_BK0_N_BK1                         = remove_cvref_t<decltype(
+        GridwiseGemm::MakeDefaultBsGridDescriptor_BK0_N_BK1(BsGridDesc_N_K{}))>;
+    using DsGridDesc_MBlock_MPerBlock_NBlock_NPerBlock = remove_cvref_t<decltype(
+        GridwiseGemm::MakeDsGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(DsGridDesc_M_N{}))>;
+    using EGridDesc_MBlock_MPerBlock_NBlock_NPerBlock  = remove_cvref_t<decltype(
+        GridwiseGemm::MakeEGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(EGridDesc_M_N{}))>;
 
     // block-to-e-tile map
     using Block2ETileMap =

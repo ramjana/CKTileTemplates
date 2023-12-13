@@ -204,8 +204,8 @@ struct GridwiseGemm_ak0mak1_bk0nbk1_mn_dpp
         CDataType* p_c_grid;
     };
 
-    using GridwiseGemmPipe = remove_cvref_t<
-        decltype(GridwiseGemmPipeline_Selector<PipelineVer, NumGemmKPrefetchStage>())>;
+    using GridwiseGemmPipe = remove_cvref_t<decltype(
+        GridwiseGemmPipeline_Selector<PipelineVer, NumGemmKPrefetchStage>())>;
 
     __host__ __device__ static constexpr auto GetABlockDescriptor_AK0PerBlock_MPerBlock_AK1()
     {

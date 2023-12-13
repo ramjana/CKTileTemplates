@@ -97,8 +97,8 @@ struct GridwiseGemmMultipleABD_xdl_cshuffle
 
     using ThisThreadBlock = ThisThreadBlock<BlockSize>;
 
-    using GridwiseGemmPipe = remove_cvref_t<
-        decltype(GridwiseGemmPipeline_Selector<PipelineVer, NumGemmKPrefetchStage, LoopSched>())>;
+    using GridwiseGemmPipe = remove_cvref_t<decltype(
+        GridwiseGemmPipeline_Selector<PipelineVer, NumGemmKPrefetchStage, LoopSched>())>;
 
 #if CK_WORKAROUND_DENORM_FIX
     using ComputeDataType =

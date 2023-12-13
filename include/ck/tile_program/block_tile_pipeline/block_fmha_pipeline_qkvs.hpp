@@ -125,9 +125,9 @@ struct BlockFmhaPipelineQKVS
         using MLBlockTileType = decltype(block_tile_reduce<SMPLComputeDataType>(
             SBlockTileType{}, Sequence<1>{}, f_max, SMPLComputeDataType{0}));
 
-        using OaccBlockTileType = decltype(gemm_1(
-            get_slice_tile(PBlockTileType{}, Sequence<0, 0>{}, Sequence<kM0, kK1>{}),
-            v_lds_window));
+        using OaccBlockTileType = decltype(
+            gemm_1(get_slice_tile(PBlockTileType{}, Sequence<0, 0>{}, Sequence<kM0, kK1>{}),
+                   v_lds_window));
 
         // init Oacc, M, L
         auto o_acc = OaccBlockTileType{};

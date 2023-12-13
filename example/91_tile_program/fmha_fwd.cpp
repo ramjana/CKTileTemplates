@@ -48,6 +48,7 @@ using BiasDataType        = ck::half_t;
 using SaccDataType        = float;      // data type for first gemm accumulation
 using SMPLComputeDataType = float;      // data type for reduction, softmax
 using PDataType           = ck::half_t; // data type for A matrix of second gemm
+using LSEDataType         = float;      // data type for LSE(log-sum-exp)
 using OaccDataType        = float;      // data type for second gemm accumulation
 using ODataType           = ck::half_t;
 
@@ -117,6 +118,7 @@ using FmhaPipelineProblem =
                                                       SaccDataType,
                                                       SMPLComputeDataType,
                                                       BiasDataType,
+                                                      LSEDataType,
                                                       PDataType,
                                                       OaccDataType,
                                                       ODataType,
@@ -142,6 +144,7 @@ float invoker_fmha_kernel(const void* q_ptr,
                           const void* k_ptr,
                           const void* v_ptr,
                           const void* bias_ptr,
+                          void* lse_ptr,
                           void* o_ptr,
                           const void* seqstart_q_ptr,
                           const void* seqstart_k_ptr,
@@ -224,32 +227,65 @@ float invoker_fmha_kernel(const void* q_ptr,
         }
         else
         { // create batch mode kernel arguments
-            return FmhaKernel_::MakeKargs(q_ptr,
-                                          k_ptr,
-                                          v_ptr,
-                                          bias_ptr,
-                                          o_ptr,
-                                          seqlen_q,
-                                          seqlen_k,
-                                          hdim_q,
-                                          hdim_v,
-                                          nhead / nhead_k,
-                                          scale,
-                                          stride_q,
-                                          stride_k,
-                                          stride_v,
-                                          stride_bias,
-                                          stride_o,
-                                          nhead_stride_q,
-                                          nhead_stride_k,
-                                          nhead_stride_v,
-                                          nhead_stride_bias,
-                                          nhead_stride_o,
-                                          batch_stride_q,
-                                          batch_stride_k,
-                                          batch_stride_v,
-                                          batch_stride_bias,
-                                          batch_stride_o);
+            if constexpr(!std::is_same<void, typename FmhaKernel_::LSEDataType>::value)
+            {
+                return FmhaKernel_::MakeKargs(q_ptr,
+                                              k_ptr,
+                                              v_ptr,
+                                              bias_ptr,
+                                              lse_ptr,
+                                              o_ptr,
+                                              seqlen_q,
+                                              seqlen_k,
+                                              hdim_q,
+                                              hdim_v,
+                                              nhead / nhead_k,
+                                              scale,
+                                              stride_q,
+                                              stride_k,
+                                              stride_v,
+                                              stride_bias,
+                                              stride_o,
+                                              nhead_stride_q,
+                                              nhead_stride_k,
+                                              nhead_stride_v,
+                                              nhead_stride_bias,
+                                              nhead_stride_o,
+                                              batch_stride_q,
+                                              batch_stride_k,
+                                              batch_stride_v,
+                                              batch_stride_bias,
+                                              batch_stride_o);
+            }
+            else
+            {
+                return FmhaKernel_::MakeKargs(q_ptr,
+                                              k_ptr,
+                                              v_ptr,
+                                              bias_ptr,
+                                              o_ptr,
+                                              seqlen_q,
+                                              seqlen_k,
+                                              hdim_q,
+                                              hdim_v,
+                                              nhead / nhead_k,
+                                              scale,
+                                              stride_q,
+                                              stride_k,
+                                              stride_v,
+                                              stride_bias,
+                                              stride_o,
+                                              nhead_stride_q,
+                                              nhead_stride_k,
+                                              nhead_stride_v,
+                                              nhead_stride_bias,
+                                              nhead_stride_o,
+                                              batch_stride_q,
+                                              batch_stride_k,
+                                              batch_stride_v,
+                                              batch_stride_bias,
+                                              batch_stride_o);
+            }
         }
     }();
 
@@ -406,6 +442,7 @@ int main(int argc, char* argv[])
     Tensor<KDataType> bias_host(
         use_bias ? get_lengths(i_perm, 1, 1, shape_seqlen_q, shape_seqlen_k)
                  : std::array<ck::index_t, 4>{1, 1, 1, 1} /* dummy shape for simplifying code */);
+    Tensor<LSEDataType> lse_host(get_lengths(i_perm, shape_batch, nhead, shape_seqlen_q, 1));
     Tensor<ODataType> o_host(get_lengths(o_perm, shape_batch, nhead, shape_seqlen_q, hdim_v));
 
     if(init_method == 0)
@@ -434,6 +471,7 @@ int main(int argc, char* argv[])
     DeviceMem k_buf(k_host.GetElementSpaceSizeInBytes());
     DeviceMem v_buf(v_host.GetElementSpaceSizeInBytes());
     DeviceMem bias_buf(bias_host.GetElementSpaceSizeInBytes());
+    DeviceMem lse_buf(lse_host.GetElementSpaceSizeInBytes());
     DeviceMem o_buf(o_host.GetElementSpaceSizeInBytes());
     DeviceMem seqstart_q(seqstart_q_host.size() * sizeof(int32_t));
     DeviceMem seqstart_k(seqstart_k_host.size() * sizeof(int32_t));
@@ -468,6 +506,7 @@ int main(int argc, char* argv[])
                                                    k_buf.GetDeviceBuffer(),
                                                    v_buf.GetDeviceBuffer(),
                                                    bias_buf.GetDeviceBuffer(),
+                                                   lse_buf.GetDeviceBuffer(),
                                                    o_buf.GetDeviceBuffer(),
                                                    seqstart_q.GetDeviceBuffer(),
                                                    seqstart_k.GetDeviceBuffer(),
@@ -495,6 +534,7 @@ int main(int argc, char* argv[])
                                                    k_buf.GetDeviceBuffer(),
                                                    v_buf.GetDeviceBuffer(),
                                                    bias_buf.GetDeviceBuffer(),
+                                                   lse_buf.GetDeviceBuffer(),
                                                    o_buf.GetDeviceBuffer(),
                                                    seqstart_q.GetDeviceBuffer(),
                                                    seqstart_k.GetDeviceBuffer(),

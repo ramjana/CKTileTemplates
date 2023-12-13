@@ -249,12 +249,10 @@ struct DeviceGroupedConvBwdDataMultipleD_Wmma_CShuffle
         LoopSched,
         PipelineVer>;
 
-    using DsGridDesc_MBlock_MPerBlock_NBlock_NPerBlock =
-        decltype(GridwiseGemm::MakeDsGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
-            DsGridDesc_M_N{}));
-    using EGridDesc_MBlock_MPerBlock_NBlock_NPerBlock =
-        decltype(GridwiseGemm::MakeEGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
-            EGridDesc_M_N{}));
+    using DsGridDesc_MBlock_MPerBlock_NBlock_NPerBlock = decltype(
+        GridwiseGemm::MakeDsGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(DsGridDesc_M_N{}));
+    using EGridDesc_MBlock_MPerBlock_NBlock_NPerBlock = decltype(
+        GridwiseGemm::MakeEGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(EGridDesc_M_N{}));
 
     // Argument
     struct Argument : public BaseArgument

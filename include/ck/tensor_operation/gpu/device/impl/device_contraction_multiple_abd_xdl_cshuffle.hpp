@@ -384,18 +384,14 @@ struct DeviceContractionMultipleABD_Xdl_CShuffle
     using EGridDesc_M_N  = remove_cvref_t<decltype(MakeEGridDescriptor_M_N({}, {}))>;
 
     // desc for blockwise copy
-    using AsGridDesc_AK0_M_AK1 =
-        remove_cvref_t<decltype(GridwiseGemm::MakeDefaultAsGridDescriptor_AK0_M_AK1(
-            AsGridDesc_M_K{}))>;
-    using BsGridDesc_BK0_N_BK1 =
-        remove_cvref_t<decltype(GridwiseGemm::MakeDefaultBsGridDescriptor_BK0_N_BK1(
-            BsGridDesc_N_K{}))>;
-    using DsGridDesc_MBlock_MPerBlock_NBlock_NPerBlock = remove_cvref_t<
-        decltype(GridwiseGemm::MakeDsGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
-            DsGridDesc_M_N{}))>;
-    using EGridDesc_MBlock_MPerBlock_NBlock_NPerBlock =
-        remove_cvref_t<decltype(GridwiseGemm::MakeEGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
-            EGridDesc_M_N{}))>;
+    using AsGridDesc_AK0_M_AK1                         = remove_cvref_t<decltype(
+        GridwiseGemm::MakeDefaultAsGridDescriptor_AK0_M_AK1(AsGridDesc_M_K{}))>;
+    using BsGridDesc_BK0_N_BK1                         = remove_cvref_t<decltype(
+        GridwiseGemm::MakeDefaultBsGridDescriptor_BK0_N_BK1(BsGridDesc_N_K{}))>;
+    using DsGridDesc_MBlock_MPerBlock_NBlock_NPerBlock = remove_cvref_t<decltype(
+        GridwiseGemm::MakeDsGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(DsGridDesc_M_N{}))>;
+    using EGridDesc_MBlock_MPerBlock_NBlock_NPerBlock  = remove_cvref_t<decltype(
+        GridwiseGemm::MakeEGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(EGridDesc_M_N{}))>;
 
     // block-to-e-tile map
     using Block2ETileMap =

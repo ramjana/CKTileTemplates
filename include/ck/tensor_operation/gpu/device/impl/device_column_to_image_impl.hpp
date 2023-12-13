@@ -256,12 +256,11 @@ struct DeviceColumnToImageImpl
 
     using InputGridDesc =
         remove_cvref_t<decltype(MakeInputDescriptor_M_K(1, 1, {}, {}, {}, {}, {}, {}))>;
-    using OutputGridDesc = remove_cvref_t<decltype(MakeOutDescriptor_M_K(
-        1, 1, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}))>;
+    using OutputGridDesc = remove_cvref_t<decltype(
+        MakeOutDescriptor_M_K(1, 1, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}))>;
 
-    using Block2ETileMap = remove_cvref_t<
-        decltype(BlockToCTileMap_M00_N0_M01Adapt<MPerBlock, KPerBlock, InputGridDesc>(
-            InputGridDesc{}))>;
+    using Block2ETileMap = remove_cvref_t<decltype(
+        BlockToCTileMap_M00_N0_M01Adapt<MPerBlock, KPerBlock, InputGridDesc>(InputGridDesc{}))>;
 
     using GridwiseTensorRearrangeKernel = GridwiseTensorRearrange<InputGridDesc,
                                                                   InputDataType,

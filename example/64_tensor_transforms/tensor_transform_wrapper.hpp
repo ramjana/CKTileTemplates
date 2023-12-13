@@ -73,8 +73,8 @@ struct Layout
             if constexpr(is_detected<is_tuple, tuple_element_t<Idx::value, Tuple<Ts...>>>::value)
             {
                 // Return Sequence for the first tuple
-                constexpr index_t merge_nelems = decltype(UnrollNestedTuple(
-                    tuple_element_t<Idx::value, Tuple<Ts...>>{}))::Size();
+                constexpr index_t merge_nelems = decltype(
+                    UnrollNestedTuple(tuple_element_t<Idx::value, Tuple<Ts...>>{}))::Size();
                 using LowerDimsSequence =
                     typename arithmetic_sequence_gen<0, merge_nelems, 1>::type;
                 return LowerDimsSequence::Reverse();
@@ -92,8 +92,8 @@ struct Layout
             const auto next_seq_val = PreviousSeqT::At(I0) + 1;
             if constexpr(is_detected<is_tuple, tuple_element_t<Idx::value, Tuple<Ts...>>>::value)
             {
-                constexpr index_t merge_nelems = decltype(UnrollNestedTuple(
-                    tuple_element_t<Idx::value, Tuple<Ts...>>{}))::Size();
+                constexpr index_t merge_nelems = decltype(
+                    UnrollNestedTuple(tuple_element_t<Idx::value, Tuple<Ts...>>{}))::Size();
                 using LowerDimsSequence =
                     typename arithmetic_sequence_gen<next_seq_val, next_seq_val + merge_nelems, 1>::
                         type;

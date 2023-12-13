@@ -32,6 +32,7 @@ struct FmhaFwdKernel
     using KDataType    = ck::remove_cvref_t<typename FmhaPipeline::KDataType>;
     using VDataType    = ck::remove_cvref_t<typename FmhaPipeline::VDataType>;
     using BiasDataType = ck::remove_cvref_t<typename FmhaPipeline::BiasDataType>;
+    using LSEDataType  = ck::remove_cvref_t<typename FmhaPipeline::LSEDataType>;
     using ODataType    = ck::remove_cvref_t<typename FmhaPipeline::ODataType>;
 
     using VLayout = ck::remove_cvref_t<typename FmhaPipeline::VLayout>;
@@ -188,6 +189,66 @@ struct FmhaFwdKernel
         ck::index_t batch_stride_o;
     };
 
+    struct BatchTrainingKargs : CommonKargs,
+                                std::conditional_t<kHasBias, BatchModeBiasKargs, EmptyKargs>
+    {
+        __host__ constexpr BatchTrainingKargs(const void* q_ptr_,
+                                              const void* k_ptr_,
+                                              const void* v_ptr_,
+                                              void* lse_ptr_,
+                                              void* o_ptr_,
+                                              ck::index_t seqlen_q_,
+                                              ck::index_t seqlen_k_,
+                                              ck::index_t hdim_q_,
+                                              ck::index_t hdim_v_,
+                                              ck::index_t nhead_ratio_qk_,
+                                              float scale_,
+                                              ck::index_t stride_q_,
+                                              ck::index_t stride_k_,
+                                              ck::index_t stride_v_,
+                                              ck::index_t stride_o_,
+                                              ck::index_t nhead_stride_q_,
+                                              ck::index_t nhead_stride_k_,
+                                              ck::index_t nhead_stride_v_,
+                                              ck::index_t nhead_stride_o_,
+                                              ck::index_t batch_stride_q_,
+                                              ck::index_t batch_stride_k_,
+                                              ck::index_t batch_stride_v_,
+                                              ck::index_t batch_stride_o_)
+            : CommonKargs{q_ptr_,
+                          k_ptr_,
+                          v_ptr_,
+                          o_ptr_,
+                          seqlen_q_,
+                          seqlen_k_,
+                          hdim_q_,
+                          hdim_v_,
+                          nhead_ratio_qk_,
+                          scale_,
+                          stride_q_,
+                          stride_k_,
+                          stride_v_,
+                          stride_o_,
+                          nhead_stride_q_,
+                          nhead_stride_k_,
+                          nhead_stride_v_,
+                          nhead_stride_o_},
+              batch_stride_q{batch_stride_q_},
+              batch_stride_k{batch_stride_k_},
+              batch_stride_v{batch_stride_v_},
+              batch_stride_o{batch_stride_o_},
+              lse_ptr(reinterpret_cast<LSEDataType*>(lse_ptr_))
+        {
+        }
+
+        ck::index_t batch_stride_q;
+        ck::index_t batch_stride_k;
+        ck::index_t batch_stride_v;
+        ck::index_t batch_stride_o;
+
+        LSEDataType* lse_ptr = nullptr;
+    };
+
     struct GroupModeKargs : CommonKargs, std::conditional_t<kHasBias, CommonBiasKargs, EmptyKargs>
     {
         __host__ constexpr GroupModeKargs(const void* q_ptr_,
@@ -239,7 +300,11 @@ struct FmhaFwdKernel
     };
 
     public:
-    using Kargs = std::conditional_t<kIsGroupMode, GroupModeKargs, BatchModeKargs>;
+    using Kargs = std::conditional_t<kIsGroupMode,
+                                     GroupModeKargs,
+                                     std::conditional_t<!std::is_same<void, LSEDataType>::value,
+                                                        BatchTrainingKargs,
+                                                        BatchModeKargs>>;
 
     template <bool Cond = !kIsGroupMode>
     __host__ static constexpr std::enable_if_t<Cond, Kargs> MakeKargs(const void* q_ptr,
@@ -335,6 +400,52 @@ struct FmhaFwdKernel
             kargs.bias_ptr          = reinterpret_cast<const BiasDataType*>(bias_ptr);
             kargs.stride_bias       = stride_bias;
             kargs.nhead_stride_bias = nhead_stride_bias;
+        }
+
+        return kargs;
+    }
+
+    template <bool Cond = !kIsGroupMode>
+    __host__ static constexpr std::enable_if_t<Cond, Kargs> MakeKargs(const void* q_ptr,
+                                                                      const void* k_ptr,
+                                                                      const void* v_ptr,
+                                                                      const void* bias_ptr,
+                                                                      void* lse_ptr,
+                                                                      void* o_ptr,
+                                                                      ck::index_t seqlen_q,
+                                                                      ck::index_t seqlen_k,
+                                                                      ck::index_t hdim_q,
+                                                                      ck::index_t hdim_v,
+                                                                      ck::index_t nhead_ratio_qk,
+                                                                      float scale,
+                                                                      ck::index_t stride_q,
+                                                                      ck::index_t stride_k,
+                                                                      ck::index_t stride_v,
+                                                                      ck::index_t stride_bias,
+                                                                      ck::index_t stride_o,
+                                                                      ck::index_t nhead_stride_q,
+                                                                      ck::index_t nhead_stride_k,
+                                                                      ck::index_t nhead_stride_v,
+                                                                      ck::index_t nhead_stride_bias,
+                                                                      ck::index_t nhead_stride_o,
+                                                                      ck::index_t batch_stride_q,
+                                                                      ck::index_t batch_stride_k,
+                                                                      ck::index_t batch_stride_v,
+                                                                      ck::index_t batch_stride_bias,
+                                                                      ck::index_t batch_stride_o)
+    {
+        Kargs kargs{q_ptr,          k_ptr,          v_ptr,          lse_ptr,        o_ptr,
+                    seqlen_q,       seqlen_k,       hdim_q,         hdim_v,         nhead_ratio_qk,
+                    scale,          stride_q,       stride_k,       stride_v,       stride_o,
+                    nhead_stride_q, nhead_stride_k, nhead_stride_v, nhead_stride_o, batch_stride_q,
+                    batch_stride_k, batch_stride_v, batch_stride_o};
+
+        if constexpr(kHasBias)
+        {
+            kargs.bias_ptr          = reinterpret_cast<const BiasDataType*>(bias_ptr);
+            kargs.stride_bias       = stride_bias;
+            kargs.nhead_stride_bias = nhead_stride_bias;
+            kargs.batch_stride_bias = batch_stride_bias;
         }
 
         return kargs;

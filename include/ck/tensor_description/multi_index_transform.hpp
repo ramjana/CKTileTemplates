@@ -545,9 +545,9 @@ struct Merge_v2_magic_division : public BaseTransform<LowLengths::Size(), 1>
     using UpLengths =
         decltype(make_tuple(container_reduce(LowLengths{}, math::multiplies{}, Number<1>{})));
 
-    using LowLengthsMagicDivisor = decltype(generate_tuple(
-        lambda_merge_generate_MagicDivision_calculate_magic_divisor<LowLengths>{},
-        Number<NDimLow>{}));
+    using LowLengthsMagicDivisor = decltype(
+        generate_tuple(lambda_merge_generate_MagicDivision_calculate_magic_divisor<LowLengths>{},
+                       Number<NDimLow>{}));
 
     LowLengths low_lengths_;
     LowLengthsMagicDivisor low_lengths_magic_divisor_;

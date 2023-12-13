@@ -124,8 +124,8 @@ struct GemmSoftmaxGemmImpl
         using SBlockTileType = decltype(tile_elementwise_in(
             type_convert<SMPLComputeDataType, SaccDataType>, SaccBlockTileType{}));
 
-        using PBlockTileType = decltype(tile_elementwise_in(type_convert<PDataType, SaccDataType>,
-                                                            SaccBlockTileType{}));
+        using PBlockTileType = decltype(
+            tile_elementwise_in(type_convert<PDataType, SaccDataType>, SaccBlockTileType{}));
 
         using MLBlockTileType = decltype(block_tile_reduce<SMPLComputeDataType>(
             SBlockTileType{}, Sequence<1>{}, f_max, SMPLComputeDataType{0}));
