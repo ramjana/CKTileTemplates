@@ -37,7 +37,7 @@ template<> struct BlockFmhaBwdPipelineDispatcher<     false,      false,      tr
 template<> struct BlockFmhaBwdPipelineDispatcher<     false,      false,      true,      false,      true,         false,          false> { using Type = BlockFmhaBwdPipelineV13; };
 template<> struct BlockFmhaBwdPipelineDispatcher<     false,      false,     false,      false,      true,         false,          false> { using Type = BlockFmhaBwdPipelineV14; };
 template<> struct BlockFmhaBwdPipelineDispatcher<     false,      false,     false,      false,     false,         false,          false> { using Type = BlockFmhaBwdPipelineV15; };
-// clang-format o
+// clang-format on
 } // namespace impl
 
 template <bool QLoadOnce,      // if q load whole block length (qkhdim) to LDS at once

@@ -568,6 +568,34 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     }
 
     template <typename Problem, typename BlockGemm>
+    __host__ __device__ static constexpr auto MakeLSEDDramTileDistribution()
+    {
+        constexpr auto config   = BlockGemm::Policy::template GetWarpGemmMWarpNWarp<Problem>();
+        using WG                = remove_cvref_t<decltype(config.template At<0>())>;
+        constexpr index_t MWarp = config.template At<1>();
+        constexpr index_t NWarp = config.template At<2>();
+
+        constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
+
+        constexpr index_t N1 = WG::WarpGemmAttribute::Impl::kCNLane; // 32
+        constexpr index_t N0 = NWarp;                                // 4
+
+        constexpr index_t M4 = WG::WarpGemmAttribute::Impl::kCM1PerLane * 2;        // 8
+        constexpr index_t M3 = WG::WarpGemmAttribute::Impl::kCMLane;                // 2
+        constexpr index_t M2 = WG::WarpGemmAttribute::Impl::kCM0PerLane / 2;        // 2
+        constexpr index_t M1 = MWarp;                                               // 1
+        constexpr index_t M0 = kMPerBlock / (M1 * WG::WarpGemmAttribute::Impl::kM); // 2/4
+
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<N0, N1>,
+                                           Tuple<Sequence<M0, M1, M2, M3, M4>>,
+                                           Tuple<Sequence<1, 0>, Sequence<1, 0>>,
+                                           Tuple<Sequence<1, 0>, Sequence<3, 1>>,
+                                           Sequence<1, 1, 1>,
+                                           Sequence<0, 2, 4>>{});
+    }
+
+    template <typename Problem, typename BlockGemm>
     __host__ __device__ static constexpr auto MakeVDramRegStatTileDistribution()
     {
         constexpr auto config   = BlockGemm::Policy::template GetWarpGemmMWarpNWarp<Problem>();
