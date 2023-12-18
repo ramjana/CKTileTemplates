@@ -982,7 +982,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         using BlockGemmPolicy =
             BlockGemmASmemBSmemCRegV1CustomPolicy<typename Problem::QDataType,
                                                   typename Problem::KDataType,
-                                                  typename Problem::SaccDataType,
+                                                  typename Problem::AccDataType,
                                                   typename Problem::BlockFmhaShape::Gemm0BlockWarps,
                                                   WarpGemm>;
 

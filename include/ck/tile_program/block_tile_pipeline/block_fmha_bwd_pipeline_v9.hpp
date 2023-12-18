@@ -26,14 +26,13 @@ namespace block {
 template <typename Problem, typename Policy = BlockFmhaBwdPipelineDefaultPolicy>
 struct BlockFmhaBwdPipelineV9
 {
-    using QDataType           = remove_cvref_t<typename Problem::QDataType>;
-    using KDataType           = remove_cvref_t<typename Problem::KDataType>;
-    using VDataType           = remove_cvref_t<typename Problem::VDataType>;
-    using GemmDataType        = remove_cvref_t<typename Problem::GemmDataType>;
-    using LSEDataType         = remove_cvref_t<typename Problem::LSEDataType>;
-    using AccDataType         = remove_cvref_t<typename Problem::AccDataType>;
-    using SMPLComputeDataType = remove_cvref_t<typename Problem::SMPLComputeDataType>;
-    using DDataType           = remove_cvref_t<typename Problem::DDataType>;
+    using QDataType    = remove_cvref_t<typename Problem::QDataType>;
+    using KDataType    = remove_cvref_t<typename Problem::KDataType>;
+    using VDataType    = remove_cvref_t<typename Problem::VDataType>;
+    using GemmDataType = remove_cvref_t<typename Problem::GemmDataType>;
+    using LSEDataType  = remove_cvref_t<typename Problem::LSEDataType>;
+    using AccDataType  = remove_cvref_t<typename Problem::AccDataType>;
+    using DDataType    = remove_cvref_t<typename Problem::DDataType>;
     // using ZDataType        = remove_cvref_t<typename Problem::ZDataType>;
     using ODataType     = remove_cvref_t<typename Problem::ODataType>;
     using OGradDataType = remove_cvref_t<typename Problem::OGradDataType>;
@@ -107,12 +106,12 @@ struct BlockFmhaBwdPipelineV9
             "wrong!");
 
         static_assert(kM0 == QDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
-                          kM0 == QTDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}] &&
+                          kQKHeaddim == QTDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kN0 == KDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
-                          kN0 == KTDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}] &&
+                          kQKHeaddim == KTDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kN0 == VDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kM0 == OGradDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
-                          kM0 == OGradTDramBlockWindowTmp{}.GetWindowLengths()[Number<1>{}] &&
+                          kVHeaddim == OGradTDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kM0 == LSEDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kM0 == DDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}] &&
                           kM0 == QGradDramBlockWindowTmp{}.GetWindowLengths()[Number<0>{}],
@@ -140,6 +139,8 @@ struct BlockFmhaBwdPipelineV9
         auto k_lds = make_tensor_view<AddressSpaceEnum::Lds>(
             reinterpret_cast<KDataType*>(smem_ptr),
             Policy::template MakeKLdsBlockDescriptor<Problem>());
+        auto k_lds_store_window =
+            make_tile_window(k_lds, make_tuple(Number<kN0>{}, Number<kQKHeaddim>{}), {0, 0});
         auto k_lds_window =
             make_tile_window(k_lds, make_tuple(Number<kN0>{}, Number<kK0>{}), {0, 0});
 
@@ -148,6 +149,8 @@ struct BlockFmhaBwdPipelineV9
             static_cast<char*>(smem_ptr) + Policy::template GetSmemSizeK<Problem>()));
         auto kt_lds           = make_tensor_view<AddressSpaceEnum::Lds>(
             kt_lds_ptr, Policy::template MakeKTLdsBlockDescriptor<Problem>());
+        auto kt_lds_store_window =
+            make_tile_window(kt_lds, make_tuple(Number<kQKHeaddim>{}, Number<kN0>{}), {0, 0});
         auto kt_lds_window =
             make_tile_window(kt_lds, make_tuple(Number<kQKHeaddim>{}, Number<kK4>{}), {0, 0});
 
@@ -169,6 +172,17 @@ struct BlockFmhaBwdPipelineV9
         auto dot_lds_window =
             make_tile_window(dot_lds, make_tuple(Number<kVHeaddim>{}, Number<kK1>{}), {0, 0});
 
+        // SGrad tile in LDS
+        GemmDataType* ds_lds_ptr = static_cast<GemmDataType*>(static_cast<void*>(
+            static_cast<char*>(smem_ptr) + Policy::template GetSmemSizeK<Problem>() +
+            Policy::template GetSmemSizeKT<Problem>()));
+        auto ds_lds              = make_tensor_view<AddressSpaceEnum::Lds>(
+            ds_lds_ptr, Policy::template MakeSGradLdsBlockDescriptor<Problem>());
+        auto ds_lds_store_window =
+            make_tile_window(ds_lds, make_tuple(Number<kM0>{}, Number<kN0>{}), {0, 0});
+        auto ds_lds_window =
+            make_tile_window(ds_lds, make_tuple(Number<kM0>{}, Number<kK4>{}), {0, 0});
+
         // Block GEMM
         constexpr auto gemm_0 = Policy::template GetQKBlockGemm<Problem>();
         constexpr auto gemm_1 = Policy::template GetPTOGradTBlockGemm<Problem>();
@@ -182,7 +196,7 @@ struct BlockFmhaBwdPipelineV9
             v_dram_block_window_tmp.GetWindowOrigin(),
             Policy::template MakeVDramRegStatTileDistribution<Problem, decltype(gemm_2)>());
 
-        auto v = load_tile(v_dram_window); // persistent v register tile
+        auto v = load_tile(v_dram_window); // persistent V register tile
 
         auto lse_dram_window = make_tile_window(
             lse_dram_block_window_tmp.GetBottomTensorView(),
@@ -196,226 +210,341 @@ struct BlockFmhaBwdPipelineV9
             d_dram_block_window_tmp.GetWindowOrigin(),
             Policy::template MakeLSEDDramTileDistribution<Problem, decltype(gemm_0)>());
 
-        auto st_acc = decltype(gemm_0(q_lds_window, k_lds_window)){};
+        using SPTBlockTileType = decltype(gemm_0(q_lds_window, k_lds_window));
 
-        // infer Sacc, S, P, M, L, Oacc type
-        using SBlockTileType =
-            decltype(tile_elementwise_in(type_convert<SMPLComputeDataType, SaccDataType>, s_acc));
+        using SPGradTBlockTileType = decltype(
+            gemm_2(do_lds_window, get_slice_tile(v, Sequence<0, 0>{}, Sequence<kN0, kK2>{})));
 
-        using PBlockTileType =
-            decltype(tile_elementwise_in(type_convert<PDataType, SaccDataType>, s_acc));
+        using SPTGemmBlockTileType = decltype(
+            tile_elementwise_in(type_convert<GemmDataType, AccDataType>, SPTBlockTileType{}));
 
-        using MLBlockTileType = decltype(block_tile_reduce<SMPLComputeDataType>(
-            SBlockTileType{}, Sequence<1>{}, f_max, SMPLComputeDataType{0}));
+        using SPGradTGemmBlockTileType = decltype(
+            tile_elementwise_in(type_convert<GemmDataType, AccDataType>, SPGradTBlockTileType{}));
 
-        using OaccBlockTileType = decltype(
-            gemm_1(get_slice_tile(PBlockTileType{}, Sequence<0, 0>{}, Sequence<kM0, kK1>{}),
-                   v_lds_window));
+        using QGradBlockTileType = decltype(gemm_4(ds_lds_window, kt_lds_window));
 
-        // init Oacc, M, L
-        auto o_acc = OaccBlockTileType{};
-        auto m     = MLBlockTileType{};
-        auto l     = MLBlockTileType{};
+        // init VGrad & KGrad
+        auto dv_acc = decltype(
+            gemm_1(get_slice_tile(SPTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK1, kN0>{}),
+                   dot_lds_window)){};
 
-        tile_elementwise_inout([](auto& e) { e = 0; }, o_acc);
-        tile_elementwise_inout([](auto& e) { e = NumericLimits<SMPLComputeDataType>::Lowest(); },
-                               m);
-        tile_elementwise_inout([](auto& e) { e = 0; }, l);
+        auto dk_acc = decltype(gemm_3(
+            get_slice_tile(SPGradTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK3, kN0>{}),
+            qt_lds_window)){};
+
+        tile_elementwise_inout([](auto& e) { e = 0; }, dv_acc);
+        tile_elementwise_inout([](auto& e) { e = 0; }, dk_acc);
 
         auto k_dram_block_window = k_dram_block_window_tmp;
-        auto v_dram_window =
-            make_tile_window(v_dram_block_window_tmp.GetBottomTensorView(),
-                             v_dram_block_window_tmp.GetWindowLengths(),
-                             v_dram_block_window_tmp.GetWindowOrigin(),
-                             Policy::template MakeVDramTileDistribution<Problem>());
 
-        auto q_tile           = tile_elementwise_in(q_element_func, q);
+        auto k_dram_window = make_tile_window(
+            k_dram_block_window.GetBottomTensorView(),
+            k_dram_block_window.GetWindowLengths(),
+            k_dram_block_window.GetWindowOrigin(),
+            Policy::template MakeKDramTileDistribution<Problem>()); // K DRAM tile window for
+                                                                    // load
+
+        auto k_block_tile = load_tile(k_dram_window);
+
+        store_tile(k_lds_store_window, k_block_tile); // // persistent K in LDS
+
+        auto kt_dram_block_window = kt_dram_block_window_tmp;
+
+        auto kt_dram_window = make_tile_window(
+            kt_dram_block_window.GetBottomTensorView(),
+            kt_dram_block_window.GetWindowLengths(),
+            kt_dram_block_window.GetWindowOrigin(),
+            Policy::template MakeKTDramTileDistribution<Problem>()); // K^T DRAM tile window for
+                                                                     // load
+
+        auto kt_block_tile = load_tile(kt_dram_window);
+
+        store_tile(kt_lds_store_window, kt_block_tile); // persistent K^T in LDS
+
+        auto q_dram_block_window   = q_dram_block_window_tmp;
+        auto qt_dram_block_window  = qt_dram_block_window_tmp;
+        auto do_dram_block_window  = do_dram_block_window_tmp;
+        auto dot_dram_block_window = dot_dram_block_window_tmp;
+        auto dq_dram_block_window  = dq_dram_block_window_tmp;
+
+        auto qt_dram_window =
+            make_tile_window(qt_dram_block_window.GetBottomTensorView(),
+                             qt_dram_block_window.GetWindowLengths(),
+                             qt_dram_block_window.GetWindowOrigin(),
+                             Policy::template MakeQTDramTileDistribution<Problem>());
+
+        auto dot_dram_window =
+            make_tile_window(dot_dram_block_window.GetBottomTensorView(),
+                             dot_dram_block_window.GetWindowLengths(),
+                             dot_dram_block_window.GetWindowOrigin(),
+                             Policy::template MakeOGradTDramTileDistribution<Problem>());
+
         index_t i_total_loops = 0;
         do
         {
-            // STAGE 1, QK gemm
-            auto k_dram_window = make_tile_window(
-                k_dram_block_window.GetBottomTensorView(),
-                k_dram_block_window.GetWindowLengths(),
-                k_dram_block_window.GetWindowOrigin(),
-                Policy::template MakeKDramTileDistribution<Problem>()); // K DRAM tile window for
+            auto q_dram_window = make_tile_window(
+                q_dram_block_window.GetBottomTensorView(),
+                q_dram_block_window.GetWindowLengths(),
+                q_dram_block_window.GetWindowOrigin(),
+                Policy::template MakeQDramTileDistribution<Problem>()); // Q DRAM tile window for
                                                                         // load
 
-            auto k_block_tile = load_tile(k_dram_window);
+            auto do_dram_window = make_tile_window(
+                do_dram_block_window.GetBottomTensorView(),
+                do_dram_block_window.GetWindowLengths(),
+                do_dram_block_window.GetWindowOrigin(),
+                Policy::template MakeOGradDramTileDistribution<Problem>()); // OGrad DRAM tile
+                                                                            // window for load
+
+            // STAGE 1, Q@K Gemm0
+            auto st_acc = SPTBlockTileType{};
+
+            auto q_block_tile = load_tile(q_dram_window);
             {
-                move_tile_window(k_dram_window, {0, kK0});
+                move_tile_window(q_dram_window, {0, kK0});
 
-                tile_elementwise_inout([](auto& c) { c = 0; }, s_acc); // Initialize C
+                tile_elementwise_inout([](auto& c) { c = 0; }, st_acc); // Initialize S^T
 
-                store_tile(k_lds_window,
-                           tile_elementwise_in(k_element_func, k_block_tile)); // LDS write 0
-                k_block_tile = load_tile(k_dram_window);                       // global read 1
+                store_tile(q_lds_window, q_block_tile);  // LDS write 0
+                q_block_tile = load_tile(q_dram_window); // global read 1
             }
 
-            // index_t i_k0_loops = num_sub_loop_qk - 2;
-            constexpr index_t k0_loops = kK0BlockLength / kK0;
+            constexpr index_t k0_loops = kQKHeaddim / kK0;
 
             if constexpr(k0_loops > 2)
             {
                 static_for<0, k0_loops - 2, 1>{}([&](auto i_k0) {
                     block_sync_lds();
-                    gemm_0(s_acc,
-                           get_slice_tile(q_tile,
-                                          Sequence<0, i_k0 * kK0>{},
-                                          Sequence<kM0, (i_k0 + 1) * kK0>{}),
-                           k_lds_window);
+                    gemm_0(st_acc, q_lds_window, k_lds_window);
                     block_sync_lds();
-                    move_tile_window(k_dram_window, {0, kK0});
+                    move_tile_window(q_dram_window, {0, kK0});
+                    move_tile_window(k_lds_window, {0, kK0});
 
-                    store_tile(
-                        k_lds_window,
-                        tile_elementwise_in(k_element_func, k_block_tile)); // LDS write i + 1
-                    k_block_tile = load_tile(k_dram_window);                // global read i + 2
+                    store_tile(q_lds_window,
+                               q_block_tile);                // LDS write i + 1
+                    q_block_tile = load_tile(q_dram_window); // global read i + 2
                 });
             }
 
-            const auto v_prefetch = load_tile(v_dram_window); // prefetch load v tile
-            {                                                 // tail
+            const auto dot_prefetch = load_tile(dot_dram_window); // prefetch load OGrad^T tile
+            {                                                     // tail
                 block_sync_lds();
-                gemm_0(s_acc,
-                       get_slice_tile(q_tile,
-                                      Sequence<0, (k0_loops - 2) * kK0>{},
-                                      Sequence<kM0, (k0_loops - 1) * kK0>{}),
-                       k_lds_window);
+                gemm_0(st_acc, q_lds_window, k_lds_window);
                 block_sync_lds();
 
-                store_tile(k_lds_window, tile_elementwise_in(k_element_func, k_block_tile));
+                move_tile_window(k_lds_window, {0, kK0});
+                store_tile(q_lds_window, q_block_tile);
                 block_sync_lds();
 
-                gemm_0(s_acc,
-                       get_slice_tile(q_tile,
-                                      Sequence<0, (k0_loops - 1) * kK0>{},
-                                      Sequence<kM0, k0_loops * kK0>{}),
-                       k_lds_window);
+                gemm_0(st_acc, q_lds_window, k_lds_window);
             }
 
-            // STAGE 2, scale softmax
-            tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, s_acc);
+            // STAGE 2, Scale & Softmax
+            tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, st_acc);
 
-            const auto s =
-                tile_elementwise_in(type_convert<SMPLComputeDataType, SaccDataType>, s_acc); // S{j}
-            auto m_local = block_tile_reduce<SMPLComputeDataType>(
-                s,
-                Sequence<1>{},
-                f_max,
-                NumericLimits<SMPLComputeDataType>::Lowest()); // m_local = rowmax(S{j})
-            block_tile_reduce_sync(m_local, f_max);
+            auto lse = load_tile(lse_dram_window);
 
-            const auto m_old = m; // m{j-1}
-            tile_elementwise_inout(
-                [](auto& e0, auto e1, auto e2) { e0 = max(e1, e2); }, m, m_old, m_local); // m{j}
-
-            auto p_compute = make_static_distributed_tensor<SMPLComputeDataType>(
-                s.GetTileDistribution()); // Pcompute{j}
-
-            constexpr auto p_spans = decltype(p_compute)::GetDistributedSpans();
-            sweep_tile_span(p_spans[Number<0>{}], [&](auto idx0) {
+            auto pt                 = SPTBlockTileType{};
+            constexpr auto pt_spans = decltype(pt)::GetDistributedSpans();
+            sweep_tile_span(pt_spans[Number<0>{}], [&](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
-                sweep_tile_span(p_spans[Number<1>{}], [&](auto idx1) {
+                sweep_tile_span(pt_spans[Number<1>{}], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
-                    p_compute(i_j_idx)     = math::exp(s[i_j_idx] - m[i_idx]);
+                    pt(i_j_idx)            = math::exp(st_acc[i_j_idx] - lse[i_idx]);
                 });
             });
 
-            auto rowsum_p = block_tile_reduce<SMPLComputeDataType>(
-                p_compute, Sequence<1>{}, f_sum, SMPLComputeDataType{0}); // rowsum(Pcompute{j})
-
-            block_tile_reduce_sync(rowsum_p, f_sum);
-            // l{j}, Oacc{j}
-            constexpr auto o_spans = decltype(o_acc)::GetDistributedSpans();
-            sweep_tile_span(o_spans[Number<0>{}], [&](auto idx0) {
-                constexpr auto i_idx = make_tuple(idx0);
-                const auto tmp       = math::exp(m_old[i_idx] - m[i_idx]);
-                l(i_idx)             = tmp * l[i_idx] + rowsum_p[i_idx];
-                sweep_tile_span(o_spans[Number<1>{}], [&](auto idx1) {
-                    constexpr auto i_j_idx = make_tuple(idx0, idx1);
-                    // FIXME: this use different equation from FA v2 paper,
-                    // but produce correc result.
-                    // Is the equation wrong?
-                    o_acc(i_j_idx) *= tmp;
-                });
-            });
-
+            // STAGE 3, P^T@OGrad^T Gemm1
             block_sync_lds();
-            if constexpr(ck::is_same_v<VLayout, ck::tensor_layout::gemm::RowMajor>)
             {
-                auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
-                    Policy::template MakeShuffledVRegBlockDescriptor<Problem>());
-                shuffle_distributed_tensor(v_shuffle_tmp, v_prefetch);
-                store_tile(
-                    v_lds_window,
-                    tile_elementwise_in(v_element_func, v_shuffle_tmp)); // store the prefetch
+                auto dot_shuffle_tmp = make_static_distributed_tensor<OGradDataType>(
+                    Policy::template MakeShuffledOGradTRegBlockDescriptor<Problem>());
+                shuffle_distributed_tensor(dot_shuffle_tmp, dot_prefetch);
+                store_tile(dot_lds_window,
+                           dot_shuffle_tmp); // store the prefetch
             }
-            else
-            {
-                store_tile(v_lds_window,
-                           tile_elementwise_in(v_element_func, v_prefetch)); // store the prefetch
-            }
-            move_tile_window(v_dram_window, {0, kK1});
+            move_tile_window(dot_dram_window, {0, kK1});
 
-            const auto p =
-                tile_elementwise_in(type_convert<PDataType, SMPLComputeDataType>, p_compute);
+            const auto pt_gemm = tile_elementwise_in(type_convert<GemmDataType, AccDataType>, pt);
 
-            // STAGE 3, KV gemm
-            constexpr index_t k1_loops = kN0 / kK1;
+            constexpr index_t k1_loops = kM0 / kK1;
             if constexpr(k1_loops > 1)
             {
                 static_for<0, k1_loops - 1, 1>{}([&](auto i_k1) {
-                    const auto v = load_tile(v_dram_window); // load next v
+                    const auto dot = load_tile(dot_dram_window); // load next OGrad^T
                     block_sync_lds();
-                    gemm_1(o_acc,
-                           get_slice_tile(
-                               p, Sequence<0, i_k1 * kK1>{}, Sequence<kM0, (i_k1 + 1) * kK1>{}),
-                           v_lds_window);
+                    gemm_1(dv_acc,
+                           get_slice_tile(pt_gemm,
+                                          Sequence<i_k1 * kK1, 0>{},
+                                          Sequence<(i_k1 + 1) * kK1, kN0>{}),
+                           dot_lds_window);
                     block_sync_lds();
-                    if constexpr(ck::is_same_v<VLayout, ck::tensor_layout::gemm::RowMajor>)
-                    {
-                        auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
-                            Policy::template MakeShuffledVRegBlockDescriptor<Problem>());
-                        shuffle_distributed_tensor(v_shuffle_tmp, v);
-                        store_tile(v_lds_window,
-                                   tile_elementwise_in(v_element_func,
-                                                       v_shuffle_tmp)); // store the prefetch
-                    }
-                    else
-                    {
-                        store_tile(v_lds_window,
-                                   tile_elementwise_in(v_element_func, v)); // store next v
-                    }
-                    move_tile_window(v_dram_window, {0, kK1});
+                    auto dot_shuffle_tmp = make_static_distributed_tensor<OGradDataType>(
+                        Policy::template MakeShuffledOGradTRegBlockDescriptor<Problem>());
+                    shuffle_distributed_tensor(dot_shuffle_tmp, dot);
+                    store_tile(dot_lds_window,
+                               dot_shuffle_tmp); // store the prefetch
+
+                    move_tile_window(dot_dram_window, {0, kK1});
                 });
             }
-            // move K tile windows
-            move_tile_window(k_dram_block_window, {kN0, 0});
-            i_total_loops++;
+            const auto do_block_tile = load_tile(do_dram_window); // prefetch load OGrad tile
             // tail
             {
                 block_sync_lds();
-                gemm_1(o_acc,
-                       get_slice_tile(p, Sequence<0, (k1_loops - 1) * kK1>{}, Sequence<kM0, kN0>{}),
-                       v_lds_window);
+                gemm_1(dv_acc,
+                       get_slice_tile(
+                           pt_gemm, Sequence<(k1_loops - 1) * kK1, 0>{}, Sequence<kM0, kN0>{}),
+                       dot_lds_window);
                 block_sync_lds();
             }
+
+            // STAGE 4, OGrad@V Gemm2
+            auto dpt_acc = SPGradTBlockTileType{};
+
+            {
+                move_tile_window(do_dram_window, {0, kK2});
+
+                tile_elementwise_inout([](auto& c) { c = 0; }, dpt_acc); // Initialize PGrad^T
+
+                store_tile(do_lds_window, do_block_tile);  // LDS write 0
+                do_block_tile = load_tile(do_dram_window); // global read 1
+            }
+
+            constexpr index_t k2_loops = kVHeaddim / kK2;
+
+            if constexpr(k2_loops > 2)
+            {
+                static_for<0, k2_loops - 2, 1>{}([&](auto i_k2) {
+                    block_sync_lds();
+                    gemm_2(dpt_acc,
+                           do_lds_window,
+                           get_slice_tile(
+                               v, Sequence<0, i_k2 * kK2>{}, Sequence<kN0, (i_k2 + 1) * kK2>{}));
+                    block_sync_lds();
+                    move_tile_window(do_dram_window, {0, kK2});
+
+                    store_tile(do_lds_window,
+                               do_block_tile);                 // LDS write i + 1
+                    do_block_tile = load_tile(do_dram_window); // global read i + 2
+                });
+            }
+
+            const auto qt_prefetch = load_tile(qt_dram_window); // prefetch load Q^T tile
+            {                                                   // tail
+                block_sync_lds();
+                gemm_2(dpt_acc,
+                       do_lds_window,
+                       get_slice_tile(v,
+                                      Sequence<0, (k2_loops - 2) * kK2>{},
+                                      Sequence<kN0, (k2_loops - 1) * kK2>{}));
+                block_sync_lds();
+
+                store_tile(do_lds_window, do_block_tile);
+                block_sync_lds();
+
+                gemm_2(dpt_acc,
+                       do_lds_window,
+                       get_slice_tile(v,
+                                      Sequence<0, (k2_loops - 1) * kK2>{},
+                                      Sequence<kN0, k2_loops * kK2>{}));
+            }
+
+            // STAGE 5, P^T(PGrad^T - D)
+            auto d = load_tile(d_dram_window);
+
+            auto dst                 = SPGradTBlockTileType{};
+            constexpr auto dst_spans = decltype(dst)::GetDistributedSpans();
+            sweep_tile_span(dst_spans[Number<0>{}], [&](auto idx0) {
+                constexpr auto i_idx = make_tuple(idx0);
+                sweep_tile_span(dst_spans[Number<1>{}], [&](auto idx1) {
+                    constexpr auto i_j_idx = make_tuple(idx0, idx1);
+                    dst(i_j_idx)           = pt[i_j_idx] * (dpt_acc[i_j_idx] - d[i_idx]);
+                });
+            });
+
+            // STAGE 6, SGrad^T@Q^T Gemm3
+            block_sync_lds();
+            {
+                auto qt_shuffle_tmp = make_static_distributed_tensor<QDataType>(
+                    Policy::template MakeShuffledQTRegBlockDescriptor<Problem>());
+                shuffle_distributed_tensor(qt_shuffle_tmp, qt_prefetch);
+                store_tile(qt_lds_window,
+                           qt_shuffle_tmp); // store the prefetch
+            }
+            move_tile_window(qt_dram_window, {0, kK3});
+
+            const auto dst_gemm = tile_elementwise_in(type_convert<GemmDataType, AccDataType>, dst);
+
+            constexpr index_t k3_loops = kM0 / kK3;
+            if constexpr(k3_loops > 1)
+            {
+                static_for<0, k3_loops - 1, 1>{}([&](auto i_k3) {
+                    const auto qt = load_tile(qt_dram_window); // load next Q^T
+                    block_sync_lds();
+                    gemm_3(dk_acc,
+                           get_slice_tile(dst_gemm,
+                                          Sequence<i_k3 * kK3, 0>{},
+                                          Sequence<(i_k3 + 1) * kK3, kN0>{}),
+                           qt_lds_window);
+                    block_sync_lds();
+                    auto qt_shuffle_tmp = make_static_distributed_tensor<QDataType>(
+                        Policy::template MakeShuffledQTRegBlockDescriptor<Problem>());
+                    shuffle_distributed_tensor(qt_shuffle_tmp, qt);
+                    store_tile(qt_lds_window,
+                               qt_shuffle_tmp); // store the prefetch
+
+                    move_tile_window(qt_dram_window, {0, kK3});
+                });
+            }
+            // tail
+            {
+                block_sync_lds();
+                gemm_3(dk_acc,
+                       get_slice_tile(
+                           dst_gemm, Sequence<(k3_loops - 1) * kK3, 0>{}, Sequence<kM0, kN0>{}),
+                       qt_lds_window);
+                block_sync_lds();
+            }
+
+            // STAGE 7, SGrad@K^T Gemm4
+            store_tile(ds_lds_store_window,
+                       tile_elementwise_in(type_convert<GemmDataType, AccDataType>, ds));
+
+            auto dq_acc = QGradBlockTileType{};
+
+            constexpr index_t k4_loops = kN0 / kK4;
+
+            tile_elementwise_inout([](auto& c) { c = 0; }, dq_acc); // Initialize QGrad
+
+            static_for<0, k4_loops, 1>{}([&](auto i_k4) {
+                block_sync_lds();
+                gemm_4(dq_acc, ds_lds_window, kt_lds_window);
+                block_sync_lds();
+                move_tile_window(ds_lds_window, {0, kK4});
+                move_tile_window(kt_lds_window, {0, kK4});
+            });
+
+            // QGrad Scale
+            tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, dq_acc);
+            const auto dq = tile_elementwise_in(type_convert<QGradDataType, AccDataType>, dq_acc);
+            store_tile(dq_dram_block_window, dq); // TODO: Atomicadd
+
+            // move tile windows
+            move_tile_window(q_dram_block_window, {kM0, 0});
+            move_tile_window(do_dram_block_window, {kM0, 0});
+            move_tile_window(lse_dram_window, {kM0, 0});
+            move_tile_window(d_dram_window, {kM0, 0});
+            move_tile_window(ds_lds_window, {0, -kN0});
+            move_tile_window(k_lds_window, {0, -kK0 * (k0_loops - 1)});
+            move_tile_window(kt_lds_window, {0, -kN0});
+            i_total_loops++;
         } while(i_total_loops < num_total_loop);
 
-        // finally, O
-        constexpr auto o_spans = decltype(o_acc)::GetDistributedSpans();
+        // KGrad Scale
+        tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, dk_acc);
 
-        sweep_tile_span(o_spans[Number<0>{}], [&](auto idx0) {
-            constexpr auto i_idx = make_tuple(idx0);
-            const auto tmp       = 1 / l[i_idx];
-            sweep_tile_span(o_spans[Number<1>{}], [&](auto idx1) {
-                constexpr auto i_j_idx = make_tuple(idx0, idx1);
-                o_acc(i_j_idx) *= tmp;
-            });
-        });
-
-        return o_acc;
+        return dk_acc, dv_acc;
     }
 
     template <typename QDramBlockWindowTmp,

@@ -220,10 +220,10 @@ struct FmhaBwdKernel
         //     Number<1>{});
 
         auto lse_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            lse_ptr, make_tuple(kargs.seqlen_q), make_tuple(1));
+            lse_ptr, make_tuple(kargs.seqlen_q), Number<32>{});
 
         auto d_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            d_ptr, make_tuple(kargs.seqlen_q), make_tuple(1));
+            d_ptr, make_tuple(kargs.seqlen_q), Number<32>{});
 
         auto do_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             do_ptr,
