@@ -21,7 +21,7 @@ struct FmhaBwdTilePartitioner
         return dim3(seqlen_k_ / kN0, batch_size_, nhead_);
     }
 
-    __device__ auto operator()(ck::index_t /*seqlen_q*/)
+    __device__ auto operator()(ck::index_t /*seqlen_k*/)
     {
         using namespace ck;
 

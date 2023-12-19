@@ -44,9 +44,9 @@ template <bool QLoadOnce,      // if q load whole block length (qkhdim) to LDS a
           bool QTLoadOnce,     // if q^t load whole block length (qkhdim) to LDS at once
           bool KLoadOnce,      // if k load whole block length (qkhdim) to LDS at once
           bool KTLoadOnce,     // if k^t load whole block length (qkhdim) to LDS at once
-          bool VLoadOnce,      // if do load whole block length (vhdim) to LDS at once
-          bool OGradLoadOnce,  // if do^t load whole block length (vhdim) to LDS at once
-          bool OGradTLoadOnce> // if v load whole block length (vhdim) to Vgprs at once
+          bool VLoadOnce,      // if v load whole block length (vhdim) to Vgprs at once
+          bool OGradLoadOnce,  // if do load whole block length (vhdim) to LDS at once
+          bool OGradTLoadOnce> // if do^t load whole block length (vhdim) to LDS at once
 using BlockFmhaBwdPipelineDispatcher = typename impl::
     BlockFmhaBwdPipelineDispatcher<QLoadOnce, QTLoadOnce, KLoadOnce, KTLoadOnce, VLoadOnce, OGradLoadOnce, OGradTLoadOnce>::Type;
 
