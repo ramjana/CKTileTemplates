@@ -86,7 +86,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     }
 
     template <typename Problem, typename BlockGemm>
-    __host__ __device__ static constexpr auto MakeVRegBlockDescriptor()
+    __host__ __device__ static constexpr auto MakeVDramRegStatTileDistribution()
     {
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
         constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
@@ -595,33 +595,6 @@ struct BlockFmhaBwdPipelineDefaultPolicy
                                            Sequence<0, 2, 4>>{});
     }
 
-    template <typename Problem, typename BlockGemm>
-    __host__ __device__ static constexpr auto MakeVDramRegStatTileDistribution()
-    {
-        constexpr auto config   = BlockGemm::Policy::template GetWarpGemmMWarpNWarp<Problem>();
-        using WG                = remove_cvref_t<decltype(config.template At<0>())>;
-        constexpr index_t NWarp = config.template At<2>();
-
-        constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
-        constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-
-        constexpr index_t K2 = WG::kK / WG::WarpGemmAttribute::Impl::kABKLane;
-        constexpr index_t K1 = WG::WarpGemmAttribute::Impl::kABKLane;
-        constexpr index_t K0 = kKPerBlock / (K1 * K2);
-
-        constexpr index_t N2 = WG::WarpGemmAttribute::Impl::kANLane;
-        constexpr index_t N1 = NWarp;
-        constexpr index_t N0 = kNPerBlock / (N2 * N1);
-
-        return make_static_tile_distribution(
-            StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<N0, N1, N2>, Sequence<K0, K1, K2>>,
-                                           Tuple<Sequence<1>, Sequence<2, 1>>,
-                                           Tuple<Sequence<1>, Sequence<1, 2>>,
-                                           Sequence<2, 1, 2>,
-                                           Sequence<0, 0, 2>>{});
-    }
-
     template <typename Problem>
     __host__ __device__ static constexpr auto MakeVDramRegTempTileDistribution()
     {
@@ -745,6 +718,70 @@ struct BlockFmhaBwdPipelineDefaultPolicy
                                            Tuple<Sequence<1>, Sequence<2, 0>>,
                                            Sequence<1, 2>,
                                            Sequence<0, 1>>{});
+    }
+
+    template <typename Problem>
+    __host__ __device__ static constexpr auto MakePreODramTileDistribution()
+    {
+        using ODataType = remove_cvref_t<typename Problem::ODataType>;
+
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+        constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
+
+        constexpr index_t K1 = 16 / sizeof(ODataType);
+        constexpr index_t K0 = kKPerBlock / K1;
+        constexpr index_t M1 = get_warp_size();
+        constexpr index_t M0 = kBlockSize / M1;
+
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<M0, M1>, Sequence<K0, K1>>,
+                                           Tuple<Sequence<1>, Sequence<1>>,
+                                           Tuple<Sequence<0>, Sequence<1>>,
+                                           Sequence<2, 2>,
+                                           Sequence<0, 1>>{});
+    }
+
+    template <typename Problem>
+    __host__ __device__ static constexpr auto MakePreOGradDramTileDistribution()
+    {
+        using OGradDataType = remove_cvref_t<typename Problem::OGradDataType>;
+
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+        constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
+
+        constexpr index_t K1 = 16 / sizeof(OGradDataType);
+        constexpr index_t K0 = kKPerBlock / K1;
+        constexpr index_t M1 = get_warp_size();
+        constexpr index_t M0 = kBlockSize / M1;
+
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<M0, M1>, Sequence<K0, K1>>,
+                                           Tuple<Sequence<1>, Sequence<1>>,
+                                           Tuple<Sequence<0>, Sequence<1>>,
+                                           Sequence<2, 2>,
+                                           Sequence<0, 1>>{});
+    }
+
+    template <typename Problem>
+    __host__ __device__ static constexpr auto MakePreDDramTileDistribution()
+    {
+        using DDataType = remove_cvref_t<typename Problem::DDataType>;
+
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+
+        constexpr index_t K0 = 1;
+        constexpr index_t M1 = get_warp_size();
+        constexpr index_t M0 = kBlockSize / M1;
+
+        return make_static_tile_distribution(
+            StaticTileDistributionEncoding<Sequence<1>,
+                                           Tuple<Sequence<M0, M1>, Sequence<K0>>,
+                                           Tuple<Sequence<1>, Sequence<1>>,
+                                           Tuple<Sequence<0>, Sequence<1>>,
+                                           Sequence<2>,
+                                           Sequence<0>>{});
     }
 
     template <typename Problem>
@@ -988,34 +1025,6 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         return BlockGemmASmemBSmemCRegV1<BlockGemmProblem, BlockGemmPolicy>{};
     }
-
-    // template <typename Problem>
-    // __host__ __device__ static constexpr auto GetQKBlockGemm()
-    // {
-    //     using BlockGemmProblem =
-    //         BlockGemmPipelineProblem<typename Problem::QDataType,
-    //                                  typename Problem::KDataType,
-    //                                  typename Problem::AccDataType,
-    //                                  Problem::kBlockSize,
-    //                                  TileGemmShape<Problem::BlockFmhaShape::kM0,
-    //                                                Problem::BlockFmhaShape::kN0,
-    //                                                Problem::BlockFmhaShape::kK0>>;
-
-    //     using WarpGemm =
-    //         warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleB<
-    //             warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
-    //             2>>;
-
-    //     using BlockGemmPolicy =
-    //         BlockGemmARegBSmemCRegV1CustomPolicy<typename Problem::QDataType,
-    //                                              typename Problem::KDataType,
-    //                                              typename Problem::AccDataType,
-    //                                              typename
-    //                                              Problem::BlockFmhaShape::Gemm0BlockWarps,
-    //                                              WarpGemm>;
-
-    //     return BlockGemmARegBSmemCRegV1<BlockGemmProblem, BlockGemmPolicy>{};
-    // }
 
     template <typename Problem>
     __host__ __device__ static constexpr auto GetPTOGradTBlockGemm()

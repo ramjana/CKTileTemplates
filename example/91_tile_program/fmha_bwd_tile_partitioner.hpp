@@ -32,3 +32,25 @@ struct FmhaBwdTilePartitioner
         return ck::make_tuple(i_block, i_nhead, i_batch);
     }
 };
+
+template <ck::index_t kBlockSize>
+struct FmhaBwdOGradDotOTilePartitioner
+{
+    __host__ static constexpr auto
+    GridSize(ck::index_t batch_size_, ck::index_t nhead_, ck::index_t seqlen_q_)
+    {
+        // TODO: this may need tuning
+        return dim3(seqlen_q_ / kBlockSize, batch_size_, nhead_);
+    }
+
+    __device__ auto operator()(ck::index_t /*seqlen_q*/)
+    {
+        using namespace ck;
+
+        const index_t i_block = blockIdx.x;
+        const index_t i_batch = blockIdx.y;
+        const index_t i_nhead = blockIdx.z;
+
+        return ck::make_tuple(i_block, i_nhead, i_batch);
+    }
+};

@@ -19,16 +19,14 @@ struct FmhaBwdKernel
     using EpiloguePipeline                  = ck::remove_cvref_t<EpiloguePipeline_>;
     static constexpr ck::index_t kBlockSize = FmhaPipeline::kBlockSize;
 
-    using QDataType           = ck::remove_cvref_t<typename FmhaPipeline::QDataType>;
-    using KDataType           = ck::remove_cvref_t<typename FmhaPipeline::KDataType>;
-    using VDataType           = ck::remove_cvref_t<typename FmhaPipeline::VDataType>;
-    using GemmDataType        = ck::remove_cvref_t<typename FmhaPipeline::GemmDataType>;
-    using LSEDataType         = ck::remove_cvref_t<typename FmhaPipeline::LSEDataType>;
-    using AccDataType         = ck::remove_cvref_t<typename FmhaPipeline::AccDataType>;
-    using SMPLComputeDataType = ck::remove_cvref_t<typename FmhaPipeline::SMPLComputeDataType>;
-    using DDataType           = ck::remove_cvref_t<typename FmhaPipeline::DDataType>;
-    using ZDataType           = ck::remove_cvref_t<typename FmhaPipeline::ZDataType>;
-    // using ODataType           = ck::remove_cvref_t<typename FmhaPipeline::ODataType>;
+    using QDataType    = ck::remove_cvref_t<typename FmhaPipeline::QDataType>;
+    using KDataType    = ck::remove_cvref_t<typename FmhaPipeline::KDataType>;
+    using VDataType    = ck::remove_cvref_t<typename FmhaPipeline::VDataType>;
+    using GemmDataType = ck::remove_cvref_t<typename FmhaPipeline::GemmDataType>;
+    using LSEDataType  = ck::remove_cvref_t<typename FmhaPipeline::LSEDataType>;
+    using AccDataType  = ck::remove_cvref_t<typename FmhaPipeline::AccDataType>;
+    using DDataType    = ck::remove_cvref_t<typename FmhaPipeline::DDataType>;
+    // using ZDataType           = ck::remove_cvref_t<typename FmhaPipeline::ZDataType>;
     using OGradDataType = ck::remove_cvref_t<typename FmhaPipeline::OGradDataType>;
     using QGradDataType = ck::remove_cvref_t<typename FmhaPipeline::QGradDataType>;
     using KGradDataType = ck::remove_cvref_t<typename FmhaPipeline::KGradDataType>;
@@ -39,10 +37,9 @@ struct FmhaBwdKernel
         const void* q_ptr;
         const void* k_ptr;
         const void* v_ptr;
-        // const void* o_ptr;
         const void* lse_ptr;
         const void* do_ptr;
-        // void* d_ptr;
+        const void* d_ptr;
         // void* z_ptr;
         void* dq_ptr;
         void* dk_ptr;
@@ -88,10 +85,9 @@ struct FmhaBwdKernel
     __host__ static constexpr Kargs MakeKargs(const void* q_ptr,
                                               const void* k_ptr,
                                               const void* v_ptr,
-                                              // const void* o_ptr,
                                               const void* lse_ptr,
                                               const void* do_ptr,
-                                              void* d_ptr,
+                                              const void* d_ptr,
                                               // void* z_ptr,
                                               void* dq_ptr,
                                               void* dk_ptr,
@@ -158,8 +154,6 @@ struct FmhaBwdKernel
                                  i_nhead * kargs.nhead_stride_k + i_batch * kargs.batch_stride_k;
         const VDataType* v_ptr = reinterpret_cast<const VDataType*>(kargs.v_ptr) +
                                  i_nhead * kargs.nhead_stride_v + i_batch * kargs.batch_stride_v;
-        // const ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
-        //                          i_nhead * kargs.nhead_stride_o + i_batch * kargs.batch_stride_o;
         const LSEDataType* lse_ptr = reinterpret_cast<LSEDataType*>(kargs.lse_ptr) +
                                      i_nhead * kargs.nhead_stride_lse +
                                      i_batch * kargs.batch_stride_lse;
@@ -211,13 +205,6 @@ struct FmhaBwdKernel
             make_tuple(kargs.stride_v, 1),
             Number<32>{},
             Number<1>{});
-
-        // auto o_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-        //     o_ptr,
-        //     make_tuple(kargs.seqlen_q, kargs.hdim_v),
-        //     make_tuple(kargs.stride_o, 1),
-        //     Number<32>{},
-        //     Number<1>{});
 
         auto lse_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             lse_ptr, make_tuple(kargs.seqlen_q), Number<32>{});
@@ -375,5 +362,119 @@ struct FmhaBwdKernel
             {i_n0, 0});
 
         EpiloguePipeline{}(dk_dram_window, dv_dram_window, dk_acc_tile, dv_acc_tile);
+    }
+};
+
+template <typename TilePartitioner_, typename FmhaOGradDotO_, typename FmhaPipeline_>
+struct FmhaBwdOGradDotOKernel
+{
+    using TilePartitioner                   = ck::remove_cvref_t<TilePartitioner_>;
+    using FmhaOGradDotO                     = ck::remove_cvref_t<FmhaOGradDotO_>;
+    using FmhaPipeline                      = ck::remove_cvref_t<FmhaPipeline_>;
+    static constexpr ck::index_t kBlockSize = FmhaPipeline::kBlockSize;
+
+    using DDataType     = ck::remove_cvref_t<typename FmhaPipeline::DDataType>;
+    using ODataType     = ck::remove_cvref_t<typename FmhaPipeline::ODataType>;
+    using OGradDataType = ck::remove_cvref_t<typename FmhaPipeline::OGradDataType>;
+
+    struct Kargs
+    {
+        const void* o_ptr;
+        const void* do_ptr;
+        void* d_ptr;
+
+        ck::index_t seqlen_q;
+        ck::index_t hdim_v;
+
+        ck::index_t stride_o;
+        // ck::index_t stride_do;
+
+        ck::index_t nhead_stride_o;
+        ck::index_t nhead_stride_d;
+        // ck::index_t nhead_stride_do;
+
+        ck::index_t batch_stride_o;
+        ck::index_t batch_stride_d;
+        // ck::index_t batch_stride_do;
+    };
+
+    __host__ static constexpr Kargs MakeKargs(const void* o_ptr,
+                                              const void* do_ptr,
+                                              void* d_ptr,
+                                              ck::index_t seqlen_q,
+                                              ck::index_t hdim_v,
+                                              ck::index_t stride_o,
+                                              ck::index_t nhead_stride_o,
+                                              ck::index_t batch_stride_o)
+    {
+        return Kargs{
+            o_ptr, do_ptr, d_ptr, seqlen_q, hdim_v, stride_o, nhead_stride_o, batch_stride_o};
+    }
+
+    __host__ static constexpr auto
+    GridSize(ck::index_t batch_size_, ck::index_t nhead_, ck::index_t seqlen_q_)
+    {
+        return TilePartitioner::GridSize(batch_size_, nhead_, seqlen_q_);
+    }
+
+    __host__ static constexpr auto BlockSize() { return dim3(kBlockSize); }
+
+    __host__ __device__ static constexpr ck::index_t GetSmemSize() { return 0; }
+
+    __device__ void operator()(Kargs kargs) const
+    {
+        using namespace ck;
+        using namespace ck::tile_program;
+        using namespace ck::tile_program::block;
+
+        // allocate LDS
+        // __shared__ char smem_ptr[GetSmemSize()];
+
+        // divide problem
+        const auto [i_tile_m, i_nhead, i_batch] = TilePartitioner{}(kargs.seqlen_q);
+
+        const index_t i_m0 = __builtin_amdgcn_readfirstlane(i_tile_m * FmhaPipeline::kM0);
+
+        // for simplicity, batch stride we just modify the pointer
+        const ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
+                                 i_nhead * kargs.nhead_stride_o + i_batch * kargs.batch_stride_o;
+        const OGradDataType* do_ptr = reinterpret_cast<OGradDataType*>(kargs.do_ptr) +
+                                      i_nhead * kargs.nhead_stride_o +
+                                      i_batch * kargs.batch_stride_o;
+        DDataType* d_ptr = reinterpret_cast<DDataType*>(kargs.d_ptr) +
+                           i_nhead * kargs.nhead_stride_d + i_batch * kargs.batch_stride_d;
+
+        // O/dO/D DRAM and DRAM window
+        auto o_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            o_ptr,
+            make_tuple(kargs.seqlen_q, kargs.hdim_v),
+            make_tuple(kargs.stride_o, 1),
+            Number<32>{},
+            Number<1>{});
+
+        auto do_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            do_ptr,
+            make_tuple(kargs.seqlen_q, kargs.hdim_v),
+            make_tuple(kargs.stride_o, 1),
+            Number<32>{},
+            Number<1>{});
+
+        auto d_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+            d_ptr, make_tuple(kargs.seqlen_q), Number<32>{});
+
+        auto o_dram_window = make_tile_window(
+            o_dram,
+            make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kVHeaddim>{}),
+            {i_m0, 0});
+
+        auto do_dram_window = make_tile_window(
+            do_dram,
+            make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kVHeaddim>{}),
+            {i_m0, 0});
+
+        auto d_dram_window =
+            make_tile_window(d_dram, make_tuple(Number<FmhaPipeline::kM0>{}), {i_m0});
+
+        FmhaOGradDotO{}(o_dram_window, do_dram_window, d_dram_window);
     }
 };
