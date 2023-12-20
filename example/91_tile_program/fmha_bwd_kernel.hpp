@@ -65,7 +65,7 @@ struct FmhaBwdKernel
         ck::index_t nhead_stride_k;
         ck::index_t nhead_stride_v;
         ck::index_t nhead_stride_o;
-        ck::index_t nhead_stride_lse;
+        ck::index_t nhead_stride_lsed;
         // ck::index_t nhead_stride_dq;
         // ck::index_t nhead_stride_dk;
         // ck::index_t nhead_stride_dv;
@@ -75,7 +75,7 @@ struct FmhaBwdKernel
         ck::index_t batch_stride_k;
         ck::index_t batch_stride_v;
         ck::index_t batch_stride_o;
-        ck::index_t batch_stride_lse;
+        ck::index_t batch_stride_lsed;
         // ck::index_t batch_stride_dq;
         // ck::index_t batch_stride_dk;
         // ck::index_t batch_stride_dv;
@@ -105,19 +105,41 @@ struct FmhaBwdKernel
                                               ck::index_t nhead_stride_k,
                                               ck::index_t nhead_stride_v,
                                               ck::index_t nhead_stride_o,
-                                              ck::index_t nhead_stride_lse,
+                                              ck::index_t nhead_stride_lsed,
                                               ck::index_t batch_stride_q,
                                               ck::index_t batch_stride_k,
                                               ck::index_t batch_stride_v,
                                               ck::index_t batch_stride_o,
-                                              ck::index_t batch_stride_lse)
+                                              ck::index_t batch_stride_lsed)
     {
-        return Kargs{q_ptr,          k_ptr,          v_ptr,          lse_ptr,        do_ptr,
-                     d_ptr,          dq_ptr,         dk_ptr,         dv_ptr,         seqlen_q,
-                     seqlen_k,       hdim_q,         hdim_v,         scale,          stride_q,
-                     stride_k,       stride_v,       stride_o,       nhead_stride_q, nhead_stride_k,
-                     nhead_stride_v, nhead_stride_o, batch_stride_q, batch_stride_k, batch_stride_v,
-                     batch_stride_o};
+        return Kargs{q_ptr,
+                     k_ptr,
+                     v_ptr,
+                     lse_ptr,
+                     do_ptr,
+                     d_ptr,
+                     dq_ptr,
+                     dk_ptr,
+                     dv_ptr,
+                     seqlen_q,
+                     seqlen_k,
+                     hdim_q,
+                     hdim_v,
+                     scale,
+                     stride_q,
+                     stride_k,
+                     stride_v,
+                     stride_o,
+                     nhead_stride_q,
+                     nhead_stride_k,
+                     nhead_stride_v,
+                     nhead_stride_o,
+                     nhead_stride_lsed,
+                     batch_stride_q,
+                     batch_stride_k,
+                     batch_stride_v,
+                     batch_stride_o,
+                     batch_stride_lsed};
     }
 
     __host__ static constexpr auto
@@ -155,11 +177,11 @@ struct FmhaBwdKernel
         const VDataType* v_ptr = reinterpret_cast<const VDataType*>(kargs.v_ptr) +
                                  i_nhead * kargs.nhead_stride_v + i_batch * kargs.batch_stride_v;
         const LSEDataType* lse_ptr = reinterpret_cast<LSEDataType*>(kargs.lse_ptr) +
-                                     i_nhead * kargs.nhead_stride_lse +
-                                     i_batch * kargs.batch_stride_lse;
+                                     i_nhead * kargs.nhead_stride_lsed +
+                                     i_batch * kargs.batch_stride_lsed;
         const DDataType* d_ptr = reinterpret_cast<DDataType*>(kargs.d_ptr) +
-                                 i_nhead * kargs.nhead_stride_lse +
-                                 i_batch * kargs.batch_stride_lse;
+                                 i_nhead * kargs.nhead_stride_lsed +
+                                 i_batch * kargs.batch_stride_lsed;
         const OGradDataType* do_ptr = reinterpret_cast<OGradDataType*>(kargs.do_ptr) +
                                       i_nhead * kargs.nhead_stride_o +
                                       i_batch * kargs.batch_stride_o;
@@ -365,17 +387,23 @@ struct FmhaBwdKernel
     }
 };
 
-template <typename TilePartitioner_, typename FmhaOGradDotO_, typename FmhaPipeline_>
+template <typename TilePartitioner_, typename FmhaOGradDotO_, typename Problem_>
 struct FmhaBwdOGradDotOKernel
 {
-    using TilePartitioner                   = ck::remove_cvref_t<TilePartitioner_>;
-    using FmhaOGradDotO                     = ck::remove_cvref_t<FmhaOGradDotO_>;
-    using FmhaPipeline                      = ck::remove_cvref_t<FmhaPipeline_>;
-    static constexpr ck::index_t kBlockSize = FmhaPipeline::kBlockSize;
+    using TilePartitioner = ck::remove_cvref_t<TilePartitioner_>;
+    using FmhaOGradDotO   = ck::remove_cvref_t<FmhaOGradDotO_>;
+    using Problem         = ck::remove_cvref_t<Problem_>;
 
-    using DDataType     = ck::remove_cvref_t<typename FmhaPipeline::DDataType>;
-    using ODataType     = ck::remove_cvref_t<typename FmhaPipeline::ODataType>;
-    using OGradDataType = ck::remove_cvref_t<typename FmhaPipeline::OGradDataType>;
+    using DDataType     = ck::remove_cvref_t<typename Problem::DDataType>;
+    using ODataType     = ck::remove_cvref_t<typename Problem::ODataType>;
+    using OGradDataType = ck::remove_cvref_t<typename Problem::OGradDataType>;
+
+    static constexpr index_t kBlockSize = Problem::kBlockSize;
+
+    using BlockFmhaShape = ck::remove_cvref_t<typename Problem::BlockFmhaShape>;
+
+    static constexpr index_t kM0       = kBlockSize;
+    static constexpr index_t kVHeaddim = BlockFmhaShape::kVHeaddim;
 
     struct Kargs
     {
@@ -433,7 +461,7 @@ struct FmhaBwdOGradDotOKernel
         // divide problem
         const auto [i_tile_m, i_nhead, i_batch] = TilePartitioner{}(kargs.seqlen_q);
 
-        const index_t i_m0 = __builtin_amdgcn_readfirstlane(i_tile_m * FmhaPipeline::kM0);
+        const index_t i_m0 = __builtin_amdgcn_readfirstlane(i_tile_m * kM0);
 
         // for simplicity, batch stride we just modify the pointer
         const ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
@@ -462,18 +490,13 @@ struct FmhaBwdOGradDotOKernel
         auto d_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             d_ptr, make_tuple(kargs.seqlen_q), Number<32>{});
 
-        auto o_dram_window = make_tile_window(
-            o_dram,
-            make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kVHeaddim>{}),
-            {i_m0, 0});
+        auto o_dram_window =
+            make_tile_window(o_dram, make_tuple(Number<kM0>{}, Number<kVHeaddim>{}), {i_m0, 0});
 
-        auto do_dram_window = make_tile_window(
-            do_dram,
-            make_tuple(Number<FmhaPipeline::kM0>{}, Number<FmhaPipeline::kVHeaddim>{}),
-            {i_m0, 0});
+        auto do_dram_window =
+            make_tile_window(do_dram, make_tuple(Number<kM0>{}, Number<kVHeaddim>{}), {i_m0, 0});
 
-        auto d_dram_window =
-            make_tile_window(d_dram, make_tuple(Number<FmhaPipeline::kM0>{}), {i_m0});
+        auto d_dram_window = make_tile_window(d_dram, make_tuple(Number<kM0>{}), {i_m0});
 
         FmhaOGradDotO{}(o_dram_window, do_dram_window, d_dram_window);
     }

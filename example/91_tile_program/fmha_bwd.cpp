@@ -17,6 +17,7 @@
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_default_policy.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_problem.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_dispatcher.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_dot_do_o.hpp"
 #include "ck/tile_program/tile/tile_fmha_bwd_shape.hpp"
 
 #include "reference_batched_gemm.hpp"
@@ -25,26 +26,25 @@
 #include "fmha_bwd_tile_partitioner.hpp"
 #include "fmha_bwd_epilogue.hpp"
 
-using QDataType           = ck::half_t;
-using KDataType           = ck::half_t;
-using VDataType           = ck::half_t;
-using GemmDataType        = ck::half_t;
-using LSEDataType         = float;
-using AccDataType         = float; // data type for gemm accumulation
-using SMPLComputeDataType = float; // data type for reduction, softmax
-using DDataType           = float;
-using ZDataType           = unsigned short;
-using ODataType           = ck::half_t;
-using OGradDataType       = ck::half_t;
-using QGradDataType       = ck::half_t;
-using KGradDataType       = ck::half_t;
-using VGradDataType       = ck::half_t;
+using QDataType     = ck::half_t;
+using KDataType     = ck::half_t;
+using VDataType     = ck::half_t;
+using GemmDataType  = ck::half_t;
+using LSEDataType   = float;
+using AccDataType   = float; // data type for gemm accumulation
+using DDataType     = float;
+using ZDataType     = unsigned short;
+using ODataType     = ck::half_t;
+using OGradDataType = ck::half_t;
+using QGradDataType = ck::half_t;
+using KGradDataType = ck::half_t;
+using VGradDataType = ck::half_t;
 
-// GEMM0: Q@K^T=S
-// GEMM1: P^T@dO=dV(This was chosen as G1 to match fwd, but N1 must be equal to headdim_v)
-// GEMM2: dO@V^T=dP(This was chosen as G2 because of the calculation order)
-// GEMM3: dS^T@Q=dK(Similar to G1, but N3 must be equal to headdim_qk)
-// GEMM4: dS@K=dQ(N4 must be equal to headdim_qk)
+// GEMM0: Q@K=S^T
+// GEMM1: P^T@dO^T=dV(This was chosen as G1 to match fwd, but N1 must be equal to headdim_v)
+// GEMM2: dO@V=dP^T(This was chosen as G2 because of the calculation order)
+// GEMM3: dS^T@Q^T=dK(Similar to G1, but N3 must be equal to headdim_qk)
+// GEMM4: dS@K^T=dQ(N4 must be equal to headdim_qk)
 // Is it necessary to distinguish between K0~K4?
 // clang-format off
 // ######################################|  M0|  N0|  K0|  K1|  K2|  K3|  K4| QKHD|  VHD|
@@ -97,7 +97,6 @@ using FmhaBwdPipelineProblemHDim32 =
                                                          GemmDataType,
                                                          LSEDataType,
                                                          AccDataType,
-                                                         SMPLComputeDataType,
                                                          DDataType,
                                                          ZDataType,
                                                          ODataType,
@@ -114,7 +113,6 @@ using FmhaBwdPipelineProblemHDim64 =
                                                          GemmDataType,
                                                          LSEDataType,
                                                          AccDataType,
-                                                         SMPLComputeDataType,
                                                          DDataType,
                                                          ZDataType,
                                                          ODataType,
@@ -139,22 +137,72 @@ using FmhaBwdPipelineHDim32 =
 using FmhaBwdPipelineHDim64 =
     ck::tile_program::block::BlockFmhaBwdPipeline<FmhaBwdPipelineProblemHDim64>;
 
-using FmhaBWDEpilogue = FmhaBwdEpilogue<
-    FmhaBwdEpilogueProblem<AccDataType, QGradDataType, KGradDataType, VGradDataType>>;
+using FmhaBWDEpilogue =
+    FmhaBwdEpilogue<FmhaBwdEpilogueProblem<AccDataType, KGradDataType, VGradDataType>>;
 using FmhaBwdKernelHDim32 =
     FmhaBwdKernel<FmhaBwdTilePartitionerHDim32, FmhaBwdPipelineHDim32, FmhaBWDEpilogue>;
 using FmhaBwdKernelHDim64 =
-    FmhaFwdKernel<FmhaBwdTilePartitionerHDim64, FmhaBwdPipelineHDim64, FmhaBWDEpilogue>;
+    FmhaBwdKernel<FmhaBwdTilePartitionerHDim64, FmhaBwdPipelineHDim64, FmhaBWDEpilogue>;
+
+using FmhaBwdOGradDotOTilePartitionerHDimX = FmhaBwdOGradDotOTilePartitioner<256>;
+using FmhaBwdOGradDotOHDim32               = BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim32>;
+using FmhaBwdOGradDotOHDim64               = BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim64>;
+using FmhaBwdOGradDotOKernelHDim32 = FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX,
+                                                            FmhaBwdOGradDotOHDim32,
+                                                            FmhaBwdPipelineProblemHDim32>;
+using FmhaBwdOGradDotOKernelHDim64 = FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX,
+                                                            FmhaBwdOGradDotOHDim64,
+                                                            FmhaBwdPipelineProblemHDim64>;
+
+template <typename FmhaBwdOGradDotOKernel>
+float invoker_fmha_bwd_dot_do_o_kernel(cconst void* o_ptr,
+                                       const void* do_ptr,
+                                       const void* d_ptr,
+                                       ck::index_t batch,
+                                       ck::index_t nhead,
+                                       ck::index_t seqlen_q,
+                                       ck::index_t hdim_v,
+                                       bool o_perm,
+                                       bool time_kernel = true)
+{
+    dim3 kGridSize            = FmhaBwdKernel::GridSize(batch, nhead, seqlen_q);
+    constexpr dim3 kBlockSize = FmhaBwdKernel::BlockSize();
+
+    // constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
+    // constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
+    // constexpr ck::index_t kBlockPerCu   = kWarpPerCu / kWarpPerBlock;
+    constexpr ck::index_t kBlockPerCu = 1;
+
+    // batch * nhead * seqlen * hdim or batch * seqlen * nhead * hdim
+    auto kargs =
+        FmhaBwdOGradDotOKernel::MakeKargs(o_ptr,
+                                          do_ptr,
+                                          d_ptr,
+                                          seqlen_q,
+                                          hdim_v,
+                                          o_perm ? hdim_v : nhead * hdim_v,    // stride_o
+                                          o_perm ? seqlen_q * hdim_v : hdim_v, // nhead_stride_o
+                                          seqlen_q,                            // nhead_stride_d
+                                          nhead * seqlen_q * hdim_v,           // batch_stride_o
+                                          nhead * seqlen_q);                   // batch_stride_d
+
+    float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(StreamConfig{nullptr, time_kernel},
+                                                              FmhaBwdOGradDotOKernel{},
+                                                              kGridSize,
+                                                              kBlockSize,
+                                                              0,
+                                                              kargs);
+    return ave_time;
+}
 
 template <typename FmhaBwdKernel>
 float invoker_fmha_bwd_kernel(const void* q_ptr,
                               const void* k_ptr,
                               const void* v_ptr,
-                              const void* o_ptr,
                               const void* lse_ptr,
                               const void* do_ptr,
+                              const void* d_ptr,
                               // void* z_ptr,
-                              // void* d_ptr,
                               void* dq_ptr,
                               void* dk_ptr,
                               void* dv_ptr,
@@ -181,18 +229,17 @@ float invoker_fmha_bwd_kernel(const void* q_ptr,
     auto kargs = FmhaBwdKernel::MakeKargs(q_ptr,
                                           k_ptr,
                                           v_ptr,
-                                          o_ptr,
                                           lse_ptr,
                                           do_ptr,
-                                          // d_ptr,
+                                          d_ptr,
                                           // z_ptr,
                                           dq_ptr,
                                           dk_ptr,
                                           dv_ptr,
-                                          seqlen_q, // seqlen_q
-                                          seqlen_k, // seqlen_k
-                                          hdim_q,   // hdim_q
-                                          hdim_v,   // hdim_v
+                                          seqlen_q,
+                                          seqlen_k,
+                                          hdim_q,
+                                          hdim_v,
                                           scale,
                                           i_perm ? hdim_q : nhead * hdim_q,    // stride_q
                                           i_perm ? hdim_q : nhead * hdim_q,    // stride_k
@@ -202,12 +249,12 @@ float invoker_fmha_bwd_kernel(const void* q_ptr,
                                           i_perm ? seqlen_k * hdim_q : hdim_q, // nhead_stride_k
                                           i_perm ? seqlen_k * hdim_v : hdim_v, // nhead_stride_v
                                           o_perm ? seqlen_q * hdim_v : hdim_v, // nhead_stride_o
-                                          seqlen_q,                            // nhead_stride_lse
+                                          seqlen_q,                            // nhead_stride_lsed
                                           nhead * seqlen_q * hdim_q,           // batch_stride_q
                                           nhead * seqlen_k * hdim_q,           // batch_stride_k
                                           nhead * seqlen_k * hdim_v,           // batch_stride_v
                                           nhead * seqlen_q * hdim_v,           // batch_stride_o
-                                          nhead * seqlen_q);                   // batch_stride_lse
+                                          nhead * seqlen_q);                   // batch_stride_lsed
 
     float ave_time = launch_kernel<kBlockSize.x, kBlockPerCu>(
         StreamConfig{nullptr, time_kernel}, FmhaBwdKernel{}, kGridSize, kBlockSize, 0, kargs);
@@ -238,7 +285,7 @@ void run_fmha_fwd_host(const TensorQ& q_g_m_k,
 // float rp_dropout)
 {
     // S = alpha * Q * K^T
-    reference_batched_gemm<QDataType, KDataType, AccDataType, SMPLComputeDataType>(
+    reference_batched_gemm<QDataType, KDataType, AccDataType, AccDataType>(
         q_g_m_k,
         k_g_n_k,
         s_g_m_n,
@@ -247,10 +294,8 @@ void run_fmha_fwd_host(const TensorQ& q_g_m_k,
         [&alpha](const AccDataType& x) { return alpha * x; });
     // TODO: masking
     // P = Softmax(S)
-    reference_batched_softmax<SMPLComputeDataType,
-                              SMPLComputeDataType,
-                              SMPLComputeDataType,
-                              LSEDataType>(s_g_m_n, p_hp_g_m_n, lse_g_m);
+    reference_batched_softmax<AccDataType, AccDataType, AccDataType, LSEDataType>(
+        s_g_m_n, p_hp_g_m_n, lse_g_m);
 
     p_hp_g_m_n.ForEach(
         [&](auto& self, auto idx) { p_lp_g_m_n(idx) = ck::type_convert<GemmDataType>(self(idx)); });
@@ -315,8 +360,8 @@ int main(int argc, char* argv[])
     Tensor<VDataType> v_host(get_lengths(i_perm, batch, nhead, seqlen_k, hdim_v));
     Tensor<ODataType> o_host(get_lengths(o_perm, batch, nhead, seqlen_q, hdim_v));
     Tensor<LSEDataType> lse_host(std::array<ck::index_t, 3>{batch, nhead, seqlen_q});
+    Tensor<DDataType> d_host(std::array<ck::index_t, 3>{batch, nhead, seqlen_q});
     // Tensor<ZDataType> z_host(std::array<ck::index_t, 4>{batch, nhead, seqlen_q, seqlen_k});
-    // Tensor<DDataType> d_host(std::array<ck::index_t, 3>{batch, nhead, seqlen_q});
     Tensor<QGradDataType> dq_host(get_lengths(i_perm, batch, nhead, seqlen_q, hdim_q));
     Tensor<KGradDataType> dk_host(get_lengths(i_perm, batch, nhead, seqlen_k, hdim_q));
     Tensor<VGradDataType> dv_host(get_lengths(i_perm, batch, nhead, seqlen_k, hdim_v));
@@ -339,8 +384,8 @@ int main(int argc, char* argv[])
     DeviceMem v_buf(sizeof(VDataType) * v_host.GetElementSpaceSize());
     DeviceMem o_buf(sizeof(ODataType) * o_host.GetElementSpaceSize());
     DeviceMem lse_buf(sizeof(LSEDataType) * lse_host.GetElementSpaceSize());
+    DeviceMem d_buf(sizeof(DDataType) * d_host.GetElementSpaceSize());
     // DeviceMem z_buf(sizeof(ZDataType) * z_host.GetElementSpaceSize());
-    // DeviceMem d_buf(sizeof(DDataType) * d_host.GetElementSpaceSize());
     DeviceMem dq_buf(sizeof(QGradDataType) * dq_host.GetElementSpaceSize());
     DeviceMem dk_buf(sizeof(KGradDataType) * dk_host.GetElementSpaceSize());
     DeviceMem dv_buf(sizeof(VGradDataType) * dv_host.GetElementSpaceSize());
@@ -358,47 +403,67 @@ int main(int argc, char* argv[])
 
     float ave_time = 0;
     if(hdim_q == hdim_v && hdim_q == 32)
-        ave_time = invoker_fmha_bwd_kernel<FmhaKernelHDim32>(q_buf.GetDeviceBuffer(),
-                                                             k_buf.GetDeviceBuffer(),
-                                                             v_buf.GetDeviceBuffer(),
-                                                             o_buf.GetDeviceBuffer(),
-                                                             lse_buf.GetDeviceBuffer(),
-                                                             do_buf.GetDeviceBuffer(),
-                                                             // z_buf.GetDeviceBuffer(),
-                                                             // d_buf.GetDeviceBuffer(),
-                                                             dq_buf.GetDeviceBuffer(),
-                                                             dk_buf.GetDeviceBuffer(),
-                                                             dv_buf.GetDeviceBuffer(),
-                                                             batch,
-                                                             nhead,
-                                                             seqlen_q,
-                                                             seqlen_k,
-                                                             hdim_q,
-                                                             hdim_v,
-                                                             scale,
-                                                             i_perm,
-                                                             o_perm);
+    {
+        ave_time =
+            invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim32>(o_buf.GetDeviceBuffer(),
+                                                                           do_buf.GetDeviceBuffer(),
+                                                                           d_buf.GetDeviceBuffer(),
+                                                                           batch,
+                                                                           nhead,
+                                                                           seqlen_q,
+                                                                           hdim_v,
+                                                                           o_perm);
+        ave_time += invoker_fmha_bwd_kernel<FmhaKernelHDim32>(q_buf.GetDeviceBuffer(),
+                                                              k_buf.GetDeviceBuffer(),
+                                                              v_buf.GetDeviceBuffer(),
+                                                              lse_buf.GetDeviceBuffer(),
+                                                              do_buf.GetDeviceBuffer(),
+                                                              d_buf.GetDeviceBuffer(),
+                                                              // z_buf.GetDeviceBuffer(),
+                                                              dq_buf.GetDeviceBuffer(),
+                                                              dk_buf.GetDeviceBuffer(),
+                                                              dv_buf.GetDeviceBuffer(),
+                                                              batch,
+                                                              nhead,
+                                                              seqlen_q,
+                                                              seqlen_k,
+                                                              hdim_q,
+                                                              hdim_v,
+                                                              scale,
+                                                              i_perm,
+                                                              o_perm);
+    }
     else if(hdim_q == hdim_v && hdim_q == 64)
-        ave_time = invoker_fmha_bwd_kernel<FmhaKernelHDim64>(q_buf.GetDeviceBuffer(),
-                                                             k_buf.GetDeviceBuffer(),
-                                                             v_buf.GetDeviceBuffer(),
-                                                             o_buf.GetDeviceBuffer(),
-                                                             lse_buf.GetDeviceBuffer(),
-                                                             do_buf.GetDeviceBuffer(),
-                                                             // z_buf.GetDeviceBuffer(),
-                                                             // d_buf.GetDeviceBuffer(),
-                                                             dq_buf.GetDeviceBuffer(),
-                                                             dk_buf.GetDeviceBuffer(),
-                                                             dv_buf.GetDeviceBuffer(),
-                                                             batch,
-                                                             nhead,
-                                                             seqlen_q,
-                                                             seqlen_k,
-                                                             hdim_q,
-                                                             hdim_v,
-                                                             scale,
-                                                             i_perm,
-                                                             o_perm);
+    {
+        ave_time =
+            invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim64>(o_buf.GetDeviceBuffer(),
+                                                                           do_buf.GetDeviceBuffer(),
+                                                                           d_buf.GetDeviceBuffer(),
+                                                                           batch,
+                                                                           nhead,
+                                                                           seqlen_q,
+                                                                           hdim_v,
+                                                                           o_perm);
+        ave_time += invoker_fmha_bwd_kernel<FmhaKernelHDim64>(q_buf.GetDeviceBuffer(),
+                                                              k_buf.GetDeviceBuffer(),
+                                                              v_buf.GetDeviceBuffer(),
+                                                              lse_buf.GetDeviceBuffer(),
+                                                              do_buf.GetDeviceBuffer(),
+                                                              d_buf.GetDeviceBuffer(),
+                                                              // z_buf.GetDeviceBuffer(),
+                                                              dq_buf.GetDeviceBuffer(),
+                                                              dk_buf.GetDeviceBuffer(),
+                                                              dv_buf.GetDeviceBuffer(),
+                                                              batch,
+                                                              nhead,
+                                                              seqlen_q,
+                                                              seqlen_k,
+                                                              hdim_q,
+                                                              hdim_v,
+                                                              scale,
+                                                              i_perm,
+                                                              o_perm);
+    }
     else
     {
         std::cout << "not support hdim, will not run" << std::endl;
@@ -440,13 +505,13 @@ int main(int argc, char* argv[])
         Tensor<VGradDataType> dv_host_ref({batch * nhead, seqlen_k, hdim_v}); // dv_g_n_o
         Tensor<OGradDataType> do_host_ref({batch * nhead, seqlen_q, hdim_v}); // do_g_m_o
 
-        Tensor<SMPLComputeDataType> s_host_ref({batch * nhead, seqlen_q, seqlen_k}); // s_g_m_n
-        Tensor<GemmDataType> ds_host_ref({batch * nhead, seqlen_q, seqlen_k});       // ds_g_m_n
-        Tensor<SMPLComputeDataType> p_hp_host_ref(
+        Tensor<AccDataType> s_host_ref({batch * nhead, seqlen_q, seqlen_k});   // s_g_m_n
+        Tensor<GemmDataType> ds_host_ref({batch * nhead, seqlen_q, seqlen_k}); // ds_g_m_n
+        Tensor<AccDataType> p_hp_host_ref(
             {batch * nhead, seqlen_q, seqlen_k}); // p_hp_g_m_n high precision
         Tensor<GemmDataType> p_lp_host_ref(
             {batch * nhead, seqlen_q, seqlen_k}); // p_lp_g_m_n low precision
-        Tensor<SMPLComputeDataType> dp_hp_host_ref(
+        Tensor<AccDataType> dp_hp_host_ref(
             {batch * nhead, seqlen_q, seqlen_k}); // dp_hp_g_m_n high precision
 
         Tensor<QGradDataType> dq_host_result_ref(
@@ -486,6 +551,15 @@ int main(int argc, char* argv[])
                 v_host_ref(idx[0] * nhead + idx[2], idx[3], idx[1]) = self(idx);
             });
 
+        if(o_perm)
+            do_host.ForEach([&](auto& self, auto idx) {
+                do_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]) = self(idx);
+            });
+        else
+            do_host.ForEach([&](auto& self, auto idx) {
+                do_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]) = self(idx);
+            });
+
         // reference
         run_fmha_fwd_host(q_host_ref,
                           k_host_ref,
@@ -514,14 +588,24 @@ int main(int argc, char* argv[])
         lse_buf.ToDevice(lse_host.mData.data());
 
         if(hdim_q == hdim_v && hdim_q == 32)
+        {
+            invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim32>(o_buf.GetDeviceBuffer(),
+                                                                           do_buf.GetDeviceBuffer(),
+                                                                           d_buf.GetDeviceBuffer(),
+                                                                           batch,
+                                                                           nhead,
+                                                                           seqlen_q,
+                                                                           hdim_v,
+                                                                           o_perm,
+                                                                           false);
             invoker_fmha_bwd_kernel<FmhaKernelHDim32>(q_buf.GetDeviceBuffer(),
                                                       k_buf.GetDeviceBuffer(),
                                                       v_buf.GetDeviceBuffer(),
                                                       o_buf.GetDeviceBuffer(),
                                                       lse_buf.GetDeviceBuffer(),
                                                       do_buf.GetDeviceBuffer(),
+                                                      d_buf.GetDeviceBuffer(),
                                                       // z_buf.GetDeviceBuffer(),
-                                                      // d_buf.GetDeviceBuffer(),
                                                       dq_buf.GetDeviceBuffer(),
                                                       dk_buf.GetDeviceBuffer(),
                                                       dv_buf.GetDeviceBuffer(),
@@ -535,15 +619,26 @@ int main(int argc, char* argv[])
                                                       i_perm,
                                                       o_perm,
                                                       false);
+        }
         else if(hdim_q == hdim_v && hdim_q == 64)
+        {
+            invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim64>(o_buf.GetDeviceBuffer(),
+                                                                           do_buf.GetDeviceBuffer(),
+                                                                           d_buf.GetDeviceBuffer(),
+                                                                           batch,
+                                                                           nhead,
+                                                                           seqlen_q,
+                                                                           hdim_v,
+                                                                           o_perm,
+                                                                           false);
             invoker_fmha_bwd_kernel<FmhaKernelHDim64>(q_buf.GetDeviceBuffer(),
                                                       k_buf.GetDeviceBuffer(),
                                                       v_buf.GetDeviceBuffer(),
                                                       o_buf.GetDeviceBuffer(),
                                                       lse_buf.GetDeviceBuffer(),
                                                       do_buf.GetDeviceBuffer(),
+                                                      d_buf.GetDeviceBuffer(),
                                                       // z_buf.GetDeviceBuffer(),
-                                                      // d_buf.GetDeviceBuffer(),
                                                       dq_buf.GetDeviceBuffer(),
                                                       dk_buf.GetDeviceBuffer(),
                                                       dv_buf.GetDeviceBuffer(),
@@ -557,11 +652,12 @@ int main(int argc, char* argv[])
                                                       i_perm,
                                                       o_perm,
                                                       false);
+        }
 
-        // dP_dropout = dO * V^T
-        // dP = dO * V^T w/o dropout
+        // dP_dropout = dO@V
+        // dP = dO@V w/o dropout
         auto v_t_host_ref = v_host_ref.Transpose({0, 2, 1}); // v_g_o_n -> v_g_n_o
-        reference_batched_gemm<OGradDataType, VDataType, AccDataType, SMPLComputeDataType>(
+        reference_batched_gemm<OGradDataType, VDataType, AccDataType, AccDataType>(
             do_host_ref, v_t_host_ref, dp_hp_host_ref); // dp_g_m_n = do_g_m_o@v_g_n_o
 
         // TODO: dP = dP_dropout x Z
@@ -576,28 +672,28 @@ int main(int argc, char* argv[])
                 do_dot_o += ck::type_convert<AccDataType>(do_host_ref(idx_gmo)) *
                             ck::type_convert<AccDataType>(o_host_ref(idx_gmo));
             }
-            self(idx_gmn) = ck::type_convert<GemmDataType>(
-                ck::type_convert<AccDataType>(p_hp_host_ref(idx_gmn)) *
-                (ck::type_convert<AccDataType>(dp_hp_host_ref(idx_gmn)) - do_dot_o));
+            self(idx_gmn) = ck::type_convert<GemmDataType>(p_hp_host_ref(idx_gmn) *
+                                                           (dp_hp_host_ref(idx_gmn) - do_dot_o));
         });
 
-        // dV = P_drop^T * dO
-        // dV = P^T * dO w/o dropout
+        // dV = P_drop^T@dO^T
+        // dV = P^T@dO^T w/o dropout
         auto p_t_lp_host_ref = p_lp_host_ref.Transpose({0, 2, 1}); // p_lp_g_m_n -> p_lp_g_n_m
         auto do_t_host_ref   = do_host_ref.Transpose({0, 2, 1});   // do_g_m_o -> do_g_o_m
         reference_batched_gemm<GemmDataType, OGradDataType, AccDataType, VGradDataType>(
             p_t_lp_host_ref, do_t_host_ref, dv_g_n_o); // dv_g_n_o = p_lp_g_n_m@do_g_o_m
 
-        // dQ = alpha * dS * K
+        // dQ = alpha * dS@K^T
+        auto k_t_host_ref = k_host_ref.Transpose({0, 2, 1}); // k_g_n_k -> k_g_k_n
         reference_batched_gemm<GemmDataType, KDataType, AccDataType, QGradDataType>(
             ds_host_ref,
-            k_host_ref,
+            k_t_host_ref,
             dq_host_ref,
             [](const GemmDataType& x) { return x; },
             [](const KDataType& x) { return x; },
             [&alpha](const AccDataType& x) { return alpha * x; }); // dq_g_m_k = ds_g_m_n@k_g_k_n
 
-        // dK = alpha * dS^T * Q
+        // dK = alpha * dS^T@Q^T
         auto ds_t_host_ref = ds_host_ref.Transpose({0, 2, 1}); // ds_g_m_n -> ds_g_n_m
         auto q_t_host_ref  = q_host_ref.Transpose({0, 2, 1});  // q_g_m_k -> q_g_k_m
         reference_batched_gemm<GemmDataType, QDataType, AccDataType, KGradDataType>(
@@ -639,9 +735,9 @@ int main(int argc, char* argv[])
         dq_buf.FromDevice(dq_host.mData.data());
         dk_buf.FromDevice(dk_host.mData.data());
         dv_buf.FromDevice(dv_host.mData.data());
-        return !(ck::utils::check_err(dq_host, dq_host_result_ref) &
-                 ck::utils::check_err(dk_host, dk_host_result_ref) &
-                 ck::utils::check_err(dv_host, dv_host_result_ref));
+        return !(ck::utils::check_err(dq_host, dq_host_result_ref, "error", 1e-2, 1e-2) &
+                 ck::utils::check_err(dk_host, dk_host_result_ref, "error", 1e-2, 1e-2) &
+                 ck::utils::check_err(dv_host, dv_host_result_ref, "error", 1e-2, 1e-2));
     }
     else
     {
