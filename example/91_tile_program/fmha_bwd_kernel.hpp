@@ -375,7 +375,7 @@ struct FmhaBwdKernel
 
         auto dk_dram_window = make_tile_window(
             dk_dram,
-            make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kVHeaddim>{}),
+            make_tuple(Number<FmhaPipeline::kN0>{}, Number<FmhaPipeline::kQKHeaddim>{}),
             {i_n0, 0});
 
         auto dv_dram_window = make_tile_window(
