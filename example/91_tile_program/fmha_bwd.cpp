@@ -586,6 +586,7 @@ int main(int argc, char* argv[])
 
         o_buf.ToDevice(o_host.mData.data());
         lse_buf.ToDevice(lse_host.mData.data());
+        dq_buf.SetZero();
 
         if(hdim_q == hdim_v && hdim_q == 32)
         {

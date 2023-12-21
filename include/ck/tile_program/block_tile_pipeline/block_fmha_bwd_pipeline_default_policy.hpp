@@ -150,6 +150,37 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
     // 3d + padding
     template <typename Problem>
+    __host__ __device__ static constexpr auto MakeQLdsBlockDescriptorAsQT()
+    {
+        constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
+        if constexpr(Problem::BlockFmhaShape::kQLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
+        }
+        constexpr index_t kKPack = GetSmemKPackQ<Problem>();
+
+        constexpr auto q_lds_block_desc_0 = make_naive_tensor_descriptor(
+            make_tuple(Number<kKPerBlock / kKPack>{}, Number<kMPerBlock>{}, Number<kKPack>{}),
+            make_tuple(Number<(kMPerBlock + 1) * kKPack>{}, Number<kKPack>{}, Number<1>{}),
+            Number<8>{},
+            Number<1>{});
+
+        constexpr auto q_lds_block_desc = transform_tensor_descriptor(
+            q_lds_block_desc_0,
+            make_tuple(make_pass_through_transform(kMPerBlock),
+                       make_merge_transform(make_tuple(kKPerBlock / kKPack, kKPack))),
+            make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
+            make_tuple(Sequence<1>{}, Sequence<0>{}));
+
+        return q_lds_block_desc;
+    }
+
+    // 3d + padding
+    template <typename Problem>
     __host__ __device__ static constexpr auto MakeKLdsBlockDescriptor()
     {
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
@@ -175,6 +206,37 @@ struct BlockFmhaBwdPipelineDefaultPolicy
                        make_merge_transform(make_tuple(kKPerBlock / kKPack, kKPack))),
             make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}));
+
+        return k_lds_block_desc;
+    }
+
+    // 3d + padding
+    template <typename Problem>
+    __host__ __device__ static constexpr auto MakeKLdsBlockDescriptorAsKT()
+    {
+        constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
+        if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
+        }
+        constexpr index_t kKPack = GetSmemKPackK<Problem>();
+
+        constexpr auto k_lds_block_desc_0 = make_naive_tensor_descriptor(
+            make_tuple(Number<kKPerBlock / kKPack>{}, Number<kNPerBlock>{}, Number<kKPack>{}),
+            make_tuple(Number<(kNPerBlock + 1) * kKPack>{}, Number<kKPack>{}, Number<1>{}),
+            Number<8>{},
+            Number<1>{});
+
+        constexpr auto k_lds_block_desc = transform_tensor_descriptor(
+            k_lds_block_desc_0,
+            make_tuple(make_pass_through_transform(kNPerBlock),
+                       make_merge_transform(make_tuple(kKPerBlock / kKPack, kKPack))),
+            make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
+            make_tuple(Sequence<1>{}, Sequence<0>{}));
 
         return k_lds_block_desc;
     }
@@ -232,6 +294,37 @@ struct BlockFmhaBwdPipelineDefaultPolicy
                        make_merge_transform(make_tuple(kKPerBlock / kKPack, kKPack))),
             make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}));
+
+        return do_lds_block_desc;
+    }
+
+    // 3d + padding
+    template <typename Problem>
+    __host__ __device__ static constexpr auto MakeOGradLdsBlockDescriptorAsOGradT()
+    {
+        constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
+        if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce)
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
+        }
+        else
+        {
+            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK2;
+        }
+        constexpr index_t kKPack = GetSmemKPackOGrad<Problem>();
+
+        constexpr auto do_lds_block_desc_0 = make_naive_tensor_descriptor(
+            make_tuple(Number<kKPerBlock / kKPack>{}, Number<kMPerBlock>{}, Number<kKPack>{}),
+            make_tuple(Number<(kMPerBlock + 1) * kKPack>{}, Number<kKPack>{}, Number<1>{}),
+            Number<8>{},
+            Number<1>{});
+
+        constexpr auto do_lds_block_desc = transform_tensor_descriptor(
+            do_lds_block_desc_0,
+            make_tuple(make_pass_through_transform(kMPerBlock),
+                       make_merge_transform(make_tuple(kKPerBlock / kKPack, kKPack))),
+            make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
+            make_tuple(Sequence<1>{}, Sequence<0>{}));
 
         return do_lds_block_desc;
     }
