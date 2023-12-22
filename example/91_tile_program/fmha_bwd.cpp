@@ -160,7 +160,7 @@ using FmhaBwdOGradDotOKernelHDim64 = FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTile
 template <typename FmhaBwdOGradDotOKernel>
 float invoker_fmha_bwd_dot_do_o_kernel(const void* o_ptr,
                                        const void* do_ptr,
-                                       const void* d_ptr,
+                                       void* d_ptr,
                                        ck::index_t batch,
                                        ck::index_t nhead,
                                        ck::index_t seqlen_q,

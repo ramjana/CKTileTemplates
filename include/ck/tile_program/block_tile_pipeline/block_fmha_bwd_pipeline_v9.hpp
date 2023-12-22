@@ -549,7 +549,7 @@ struct BlockFmhaBwdPipelineV9
         // KGrad Scale
         tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, dk_acc);
 
-        return dk_acc, dv_acc;
+        return ck::make_tuple(dk_acc, dv_acc);
     }
 };
 

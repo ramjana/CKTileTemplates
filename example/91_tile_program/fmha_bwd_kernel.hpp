@@ -228,10 +228,10 @@ struct FmhaBwdKernel
             Number<32>{},
             Number<1>{});
 
-        auto lse_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+        auto lse_dram = make_naive_tensor_view_packed<AddressSpaceEnum::Global>(
             lse_ptr, make_tuple(kargs.seqlen_q), Number<32>{});
 
-        auto d_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+        auto d_dram = make_naive_tensor_view_packed<AddressSpaceEnum::Global>(
             d_ptr, make_tuple(kargs.seqlen_q), Number<32>{});
 
         auto do_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
@@ -345,19 +345,19 @@ struct FmhaBwdKernel
 
         auto d_dram_window = make_tile_window(d_dram, make_tuple(Number<FmhaPipeline::kM0>{}), {0});
 
-        auto dk_acc_tile, dv_acc_tile = FmhaPipeline{}(q_dram_window,
-                                                       qt_dram_window,
-                                                       k_dram_window,
-                                                       kt_dram_window,
-                                                       v_dram_window,
-                                                       do_dram_window,
-                                                       dot_dram_window,
-                                                       lse_dram_window,
-                                                       d_dram_window,
-                                                       dq_dram_window,
-                                                       kargs.scale,
-                                                       kargs.seqlen_q / FmhaPipeline::kM0,
-                                                       smem_ptr);
+        auto [dk_acc_tile, dv_acc_tile] = FmhaPipeline{}(q_dram_window,
+                                                         qt_dram_window,
+                                                         k_dram_window,
+                                                         kt_dram_window,
+                                                         v_dram_window,
+                                                         do_dram_window,
+                                                         dot_dram_window,
+                                                         lse_dram_window,
+                                                         d_dram_window,
+                                                         dq_dram_window,
+                                                         kargs.scale,
+                                                         kargs.seqlen_q / FmhaPipeline::kM0,
+                                                         smem_ptr);
 
         const auto dk_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
             dk_ptr,
@@ -474,9 +474,9 @@ struct FmhaBwdOGradDotOKernel
         const index_t i_m0 = __builtin_amdgcn_readfirstlane(i_tile_m * kM0);
 
         // for simplicity, batch stride we just modify the pointer
-        const ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
+        const ODataType* o_ptr = reinterpret_cast<const ODataType*>(kargs.o_ptr) +
                                  i_nhead * kargs.nhead_stride_o + i_batch * kargs.batch_stride_o;
-        const OGradDataType* do_ptr = reinterpret_cast<OGradDataType*>(kargs.do_ptr) +
+        const OGradDataType* do_ptr = reinterpret_cast<const OGradDataType*>(kargs.do_ptr) +
                                       i_nhead * kargs.nhead_stride_o +
                                       i_batch * kargs.batch_stride_o;
         DDataType* d_ptr = reinterpret_cast<DDataType*>(kargs.d_ptr) +
@@ -497,7 +497,7 @@ struct FmhaBwdOGradDotOKernel
             Number<32>{},
             Number<1>{});
 
-        auto d_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
+        auto d_dram = make_naive_tensor_view_packed<AddressSpaceEnum::Global>(
             d_ptr, make_tuple(kargs.seqlen_q), Number<32>{});
 
         auto o_dram_window =
