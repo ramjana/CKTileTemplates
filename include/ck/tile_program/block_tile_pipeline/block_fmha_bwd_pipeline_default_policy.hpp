@@ -122,14 +122,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     __host__ __device__ static constexpr auto MakeQLdsBlockDescriptor()
     {
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        if constexpr(Problem::BlockFmhaShape::kQLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kQLoadOnce)
+                return Problem::BlockFmhaShape::kQKHeaddim;
+            else
+                return Problem::BlockFmhaShape::kK0;
+        }();
         constexpr index_t kKPack = GetSmemKPackQ<Problem>();
 
         constexpr auto q_lds_block_desc_0 = make_naive_tensor_descriptor(
@@ -153,14 +151,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     __host__ __device__ static constexpr auto MakeQLdsBlockDescriptorAsQT()
     {
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        if constexpr(Problem::BlockFmhaShape::kQLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kQLoadOnce)
+                return Problem::BlockFmhaShape::kQKHeaddim;
+            else
+                return Problem::BlockFmhaShape::kK0;
+        }();
         constexpr index_t kKPack = GetSmemKPackQ<Problem>();
 
         constexpr auto q_lds_block_desc_0 = make_naive_tensor_descriptor(
@@ -184,14 +180,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     __host__ __device__ static constexpr auto MakeKLdsBlockDescriptor()
     {
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
-        if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
+                return Problem::BlockFmhaShape::kQKHeaddim;
+            else
+                return Problem::BlockFmhaShape::kK0;
+        }();
         constexpr index_t kKPack = GetSmemKPackK<Problem>();
 
         constexpr auto k_lds_block_desc_0 = make_naive_tensor_descriptor(
@@ -215,14 +209,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     __host__ __device__ static constexpr auto MakeKLdsBlockDescriptorAsKT()
     {
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
-        if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
+                return Problem::BlockFmhaShape::kQKHeaddim;
+            else
+                return Problem::BlockFmhaShape::kK0;
+        }();
         constexpr index_t kKPack = GetSmemKPackK<Problem>();
 
         constexpr auto k_lds_block_desc_0 = make_naive_tensor_descriptor(
@@ -272,14 +264,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     __host__ __device__ static constexpr auto MakeOGradLdsBlockDescriptor()
     {
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK2;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce)
+                return Problem::BlockFmhaShape::kVHeaddim;
+            else
+                return Problem::BlockFmhaShape::kK2;
+        }();
         constexpr index_t kKPack = GetSmemKPackOGrad<Problem>();
 
         constexpr auto do_lds_block_desc_0 = make_naive_tensor_descriptor(
@@ -303,14 +293,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     __host__ __device__ static constexpr auto MakeOGradLdsBlockDescriptorAsOGradT()
     {
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK2;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce)
+                return Problem::BlockFmhaShape::kVHeaddim;
+            else
+                return Problem::BlockFmhaShape::kK2;
+        }();
         constexpr index_t kKPack = GetSmemKPackOGrad<Problem>();
 
         constexpr auto do_lds_block_desc_0 = make_naive_tensor_descriptor(
@@ -363,14 +351,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         static_assert(PixelsPerRow % kKPack == 0);
         constexpr index_t NPerRow    = PixelsPerRow / kKPack;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        if constexpr(Problem::BlockFmhaShape::kQTLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK3;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kQTLoadOnce)
+                return Problem::BlockFmhaShape::kM0;
+            else
+                return Problem::BlockFmhaShape::kK3;
+        }();
         static_assert(kNPerBlock % NPerRow == 0);
         static_assert(kKPerBlock % kKPack == 0);
 
@@ -407,14 +393,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         static_assert(PixelsPerRow % kKPack == 0);
         constexpr index_t NPerRow    = PixelsPerRow / kKPack;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        if constexpr(Problem::BlockFmhaShape::kKTLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kN0;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK4;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kKTLoadOnce)
+                return Problem::BlockFmhaShape::kN0;
+            else
+                return Problem::BlockFmhaShape::kK4;
+        }();
         static_assert(kNPerBlock % NPerRow == 0);
         static_assert(kKPerBlock % kKPack == 0);
 
@@ -451,14 +435,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         static_assert(PixelsPerRow % kKPack == 0);
         constexpr index_t NPerRow    = PixelsPerRow / kKPack;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-        if constexpr(Problem::BlockFmhaShape::kOGradTLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kOGradTLoadOnce)
+                return Problem::BlockFmhaShape::kM0;
+            else
+                return Problem::BlockFmhaShape::kK1;
+        }();
         static_assert(kNPerBlock % NPerRow == 0);
         static_assert(kKPerBlock % kKPack == 0);
 
@@ -555,49 +537,43 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     template <typename Problem>
     __host__ __device__ static constexpr ck::index_t GetSmemSize()
     {
-        constexpr index_t smem_size_q = GetSmemSizeQ();
-        if constexpr(Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce)
-        {
-            constexpr index_t smem_size_qt = 0;
-        }
-        else
-        {
-            constexpr index_t smem_size_qt = GetSmemSizeQT();
-        }
+        constexpr index_t smem_size_q  = GetSmemSizeQ<Problem>();
+        constexpr index_t smem_size_qt = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kQLoadOnce &&
+                         !Problem::BlockFmhaShape::kQTLoadOnce)
+                return 0;
+            else
+                return GetSmemSizeQT<Problem>();
+        }();
 
-        constexpr index_t smem_size_k = GetSmemSizeK();
-        if constexpr(Problem::BlockFmhaShape::kKLoadOnce && !Problem::BlockFmhaShape::kKTLoadOnce)
-        {
-            constexpr index_t smem_size_kt = 0;
-        }
-        else
-        {
-            constexpr index_t smem_size_kt = GetSmemSizeKT();
-        }
+        constexpr index_t smem_size_k  = GetSmemSizeK<Problem>();
+        constexpr index_t smem_size_kt = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kKLoadOnce &&
+                         !Problem::BlockFmhaShape::kKTLoadOnce)
+                return 0;
+            else
+                return GetSmemSizeKT<Problem>();
+        }();
 
-        if constexpr(Problem::BlockFmhaShape::kVLoadOnce)
-        {
-            constexpr index_t smem_size_v = 0;
-        }
-        else
-        {
-            constexpr index_t smem_size_v = GetSmemSizeV();
-        }
+        constexpr index_t smem_size_v = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kVLoadOnce)
+                return 0;
+            else
+                return GetSmemSizeV<Problem>();
+        }();
 
-        constexpr index_t smem_size_do = GetSmemSizeOGrad();
-        if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce &&
-                     !Problem::BlockFmhaShape::kOGradTLoadOnce)
-        {
-            constexpr index_t smem_size_dot = 0;
-        }
-        else
-        {
-            constexpr index_t smem_size_dot = GetSmemSizeOGradT();
-        }
+        constexpr index_t smem_size_do  = GetSmemSizeOGrad<Problem>();
+        constexpr index_t smem_size_dot = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce &&
+                         !Problem::BlockFmhaShape::kOGradTLoadOnce)
+                return 0;
+            else
+                return GetSmemSizeOGradT<Problem>();
+        }();
 
-        constexpr index_t smem_size_ds = GetSmemSizeSGrad();
+        constexpr index_t smem_size_ds = GetSmemSizeSGrad<Problem>();
 
-        constexpr index_t smem_size = 0;
+        index_t smem_size = 0;
 
         if constexpr(Problem::BlockFmhaShape::kQLoadOnce && Problem::BlockFmhaShape::kQTLoadOnce &&
                      Problem::BlockFmhaShape::kOGradLoadOnce &&
@@ -722,14 +698,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         constexpr index_t kBlockSize = Problem::kBlockSize;
 
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        if constexpr(Problem::BlockFmhaShape::kQLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kQLoadOnce)
+                return Problem::BlockFmhaShape::kQKHeaddim;
+            else
+                return Problem::BlockFmhaShape::kK0;
+        }();
 
         constexpr index_t K1 = 16 / sizeof(QDataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -755,14 +729,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         constexpr index_t kBlockSize = Problem::kBlockSize;
 
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
-        if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
+                return Problem::BlockFmhaShape::kQKHeaddim;
+            else
+                return Problem::BlockFmhaShape::kK0;
+        }();
 
         constexpr index_t K1 = 16 / sizeof(KDataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -788,14 +760,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         constexpr index_t kBlockSize = Problem::kBlockSize;
 
         constexpr index_t kMPerBlock = Problem::BlockFmhaShape::kM0;
-        if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK2;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kOGradLoadOnce)
+                return Problem::BlockFmhaShape::kVHeaddim;
+            else
+                return Problem::BlockFmhaShape::kK2;
+        }();
 
         constexpr index_t K1 = 16 / sizeof(OGradDataType);
         constexpr index_t K0 = kKPerBlock / K1;
@@ -884,14 +854,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        if constexpr(Problem::BlockFmhaShape::kQTLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK3;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kQTLoadOnce)
+                return Problem::BlockFmhaShape::kM0;
+            else
+                return Problem::BlockFmhaShape::kK3;
+        }();
 
         constexpr index_t N1 = GetTransposedVectorloadQ<Problem>();
         constexpr index_t N0 = kNPerBlock / N1; // P
@@ -920,14 +888,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     {
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        if constexpr(Problem::BlockFmhaShape::kQTLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK3;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kQTLoadOnce)
+                return Problem::BlockFmhaShape::kM0;
+            else
+                return Problem::BlockFmhaShape::kK3;
+        }();
 
         constexpr index_t N1           = GetTransposedVectorloadQ<Problem>();
         constexpr index_t N0           = kNPerBlock / N1;
@@ -956,14 +922,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        if constexpr(Problem::BlockFmhaShape::kKTLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kN0;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK4;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kKTLoadOnce)
+                return Problem::BlockFmhaShape::kN0;
+            else
+                return Problem::BlockFmhaShape::kK4;
+        }();
 
         constexpr index_t N1 = GetTransposedVectorloadK<Problem>();
         constexpr index_t N0 = kNPerBlock / N1; // P
@@ -992,14 +956,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     {
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
-        if constexpr(Problem::BlockFmhaShape::kKTLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kN0;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK4;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kKTLoadOnce)
+                return Problem::BlockFmhaShape::kN0;
+            else
+                return Problem::BlockFmhaShape::kK4;
+        }();
 
         constexpr index_t N1           = GetTransposedVectorloadK<Problem>();
         constexpr index_t N0           = kNPerBlock / N1;
@@ -1028,14 +990,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-        if constexpr(Problem::BlockFmhaShape::kOGradTLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kOGradTLoadOnce)
+                return Problem::BlockFmhaShape::kM0;
+            else
+                return Problem::BlockFmhaShape::kK1;
+        }();
 
         constexpr index_t N1 = GetTransposedVectorloadOGrad<Problem>();
         constexpr index_t N0 = kNPerBlock / N1; // P
@@ -1064,14 +1024,12 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     {
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kVHeaddim;
-        if constexpr(Problem::BlockFmhaShape::kOGradTLoadOnce)
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kM0;
-        }
-        else
-        {
-            constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK1;
-        }
+        constexpr index_t kKPerBlock = [&]() {
+            if constexpr(Problem::BlockFmhaShape::kOGradTLoadOnce)
+                return Problem::BlockFmhaShape::kM0;
+            else
+                return Problem::BlockFmhaShape::kK1;
+        }();
 
         constexpr index_t N1           = GetTransposedVectorloadOGrad<Problem>();
         constexpr index_t N0           = kNPerBlock / N1;

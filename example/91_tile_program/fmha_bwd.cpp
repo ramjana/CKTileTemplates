@@ -145,8 +145,10 @@ using FmhaBwdKernelHDim64 =
     FmhaBwdKernel<FmhaBwdTilePartitionerHDim64, FmhaBwdPipelineHDim64, FmhaBWDEpilogue>;
 
 using FmhaBwdOGradDotOTilePartitionerHDimX = FmhaBwdOGradDotOTilePartitioner<256>;
-using FmhaBwdOGradDotOHDim32               = BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim32>;
-using FmhaBwdOGradDotOHDim64               = BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim64>;
+using FmhaBwdOGradDotOHDim32 =
+    ck::tile_program::block::BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim32>;
+using FmhaBwdOGradDotOHDim64 =
+    ck::tile_program::block::BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim64>;
 using FmhaBwdOGradDotOKernelHDim32 = FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX,
                                                             FmhaBwdOGradDotOHDim32,
                                                             FmhaBwdPipelineProblemHDim32>;
@@ -155,7 +157,7 @@ using FmhaBwdOGradDotOKernelHDim64 = FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTile
                                                             FmhaBwdPipelineProblemHDim64>;
 
 template <typename FmhaBwdOGradDotOKernel>
-float invoker_fmha_bwd_dot_do_o_kernel(cconst void* o_ptr,
+float invoker_fmha_bwd_dot_do_o_kernel(const void* o_ptr,
                                        const void* do_ptr,
                                        const void* d_ptr,
                                        ck::index_t batch,
@@ -272,7 +274,7 @@ template <typename TensorQ,
 // typename TensorZ>
 void run_fmha_fwd_host(const TensorQ& q_g_m_k,
                        const TensorK& k_g_n_k,
-                       const float alpha,
+                       const float scale,
                        const TensorV& v_g_o_n,
                        TensorS& s_g_m_n,
                        TensorPHP& p_hp_g_m_n,
@@ -284,14 +286,14 @@ void run_fmha_fwd_host(const TensorQ& q_g_m_k,
 // ZDataType p_dropout_in_uint8_t,
 // float rp_dropout)
 {
-    // S = alpha * Q * K^T
+    // S = scale * Q * K^T
     reference_batched_gemm<QDataType, KDataType, AccDataType, AccDataType>(
         q_g_m_k,
         k_g_n_k,
         s_g_m_n,
         [](const QDataType& x) { return x; },
         [](const KDataType& x) { return x; },
-        [&alpha](const AccDataType& x) { return alpha * x; });
+        [&scale](const AccDataType& x) { return scale * x; });
     // TODO: masking
     // P = Softmax(S)
     reference_batched_softmax<AccDataType, AccDataType, AccDataType, LSEDataType>(
@@ -413,25 +415,25 @@ int main(int argc, char* argv[])
                                                                            seqlen_q,
                                                                            hdim_v,
                                                                            o_perm);
-        ave_time += invoker_fmha_bwd_kernel<FmhaKernelHDim32>(q_buf.GetDeviceBuffer(),
-                                                              k_buf.GetDeviceBuffer(),
-                                                              v_buf.GetDeviceBuffer(),
-                                                              lse_buf.GetDeviceBuffer(),
-                                                              do_buf.GetDeviceBuffer(),
-                                                              d_buf.GetDeviceBuffer(),
-                                                              // z_buf.GetDeviceBuffer(),
-                                                              dq_buf.GetDeviceBuffer(),
-                                                              dk_buf.GetDeviceBuffer(),
-                                                              dv_buf.GetDeviceBuffer(),
-                                                              batch,
-                                                              nhead,
-                                                              seqlen_q,
-                                                              seqlen_k,
-                                                              hdim_q,
-                                                              hdim_v,
-                                                              scale,
-                                                              i_perm,
-                                                              o_perm);
+        ave_time += invoker_fmha_bwd_kernel<FmhaBwdKernelHDim32>(q_buf.GetDeviceBuffer(),
+                                                                 k_buf.GetDeviceBuffer(),
+                                                                 v_buf.GetDeviceBuffer(),
+                                                                 lse_buf.GetDeviceBuffer(),
+                                                                 do_buf.GetDeviceBuffer(),
+                                                                 d_buf.GetDeviceBuffer(),
+                                                                 // z_buf.GetDeviceBuffer(),
+                                                                 dq_buf.GetDeviceBuffer(),
+                                                                 dk_buf.GetDeviceBuffer(),
+                                                                 dv_buf.GetDeviceBuffer(),
+                                                                 batch,
+                                                                 nhead,
+                                                                 seqlen_q,
+                                                                 seqlen_k,
+                                                                 hdim_q,
+                                                                 hdim_v,
+                                                                 scale,
+                                                                 i_perm,
+                                                                 o_perm);
     }
     else if(hdim_q == hdim_v && hdim_q == 64)
     {
@@ -444,25 +446,25 @@ int main(int argc, char* argv[])
                                                                            seqlen_q,
                                                                            hdim_v,
                                                                            o_perm);
-        ave_time += invoker_fmha_bwd_kernel<FmhaKernelHDim64>(q_buf.GetDeviceBuffer(),
-                                                              k_buf.GetDeviceBuffer(),
-                                                              v_buf.GetDeviceBuffer(),
-                                                              lse_buf.GetDeviceBuffer(),
-                                                              do_buf.GetDeviceBuffer(),
-                                                              d_buf.GetDeviceBuffer(),
-                                                              // z_buf.GetDeviceBuffer(),
-                                                              dq_buf.GetDeviceBuffer(),
-                                                              dk_buf.GetDeviceBuffer(),
-                                                              dv_buf.GetDeviceBuffer(),
-                                                              batch,
-                                                              nhead,
-                                                              seqlen_q,
-                                                              seqlen_k,
-                                                              hdim_q,
-                                                              hdim_v,
-                                                              scale,
-                                                              i_perm,
-                                                              o_perm);
+        ave_time += invoker_fmha_bwd_kernel<FmhaBwdKernelHDim64>(q_buf.GetDeviceBuffer(),
+                                                                 k_buf.GetDeviceBuffer(),
+                                                                 v_buf.GetDeviceBuffer(),
+                                                                 lse_buf.GetDeviceBuffer(),
+                                                                 do_buf.GetDeviceBuffer(),
+                                                                 d_buf.GetDeviceBuffer(),
+                                                                 // z_buf.GetDeviceBuffer(),
+                                                                 dq_buf.GetDeviceBuffer(),
+                                                                 dk_buf.GetDeviceBuffer(),
+                                                                 dv_buf.GetDeviceBuffer(),
+                                                                 batch,
+                                                                 nhead,
+                                                                 seqlen_q,
+                                                                 seqlen_k,
+                                                                 hdim_q,
+                                                                 hdim_v,
+                                                                 scale,
+                                                                 i_perm,
+                                                                 o_perm);
     }
     else
     {
@@ -483,7 +485,7 @@ int main(int argc, char* argv[])
                             sizeof(QGradDataType) * batch * nhead * seqlen_q * hdim_q +
                             sizeof(KGradDataType) * batch * nhead * seqlen_k * hdim_q +
                             sizeof(VGradDataType) * batch * nhead * seqlen_k * hdim_v +
-                            sizeof(LSEGradDataType) * batch * nhead * seqlen_q;
+                            sizeof(LSEDataType) * batch * nhead * seqlen_q;
 
     float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
 
@@ -599,27 +601,27 @@ int main(int argc, char* argv[])
                                                                            hdim_v,
                                                                            o_perm,
                                                                            false);
-            invoker_fmha_bwd_kernel<FmhaKernelHDim32>(q_buf.GetDeviceBuffer(),
-                                                      k_buf.GetDeviceBuffer(),
-                                                      v_buf.GetDeviceBuffer(),
-                                                      o_buf.GetDeviceBuffer(),
-                                                      lse_buf.GetDeviceBuffer(),
-                                                      do_buf.GetDeviceBuffer(),
-                                                      d_buf.GetDeviceBuffer(),
-                                                      // z_buf.GetDeviceBuffer(),
-                                                      dq_buf.GetDeviceBuffer(),
-                                                      dk_buf.GetDeviceBuffer(),
-                                                      dv_buf.GetDeviceBuffer(),
-                                                      batch,
-                                                      nhead,
-                                                      seqlen_q,
-                                                      seqlen_k,
-                                                      hdim_q,
-                                                      hdim_v,
-                                                      scale,
-                                                      i_perm,
-                                                      o_perm,
-                                                      false);
+            invoker_fmha_bwd_kernel<FmhaBwdKernelHDim32>(q_buf.GetDeviceBuffer(),
+                                                         k_buf.GetDeviceBuffer(),
+                                                         v_buf.GetDeviceBuffer(),
+                                                         o_buf.GetDeviceBuffer(),
+                                                         lse_buf.GetDeviceBuffer(),
+                                                         do_buf.GetDeviceBuffer(),
+                                                         d_buf.GetDeviceBuffer(),
+                                                         // z_buf.GetDeviceBuffer(),
+                                                         dq_buf.GetDeviceBuffer(),
+                                                         dk_buf.GetDeviceBuffer(),
+                                                         dv_buf.GetDeviceBuffer(),
+                                                         batch,
+                                                         nhead,
+                                                         seqlen_q,
+                                                         seqlen_k,
+                                                         hdim_q,
+                                                         hdim_v,
+                                                         scale,
+                                                         i_perm,
+                                                         o_perm,
+                                                         false);
         }
         else if(hdim_q == hdim_v && hdim_q == 64)
         {
@@ -632,27 +634,27 @@ int main(int argc, char* argv[])
                                                                            hdim_v,
                                                                            o_perm,
                                                                            false);
-            invoker_fmha_bwd_kernel<FmhaKernelHDim64>(q_buf.GetDeviceBuffer(),
-                                                      k_buf.GetDeviceBuffer(),
-                                                      v_buf.GetDeviceBuffer(),
-                                                      o_buf.GetDeviceBuffer(),
-                                                      lse_buf.GetDeviceBuffer(),
-                                                      do_buf.GetDeviceBuffer(),
-                                                      d_buf.GetDeviceBuffer(),
-                                                      // z_buf.GetDeviceBuffer(),
-                                                      dq_buf.GetDeviceBuffer(),
-                                                      dk_buf.GetDeviceBuffer(),
-                                                      dv_buf.GetDeviceBuffer(),
-                                                      batch,
-                                                      nhead,
-                                                      seqlen_q,
-                                                      seqlen_k,
-                                                      hdim_q,
-                                                      hdim_v,
-                                                      scale,
-                                                      i_perm,
-                                                      o_perm,
-                                                      false);
+            invoker_fmha_bwd_kernel<FmhaBwdKernelHDim64>(q_buf.GetDeviceBuffer(),
+                                                         k_buf.GetDeviceBuffer(),
+                                                         v_buf.GetDeviceBuffer(),
+                                                         o_buf.GetDeviceBuffer(),
+                                                         lse_buf.GetDeviceBuffer(),
+                                                         do_buf.GetDeviceBuffer(),
+                                                         d_buf.GetDeviceBuffer(),
+                                                         // z_buf.GetDeviceBuffer(),
+                                                         dq_buf.GetDeviceBuffer(),
+                                                         dk_buf.GetDeviceBuffer(),
+                                                         dv_buf.GetDeviceBuffer(),
+                                                         batch,
+                                                         nhead,
+                                                         seqlen_q,
+                                                         seqlen_k,
+                                                         hdim_q,
+                                                         hdim_v,
+                                                         scale,
+                                                         i_perm,
+                                                         o_perm,
+                                                         false);
         }
 
         // dP_dropout = dO@V
@@ -682,9 +684,9 @@ int main(int argc, char* argv[])
         auto p_t_lp_host_ref = p_lp_host_ref.Transpose({0, 2, 1}); // p_lp_g_m_n -> p_lp_g_n_m
         auto do_t_host_ref   = do_host_ref.Transpose({0, 2, 1});   // do_g_m_o -> do_g_o_m
         reference_batched_gemm<GemmDataType, OGradDataType, AccDataType, VGradDataType>(
-            p_t_lp_host_ref, do_t_host_ref, dv_g_n_o); // dv_g_n_o = p_lp_g_n_m@do_g_o_m
+            p_t_lp_host_ref, do_t_host_ref, dq_host_ref); // dv_g_n_o = p_lp_g_n_m@do_g_o_m
 
-        // dQ = alpha * dS@K^T
+        // dQ = scale * dS@K^T
         auto k_t_host_ref = k_host_ref.Transpose({0, 2, 1}); // k_g_n_k -> k_g_k_n
         reference_batched_gemm<GemmDataType, KDataType, AccDataType, QGradDataType>(
             ds_host_ref,
@@ -692,9 +694,9 @@ int main(int argc, char* argv[])
             dq_host_ref,
             [](const GemmDataType& x) { return x; },
             [](const KDataType& x) { return x; },
-            [&alpha](const AccDataType& x) { return alpha * x; }); // dq_g_m_k = ds_g_m_n@k_g_k_n
+            [&scale](const AccDataType& x) { return scale * x; }); // dq_g_m_k = ds_g_m_n@k_g_k_n
 
-        // dK = alpha * dS^T@Q^T
+        // dK = scale * dS^T@Q^T
         auto ds_t_host_ref = ds_host_ref.Transpose({0, 2, 1}); // ds_g_m_n -> ds_g_n_m
         auto q_t_host_ref  = q_host_ref.Transpose({0, 2, 1});  // q_g_m_k -> q_g_k_m
         reference_batched_gemm<GemmDataType, QDataType, AccDataType, KGradDataType>(
@@ -703,7 +705,7 @@ int main(int argc, char* argv[])
             dk_host_ref,
             [](const GemmDataType& x) { return x; },
             [](const QDataType& x) { return x; },
-            [&alpha](const AccDataType& x) { return alpha * x; }); // dk_g_n_k = ds_g_n_m@q_g_k_m
+            [&scale](const AccDataType& x) { return scale * x; }); // dk_g_n_k = ds_g_n_m@q_g_k_m
 
         // permute
         if(i_perm)

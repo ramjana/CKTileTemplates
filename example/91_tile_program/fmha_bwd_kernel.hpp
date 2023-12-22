@@ -398,12 +398,12 @@ struct FmhaBwdOGradDotOKernel
     using ODataType     = ck::remove_cvref_t<typename Problem::ODataType>;
     using OGradDataType = ck::remove_cvref_t<typename Problem::OGradDataType>;
 
-    static constexpr index_t kBlockSize = Problem::kBlockSize;
+    static constexpr ck::index_t kBlockSize = Problem::kBlockSize;
 
     using BlockFmhaShape = ck::remove_cvref_t<typename Problem::BlockFmhaShape>;
 
-    static constexpr index_t kM0       = kBlockSize;
-    static constexpr index_t kVHeaddim = BlockFmhaShape::kVHeaddim;
+    static constexpr ck::index_t kM0       = kBlockSize;
+    static constexpr ck::index_t kVHeaddim = BlockFmhaShape::kVHeaddim;
 
     struct Kargs
     {

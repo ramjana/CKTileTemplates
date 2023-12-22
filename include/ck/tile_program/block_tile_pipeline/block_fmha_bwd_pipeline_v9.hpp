@@ -313,7 +313,9 @@ struct BlockFmhaBwdPipelineV9
 
             if constexpr(k0_loops > 2)
             {
-                static_for<0, k0_loops - 2, 1>{}([&](auto i_k0) {
+                index_t i_k0 = 0;
+                do
+                {
                     block_sync_lds();
                     gemm_0(st_acc, q_lds_window, k_lds_window);
                     block_sync_lds();
@@ -323,7 +325,8 @@ struct BlockFmhaBwdPipelineV9
                     store_tile(q_lds_window,
                                q_block_tile);                // LDS write i + 1
                     q_block_tile = load_tile(q_dram_window); // global read i + 2
-                });
+                    ++i_k0;
+                } while(i_k0 < (k0_loops - 2));
             }
 
             const auto dot_prefetch = load_tile(dot_dram_window); // prefetch load OGrad^T tile
@@ -508,8 +511,7 @@ struct BlockFmhaBwdPipelineV9
             }
 
             // STAGE 7, SGrad@K^T Gemm4
-            store_tile(ds_lds_store_window,
-                       tile_elementwise_in(type_convert<GemmDataType, AccDataType>, ds));
+            store_tile(ds_lds_store_window, dst_gemm);
 
             auto dq_acc = QGradBlockTileType{};
 
@@ -517,13 +519,16 @@ struct BlockFmhaBwdPipelineV9
 
             tile_elementwise_inout([](auto& c) { c = 0; }, dq_acc); // Initialize QGrad
 
-            static_for<0, k4_loops, 1>{}([&](auto i_k4) {
+            index_t i_k4 = 0;
+            do
+            {
                 block_sync_lds();
                 gemm_4(dq_acc, ds_lds_window, kt_lds_window);
                 block_sync_lds();
                 move_tile_window(ds_lds_window, {0, kK4});
                 move_tile_window(kt_lds_window, {0, kK4});
-            });
+                ++i_k4;
+            } while(i_k4 < k4_loops);
 
             // QGrad Scale
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, dq_acc);
@@ -545,45 +550,6 @@ struct BlockFmhaBwdPipelineV9
         tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, dk_acc);
 
         return dk_acc, dv_acc;
-    }
-
-    template <typename QDramBlockWindowTmp,
-              typename QTDramBlockWindowTmp,
-              typename KDramBlockWindowTmp,
-              typename KTDramBlockWindowTmp,
-              typename VDramBlockWindowTmp,
-              typename OGradDramBlockWindowTmp,
-              typename OGradTDramBlockWindowTmp,
-              typename LSEDramBlockWindowTmp,
-              typename DDramBlockWindowTmp,
-              typename QGradDramBlockWindowTmp>
-    __host__ __device__ auto operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,
-                                        const QTDramBlockWindowTmp& qt_dram_block_window_tmp,
-                                        const KDramBlockWindowTmp& k_dram_block_window_tmp,
-                                        const KTDramBlockWindowTmp& kt_dram_block_window_tmp,
-                                        const VDramBlockWindowTmp& v_dram_block_window_tmp,
-                                        const OGradDramBlockWindowTmp& do_dram_block_window_tmp,
-                                        const OGradTDramBlockWindowTmp& dot_dram_block_window_tmp,
-                                        const LSEDramBlockWindowTmp& lse_dram_block_window_tmp,
-                                        const DDramBlockWindowTmp& d_dram_block_window_tmp,
-                                        const QGradDramBlockWindowTmp& dq_dram_block_window_tmp,
-                                        float scale,
-                                        index_t num_total_loop,
-                                        void* smem_ptr) const
-    {
-        return operator()(q_dram_block_window_tmp,
-                          qt_dram_block_window_tmp,
-                          k_dram_block_window_tmp,
-                          kt_dram_block_window_tmp,
-                          v_dram_block_window_tmp,
-                          do_dram_block_window_tmp,
-                          dot_dram_block_window_tmp,
-                          lse_dram_block_window_tmp,
-                          d_dram_block_window_tmp,
-                          dq_dram_block_window_tmp,
-                          scale,
-                          num_total_loop,
-                          smem_ptr);
     }
 };
 
