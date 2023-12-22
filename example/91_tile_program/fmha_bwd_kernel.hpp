@@ -433,10 +433,20 @@ struct FmhaBwdOGradDotOKernel
                                               ck::index_t hdim_v,
                                               ck::index_t stride_o,
                                               ck::index_t nhead_stride_o,
-                                              ck::index_t batch_stride_o)
+                                              ck::index_t nhead_stride_d,
+                                              ck::index_t batch_stride_o,
+                                              ck::index_t batch_stride_d)
     {
-        return Kargs{
-            o_ptr, do_ptr, d_ptr, seqlen_q, hdim_v, stride_o, nhead_stride_o, batch_stride_o};
+        return Kargs{o_ptr,
+                     do_ptr,
+                     d_ptr,
+                     seqlen_q,
+                     hdim_v,
+                     stride_o,
+                     nhead_stride_o,
+                     nhead_stride_d,
+                     batch_stride_o,
+                     batch_stride_d};
     }
 
     __host__ static constexpr auto

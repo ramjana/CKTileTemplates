@@ -16,7 +16,8 @@
 
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_default_policy.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_problem.hpp"
-#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_dispatcher.hpp"
+// #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_dispatcher.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_v9.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_dot_do_o.hpp"
 #include "ck/tile_program/tile/tile_fmha_bwd_shape.hpp"
 
@@ -123,19 +124,19 @@ using FmhaBwdPipelineProblemHDim64 =
                                                          256, // BlockSize
                                                          FmhaShapeHDim64>;
 
-using BlockFmhaBwdPipeline =
-    ck::tile_program::block::BlockFmhaBwdPipelineDispatcher<FmhaLoadStrategy::At(Number<0>{}),
-                                                            FmhaLoadStrategy::At(Number<1>{}),
-                                                            FmhaLoadStrategy::At(Number<2>{}),
-                                                            FmhaLoadStrategy::At(Number<3>{}),
-                                                            FmhaLoadStrategy::At(Number<4>{}),
-                                                            FmhaLoadStrategy::At(Number<5>{}),
-                                                            FmhaLoadStrategy::At(Number<6>{})>;
+// using BlockFmhaBwdPipeline =
+//     ck::tile_program::block::BlockFmhaBwdPipelineDispatcher<FmhaLoadStrategy::At(Number<0>{}),
+//                                                             FmhaLoadStrategy::At(Number<1>{}),
+//                                                             FmhaLoadStrategy::At(Number<2>{}),
+//                                                             FmhaLoadStrategy::At(Number<3>{}),
+//                                                             FmhaLoadStrategy::At(Number<4>{}),
+//                                                             FmhaLoadStrategy::At(Number<5>{}),
+//                                                             FmhaLoadStrategy::At(Number<6>{})>;
 
 using FmhaBwdPipelineHDim32 =
-    ck::tile_program::block::BlockFmhaBwdPipeline<FmhaBwdPipelineProblemHDim32>;
+    ck::tile_program::block::BlockFmhaBwdPipelineV9<FmhaBwdPipelineProblemHDim32>;
 using FmhaBwdPipelineHDim64 =
-    ck::tile_program::block::BlockFmhaBwdPipeline<FmhaBwdPipelineProblemHDim64>;
+    ck::tile_program::block::BlockFmhaBwdPipelineV9<FmhaBwdPipelineProblemHDim64>;
 
 using FmhaBWDEpilogue =
     FmhaBwdEpilogue<FmhaBwdEpilogueProblem<AccDataType, KGradDataType, VGradDataType>>;
@@ -167,8 +168,8 @@ float invoker_fmha_bwd_dot_do_o_kernel(const void* o_ptr,
                                        bool o_perm,
                                        bool time_kernel = true)
 {
-    dim3 kGridSize            = FmhaBwdKernel::GridSize(batch, nhead, seqlen_q);
-    constexpr dim3 kBlockSize = FmhaBwdKernel::BlockSize();
+    dim3 kGridSize            = FmhaBwdOGradDotOKernel::GridSize(batch, nhead, seqlen_q);
+    constexpr dim3 kBlockSize = FmhaBwdOGradDotOKernel::BlockSize();
 
     // constexpr ck::index_t kWarpPerCu    = 8; // 2 warps per SIMD
     // constexpr ck::index_t kWarpPerBlock = kBlockSize.x / warpSize;
@@ -575,14 +576,14 @@ int main(int argc, char* argv[])
 
         // permute
         if(o_perm)
-            o_buf.ForEach([&](auto& self, auto idx) {
+            o_host.ForEach([&](auto& self, auto idx) {
                 self(idx) = o_host_ref(idx[0] * nhead + idx[1], idx[2], idx[3]);
             });
         else
-            o_buf.ForEach([&](auto& self, auto idx) {
+            o_host.ForEach([&](auto& self, auto idx) {
                 self(idx) = o_host_ref(idx[0] * nhead + idx[2], idx[1], idx[3]);
             });
-        lse_buf.ForEach([&](auto& self, auto idx) {
+        lse_host.ForEach([&](auto& self, auto idx) {
             self(idx) = lse_host_ref(idx[0] * nhead + idx[1], idx[2]);
         });
 
@@ -604,7 +605,6 @@ int main(int argc, char* argv[])
             invoker_fmha_bwd_kernel<FmhaBwdKernelHDim32>(q_buf.GetDeviceBuffer(),
                                                          k_buf.GetDeviceBuffer(),
                                                          v_buf.GetDeviceBuffer(),
-                                                         o_buf.GetDeviceBuffer(),
                                                          lse_buf.GetDeviceBuffer(),
                                                          do_buf.GetDeviceBuffer(),
                                                          d_buf.GetDeviceBuffer(),
@@ -637,7 +637,6 @@ int main(int argc, char* argv[])
             invoker_fmha_bwd_kernel<FmhaBwdKernelHDim64>(q_buf.GetDeviceBuffer(),
                                                          k_buf.GetDeviceBuffer(),
                                                          v_buf.GetDeviceBuffer(),
-                                                         o_buf.GetDeviceBuffer(),
                                                          lse_buf.GetDeviceBuffer(),
                                                          do_buf.GetDeviceBuffer(),
                                                          d_buf.GetDeviceBuffer(),
@@ -738,8 +737,8 @@ int main(int argc, char* argv[])
         dq_buf.FromDevice(dq_host.mData.data());
         dk_buf.FromDevice(dk_host.mData.data());
         dv_buf.FromDevice(dv_host.mData.data());
-        return !(ck::utils::check_err(dq_host, dq_host_result_ref, "error", 1e-2, 1e-2) &
-                 ck::utils::check_err(dk_host, dk_host_result_ref, "error", 1e-2, 1e-2) &
+        return !(ck::utils::check_err(dq_host, dq_host_result_ref, "error", 1e-2, 1e-2) &&
+                 ck::utils::check_err(dk_host, dk_host_result_ref, "error", 1e-2, 1e-2) &&
                  ck::utils::check_err(dv_host, dv_host_result_ref, "error", 1e-2, 1e-2));
     }
     else

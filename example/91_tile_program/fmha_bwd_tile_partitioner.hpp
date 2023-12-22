@@ -7,12 +7,12 @@
 #include "ck/tile_program/tile/store_tile.hpp"
 #include "ck/tile_program/tile/tile_elementwise.hpp"
 
-template <typename BlockFmhaBwdShape_>
+template <typename BlockFmhaShape_>
 struct FmhaBwdTilePartitioner
 {
-    using BlockFmhaBwdShape = ck::remove_cvref_t<BlockFmhaBwdShape_>;
+    using BlockFmhaShape = ck::remove_cvref_t<BlockFmhaShape_>;
 
-    static constexpr ck::index_t kN0 = BlockFmhaBwdShape::kN0;
+    static constexpr ck::index_t kN0 = BlockFmhaShape::kN0;
 
     __host__ static constexpr auto
     GridSize(ck::index_t batch_size_, ck::index_t nhead_, ck::index_t seqlen_k_)
