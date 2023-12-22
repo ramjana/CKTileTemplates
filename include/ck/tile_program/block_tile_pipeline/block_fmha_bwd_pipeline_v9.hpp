@@ -37,6 +37,8 @@ struct BlockFmhaBwdPipelineV9
     using ODataType     = remove_cvref_t<typename Problem::ODataType>;
     using OGradDataType = remove_cvref_t<typename Problem::OGradDataType>;
     using QGradDataType = remove_cvref_t<typename Problem::QGradDataType>;
+    using KGradDataType = remove_cvref_t<typename Problem::KGradDataType>;
+    using VGradDataType = remove_cvref_t<typename Problem::VGradDataType>;
 
     using BlockFmhaShape = remove_cvref_t<typename Problem::BlockFmhaShape>;
 

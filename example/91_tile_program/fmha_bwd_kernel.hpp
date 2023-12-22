@@ -176,20 +176,20 @@ struct FmhaBwdKernel
                                  i_nhead * kargs.nhead_stride_k + i_batch * kargs.batch_stride_k;
         const VDataType* v_ptr = reinterpret_cast<const VDataType*>(kargs.v_ptr) +
                                  i_nhead * kargs.nhead_stride_v + i_batch * kargs.batch_stride_v;
-        const LSEDataType* lse_ptr = reinterpret_cast<LSEDataType*>(kargs.lse_ptr) +
+        const LSEDataType* lse_ptr = reinterpret_cast<const LSEDataType*>(kargs.lse_ptr) +
                                      i_nhead * kargs.nhead_stride_lsed +
                                      i_batch * kargs.batch_stride_lsed;
-        const DDataType* d_ptr = reinterpret_cast<DDataType*>(kargs.d_ptr) +
+        const DDataType* d_ptr = reinterpret_cast<const DDataType*>(kargs.d_ptr) +
                                  i_nhead * kargs.nhead_stride_lsed +
                                  i_batch * kargs.batch_stride_lsed;
-        const OGradDataType* do_ptr = reinterpret_cast<OGradDataType*>(kargs.do_ptr) +
+        const OGradDataType* do_ptr = reinterpret_cast<const OGradDataType*>(kargs.do_ptr) +
                                       i_nhead * kargs.nhead_stride_o +
                                       i_batch * kargs.batch_stride_o;
-        QGradDataType* dq_ptr = reinterpret_cast<const QGradDataType*>(kargs.dq_ptr) +
+        QGradDataType* dq_ptr = reinterpret_cast<QGradDataType*>(kargs.dq_ptr) +
                                 i_nhead * kargs.nhead_stride_q + i_batch * kargs.batch_stride_q;
-        KGradDataType* dk_ptr = reinterpret_cast<const KGradDataType*>(kargs.dk_ptr) +
+        KGradDataType* dk_ptr = reinterpret_cast<KGradDataType*>(kargs.dk_ptr) +
                                 i_nhead * kargs.nhead_stride_k + i_batch * kargs.batch_stride_k;
-        VGradDataType* dv_ptr = reinterpret_cast<const VGradDataType*>(kargs.dv_ptr) +
+        VGradDataType* dv_ptr = reinterpret_cast<VGradDataType*>(kargs.dv_ptr) +
                                 i_nhead * kargs.nhead_stride_v + i_batch * kargs.batch_stride_v;
 
         // Q/K/V/LSE/D/dO/dQ/dK/dV DRAM and DRAM window
