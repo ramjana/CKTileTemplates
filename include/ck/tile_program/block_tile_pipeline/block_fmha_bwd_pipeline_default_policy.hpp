@@ -793,16 +793,17 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         constexpr index_t K1 = 16 / sizeof(ODataType);
         constexpr index_t K0 = kKPerBlock / K1;
+        constexpr index_t M2 = 1;
         constexpr index_t M1 = get_warp_size();
         constexpr index_t M0 = kBlockSize / M1;
 
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<M0, M1>, Sequence<K0, K1>>,
+                                           Tuple<Sequence<M0, M1, M2>, Sequence<K0, K1>>,
                                            Tuple<Sequence<1>, Sequence<1>>,
                                            Tuple<Sequence<0>, Sequence<1>>,
-                                           Sequence<2, 2>,
-                                           Sequence<0, 1>>{});
+                                           Sequence<1, 2, 2>,
+                                           Sequence<2, 0, 1>>{});
     }
 
     template <typename Problem>
@@ -815,16 +816,17 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         constexpr index_t K1 = 16 / sizeof(OGradDataType);
         constexpr index_t K0 = kKPerBlock / K1;
+        constexpr index_t M2 = 1;
         constexpr index_t M1 = get_warp_size();
         constexpr index_t M0 = kBlockSize / M1;
 
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<M0, M1>, Sequence<K0, K1>>,
+                                           Tuple<Sequence<M0, M1, M2>, Sequence<K0, K1>>,
                                            Tuple<Sequence<1>, Sequence<1>>,
                                            Tuple<Sequence<0>, Sequence<1>>,
-                                           Sequence<2, 2>,
-                                           Sequence<0, 1>>{});
+                                           Sequence<1, 2, 2>,
+                                           Sequence<2, 0, 1>>{});
     }
 
     template <typename Problem>
@@ -835,16 +837,17 @@ struct BlockFmhaBwdPipelineDefaultPolicy
         constexpr index_t kBlockSize = Problem::kBlockSize;
 
         constexpr index_t K0 = 1;
+        constexpr index_t M2 = 1;
         constexpr index_t M1 = get_warp_size();
         constexpr index_t M0 = kBlockSize / M1;
 
         return make_static_tile_distribution(
             StaticTileDistributionEncoding<Sequence<1>,
-                                           Tuple<Sequence<M0, M1>, Sequence<K0>>,
+                                           Tuple<Sequence<M0, M1, M2>, Sequence<K0>>,
                                            Tuple<Sequence<1>, Sequence<1>>,
                                            Tuple<Sequence<0>, Sequence<1>>,
-                                           Sequence<2>,
-                                           Sequence<0>>{});
+                                           Sequence<1, 2>,
+                                           Sequence<2, 0>>{});
     }
 
     template <typename Problem>

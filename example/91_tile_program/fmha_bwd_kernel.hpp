@@ -43,7 +43,7 @@ struct FmhaBwdKernel
         // void* z_ptr;
         void* dq_ptr;
         void* dk_ptr;
-        void* kv_ptr;
+        void* dv_ptr;
 
         ck::index_t seqlen_q;
         ck::index_t seqlen_k;
@@ -387,23 +387,20 @@ struct FmhaBwdKernel
     }
 };
 
-template <typename TilePartitioner_, typename FmhaOGradDotO_, typename Problem_>
+template <typename TilePartitioner_, typename FmhaOGradDotO_>
 struct FmhaBwdOGradDotOKernel
 {
     using TilePartitioner = ck::remove_cvref_t<TilePartitioner_>;
     using FmhaOGradDotO   = ck::remove_cvref_t<FmhaOGradDotO_>;
-    using Problem         = ck::remove_cvref_t<Problem_>;
 
-    using DDataType     = ck::remove_cvref_t<typename Problem::DDataType>;
-    using ODataType     = ck::remove_cvref_t<typename Problem::ODataType>;
-    using OGradDataType = ck::remove_cvref_t<typename Problem::OGradDataType>;
+    using DDataType     = ck::remove_cvref_t<typename FmhaOGradDotO::DDataType>;
+    using ODataType     = ck::remove_cvref_t<typename FmhaOGradDotO::ODataType>;
+    using OGradDataType = ck::remove_cvref_t<typename FmhaOGradDotO::OGradDataType>;
 
-    static constexpr ck::index_t kBlockSize = Problem::kBlockSize;
-
-    using BlockFmhaShape = ck::remove_cvref_t<typename Problem::BlockFmhaShape>;
+    static constexpr ck::index_t kBlockSize = FmhaOGradDotO::kBlockSize;
 
     static constexpr ck::index_t kM0       = kBlockSize;
-    static constexpr ck::index_t kVHeaddim = BlockFmhaShape::kVHeaddim;
+    static constexpr ck::index_t kVHeaddim = FmhaOGradDotO::kVHeaddim;
 
     struct Kargs
     {

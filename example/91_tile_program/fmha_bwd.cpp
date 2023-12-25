@@ -150,12 +150,10 @@ using FmhaBwdOGradDotOHDim32 =
     ck::tile_program::block::BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim32>;
 using FmhaBwdOGradDotOHDim64 =
     ck::tile_program::block::BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim64>;
-using FmhaBwdOGradDotOKernelHDim32 = FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX,
-                                                            FmhaBwdOGradDotOHDim32,
-                                                            FmhaBwdPipelineProblemHDim32>;
-using FmhaBwdOGradDotOKernelHDim64 = FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX,
-                                                            FmhaBwdOGradDotOHDim64,
-                                                            FmhaBwdPipelineProblemHDim64>;
+using FmhaBwdOGradDotOKernelHDim32 =
+    FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX, FmhaBwdOGradDotOHDim32>;
+using FmhaBwdOGradDotOKernelHDim64 =
+    FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX, FmhaBwdOGradDotOHDim64>;
 
 template <typename FmhaBwdOGradDotOKernel>
 float invoker_fmha_bwd_dot_do_o_kernel(const void* o_ptr,
@@ -316,8 +314,8 @@ int main(int argc, char* argv[])
     ck::index_t nhead    = 8;
     ck::index_t seqlen_q = 3328;
     ck::index_t seqlen_k = 4096;
-    ck::index_t hdim_q   = 128;
-    ck::index_t hdim_v   = 128;
+    ck::index_t hdim_q   = 64;
+    ck::index_t hdim_v   = 64;
 
     float scale = .0f;
 
@@ -376,10 +374,14 @@ int main(int argc, char* argv[])
     ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
     ck::utils::FillUniformDistributionIntegerValue<OGradDataType>{-2.f, 2.f}(do_host);
 #else
-    ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_host);
-    ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_host);
-    ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_host);
-    ck::utils::FillUniformDistribution<OGradDataType>{-.5f, .5f}(do_host);
+    // ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_host);
+    // ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_host);
+    // ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_host);
+    // ck::utils::FillUniformDistribution<OGradDataType>{-.5f, .5f}(do_host);
+    ck::utils::FillConstant<QDataType>{1.f}(q_host);
+    ck::utils::FillConstant<KDataType>{1.f}(k_host);
+    ck::utils::FillConstant<VDataType>{1.f}(v_host);
+    ck::utils::FillConstant<OGradDataType>{1.f}(do_host);
 #endif
 
     DeviceMem q_buf(sizeof(QDataType) * q_host.GetElementSpaceSize());
@@ -405,38 +407,39 @@ int main(int argc, char* argv[])
               << std::endl;
 
     float ave_time = 0;
-    if(hdim_q == hdim_v && hdim_q == 32)
-    {
-        ave_time =
-            invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim32>(o_buf.GetDeviceBuffer(),
-                                                                           do_buf.GetDeviceBuffer(),
-                                                                           d_buf.GetDeviceBuffer(),
-                                                                           batch,
-                                                                           nhead,
-                                                                           seqlen_q,
-                                                                           hdim_v,
-                                                                           o_perm);
-        ave_time += invoker_fmha_bwd_kernel<FmhaBwdKernelHDim32>(q_buf.GetDeviceBuffer(),
-                                                                 k_buf.GetDeviceBuffer(),
-                                                                 v_buf.GetDeviceBuffer(),
-                                                                 lse_buf.GetDeviceBuffer(),
-                                                                 do_buf.GetDeviceBuffer(),
-                                                                 d_buf.GetDeviceBuffer(),
-                                                                 // z_buf.GetDeviceBuffer(),
-                                                                 dq_buf.GetDeviceBuffer(),
-                                                                 dk_buf.GetDeviceBuffer(),
-                                                                 dv_buf.GetDeviceBuffer(),
-                                                                 batch,
-                                                                 nhead,
-                                                                 seqlen_q,
-                                                                 seqlen_k,
-                                                                 hdim_q,
-                                                                 hdim_v,
-                                                                 scale,
-                                                                 i_perm,
-                                                                 o_perm);
-    }
-    else if(hdim_q == hdim_v && hdim_q == 64)
+    // if(hdim_q == hdim_v && hdim_q == 32)
+    // {
+    //     ave_time =
+    //         invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim32>(o_buf.GetDeviceBuffer(),
+    //                                                                        do_buf.GetDeviceBuffer(),
+    //                                                                        d_buf.GetDeviceBuffer(),
+    //                                                                        batch,
+    //                                                                        nhead,
+    //                                                                        seqlen_q,
+    //                                                                        hdim_v,
+    //                                                                        o_perm);
+    //     ave_time += invoker_fmha_bwd_kernel<FmhaBwdKernelHDim32>(q_buf.GetDeviceBuffer(),
+    //                                                              k_buf.GetDeviceBuffer(),
+    //                                                              v_buf.GetDeviceBuffer(),
+    //                                                              lse_buf.GetDeviceBuffer(),
+    //                                                              do_buf.GetDeviceBuffer(),
+    //                                                              d_buf.GetDeviceBuffer(),
+    //                                                              // z_buf.GetDeviceBuffer(),
+    //                                                              dq_buf.GetDeviceBuffer(),
+    //                                                              dk_buf.GetDeviceBuffer(),
+    //                                                              dv_buf.GetDeviceBuffer(),
+    //                                                              batch,
+    //                                                              nhead,
+    //                                                              seqlen_q,
+    //                                                              seqlen_k,
+    //                                                              hdim_q,
+    //                                                              hdim_v,
+    //                                                              scale,
+    //                                                              i_perm,
+    //                                                              o_perm);
+    // }
+    // else if(hdim_q == hdim_v && hdim_q == 64)
+    if(hdim_q == hdim_v && hdim_q == 64)
     {
         ave_time =
             invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim64>(o_buf.GetDeviceBuffer(),
@@ -591,39 +594,40 @@ int main(int argc, char* argv[])
         lse_buf.ToDevice(lse_host.mData.data());
         dq_buf.SetZero();
 
-        if(hdim_q == hdim_v && hdim_q == 32)
-        {
-            invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim32>(o_buf.GetDeviceBuffer(),
-                                                                           do_buf.GetDeviceBuffer(),
-                                                                           d_buf.GetDeviceBuffer(),
-                                                                           batch,
-                                                                           nhead,
-                                                                           seqlen_q,
-                                                                           hdim_v,
-                                                                           o_perm,
-                                                                           false);
-            invoker_fmha_bwd_kernel<FmhaBwdKernelHDim32>(q_buf.GetDeviceBuffer(),
-                                                         k_buf.GetDeviceBuffer(),
-                                                         v_buf.GetDeviceBuffer(),
-                                                         lse_buf.GetDeviceBuffer(),
-                                                         do_buf.GetDeviceBuffer(),
-                                                         d_buf.GetDeviceBuffer(),
-                                                         // z_buf.GetDeviceBuffer(),
-                                                         dq_buf.GetDeviceBuffer(),
-                                                         dk_buf.GetDeviceBuffer(),
-                                                         dv_buf.GetDeviceBuffer(),
-                                                         batch,
-                                                         nhead,
-                                                         seqlen_q,
-                                                         seqlen_k,
-                                                         hdim_q,
-                                                         hdim_v,
-                                                         scale,
-                                                         i_perm,
-                                                         o_perm,
-                                                         false);
-        }
-        else if(hdim_q == hdim_v && hdim_q == 64)
+        // if(hdim_q == hdim_v && hdim_q == 32)
+        // {
+        //     invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim32>(o_buf.GetDeviceBuffer(),
+        //                                                                    do_buf.GetDeviceBuffer(),
+        //                                                                    d_buf.GetDeviceBuffer(),
+        //                                                                    batch,
+        //                                                                    nhead,
+        //                                                                    seqlen_q,
+        //                                                                    hdim_v,
+        //                                                                    o_perm,
+        //                                                                    false);
+        //     invoker_fmha_bwd_kernel<FmhaBwdKernelHDim32>(q_buf.GetDeviceBuffer(),
+        //                                                  k_buf.GetDeviceBuffer(),
+        //                                                  v_buf.GetDeviceBuffer(),
+        //                                                  lse_buf.GetDeviceBuffer(),
+        //                                                  do_buf.GetDeviceBuffer(),
+        //                                                  d_buf.GetDeviceBuffer(),
+        //                                                  // z_buf.GetDeviceBuffer(),
+        //                                                  dq_buf.GetDeviceBuffer(),
+        //                                                  dk_buf.GetDeviceBuffer(),
+        //                                                  dv_buf.GetDeviceBuffer(),
+        //                                                  batch,
+        //                                                  nhead,
+        //                                                  seqlen_q,
+        //                                                  seqlen_k,
+        //                                                  hdim_q,
+        //                                                  hdim_v,
+        //                                                  scale,
+        //                                                  i_perm,
+        //                                                  o_perm,
+        //                                                  false);
+        // }
+        // else if(hdim_q == hdim_v && hdim_q == 64)
+        if(hdim_q == hdim_v && hdim_q == 64)
         {
             invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim64>(o_buf.GetDeviceBuffer(),
                                                                            do_buf.GetDeviceBuffer(),

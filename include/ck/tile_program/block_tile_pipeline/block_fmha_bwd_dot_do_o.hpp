@@ -33,6 +33,7 @@ struct BlockFmhaBwdOGradDotO
     using BlockFmhaShape = remove_cvref_t<typename Problem::BlockFmhaShape>;
 
     static constexpr index_t kBlockSize = Problem::kBlockSize;
+    static constexpr index_t kVHeaddim  = BlockFmhaShape::kVHeaddim;
 
     __host__ __device__ static constexpr ck::index_t GetSmemSize() { return 0; }
 
@@ -71,8 +72,15 @@ struct BlockFmhaBwdOGradDotO
 
         auto do_ = load_tile(do_dram_window);
 
-        auto d = make_static_distributed_tensor<DDataType>(
-            Policy::template MakePreDDramTileDistribution<Problem>());
+        // declare d
+        constexpr auto d_dstr =
+            make_static_tile_distribution(detail::make_reduce_tile_distribution_encoding(
+                o.GetTileDistribution().GetStaticTileDistributionEncoding(), Sequence<1>{}));
+
+        auto d = make_static_distributed_tensor<DDataType>(d_dstr);
+
+        // auto d = make_static_distributed_tensor<DDataType>(
+        //     Policy::template MakePreDDramTileDistribution<Problem>());
 
         tile_elementwise_inout([](auto& c) { c = 0; }, d); // Initialize D
 
@@ -86,17 +94,6 @@ struct BlockFmhaBwdOGradDotO
         });
 
         store_tile(d_dram_block_window_tmp, d);
-    }
-
-    template <typename ODramBlockWindowTmp,
-              typename OGradDramBlockWindowTmp,
-              typename DDramBlockWindowTmp>
-    __host__ __device__ auto operator()(const ODramBlockWindowTmp& o_dram_block_window_tmp,
-                                        const OGradDramBlockWindowTmp& do_dram_block_window_tmp,
-                                        DDramBlockWindowTmp& d_dram_block_window_tmp) const
-    {
-        return operator()(
-            o_dram_block_window_tmp, do_dram_block_window_tmp, d_dram_block_window_tmp);
     }
 };
 
