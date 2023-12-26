@@ -347,7 +347,7 @@ struct BlockFmhaBwdPipelineV9
             // STAGE 2, Scale & Softmax
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, st_acc);
 
-            auto lse = load_tile(lse_dram_window);
+            const auto lse = load_tile(lse_dram_window);
 
             auto pt                 = SPTBlockTileType{};
             constexpr auto pt_spans = decltype(pt)::GetDistributedSpans();
@@ -393,7 +393,7 @@ struct BlockFmhaBwdPipelineV9
                     move_tile_window(dot_dram_window, {0, kK1});
                 });
             }
-            const auto do_block_tile = load_tile(do_dram_window); // prefetch load OGrad tile
+            auto do_block_tile = load_tile(do_dram_window); // prefetch load OGrad tile
             // tail
             {
                 block_sync_lds();
@@ -456,7 +456,7 @@ struct BlockFmhaBwdPipelineV9
             }
 
             // STAGE 5, P^T(PGrad^T - D)
-            auto d = load_tile(d_dram_window);
+            const auto d = load_tile(d_dram_window);
 
             auto dst                 = SPGradTBlockTileType{};
             constexpr auto dst_spans = decltype(dst)::GetDistributedSpans();

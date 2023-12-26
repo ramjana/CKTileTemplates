@@ -832,8 +832,6 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     template <typename Problem>
     __host__ __device__ static constexpr auto MakePreDDramTileDistribution()
     {
-        using DDataType = remove_cvref_t<typename Problem::DDataType>;
-
         constexpr index_t kBlockSize = Problem::kBlockSize;
 
         constexpr index_t K0 = 1;
@@ -853,8 +851,6 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     template <typename Problem>
     __device__ static constexpr auto MakeQTDramTileDistribution()
     {
-        using QDataType = remove_cvref_t<typename Problem::QDataType>;
-
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
         constexpr index_t kKPerBlock = [&]() {
@@ -921,8 +917,6 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     template <typename Problem>
     __device__ static constexpr auto MakeKTDramTileDistribution()
     {
-        using KDataType = remove_cvref_t<typename Problem::KDataType>;
-
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kQKHeaddim;
         constexpr index_t kKPerBlock = [&]() {
@@ -989,8 +983,6 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     template <typename Problem>
     __device__ static constexpr auto MakeOGradTDramTileDistribution()
     {
-        using OGradDataType = remove_cvref_t<typename Problem::OGradDataType>;
-
         constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kVHeaddim;
         constexpr index_t kKPerBlock = [&]() {

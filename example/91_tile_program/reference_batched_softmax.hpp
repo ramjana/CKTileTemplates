@@ -49,7 +49,7 @@ void reference_batched_softmax(const Tensor<ADataType>& a_b_m_n, Tensor<BDataTyp
 template <typename ADataType, typename AccDataType, typename BDataType, typename LSEDataType>
 void reference_batched_softmax(const Tensor<ADataType>& a_b_m_n,
                                Tensor<BDataType>& b_b_m_n,
-                               Tensor<LSEDataType> lse_b_m)
+                               Tensor<LSEDataType>& lse_b_m)
 {
     const int N = a_b_m_n.mDesc.GetLengths()[2];
 
@@ -82,7 +82,7 @@ void reference_batched_softmax(const Tensor<ADataType>& a_b_m_n,
             b_b_m_n(batch, m, n) = ck::math::exp(v_a - v_max) / v_exp_sum;
         }
 
-        lse_b_m(batch, m) = v_max + std::log(v_exp_sum);
+        lse_b_m(batch, m) = ck::type_convert<LSEDataType>(v_max + std::log(v_exp_sum));
     };
 
     make_ParallelTensorFunctor(f, b_b_m_n.mDesc.GetLengths()[0], b_b_m_n.mDesc.GetLengths()[1])(
