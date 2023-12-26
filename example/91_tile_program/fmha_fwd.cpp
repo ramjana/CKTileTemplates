@@ -179,6 +179,7 @@ float invoker_fmha_kernel(const void* q_ptr,
             return i_perm ? seqlen_k : nhead_k * seqlen_k;
     }();
     const ck::index_t stride_bias = (i_perm ? seqlen_k : 1 * seqlen_k);
+    const ck::index_t stride_lse  = 1;
     const ck::index_t stride_o    = (o_perm ? hdim_v : nhead * hdim_v);
     // setup nhead_stride_* arguments
     const ck::index_t nhead_stride_q = (i_perm ? seqlen_q * hdim_q : hdim_q);
@@ -190,40 +191,75 @@ float invoker_fmha_kernel(const void* q_ptr,
             return i_perm ? hdim_v * seqlen_k : seqlen_k;
     }();
     const ck::index_t nhead_stride_bias = (i_perm ? 0 * seqlen_q * seqlen_k : 0 * seqlen_k);
+    const ck::index_t nhead_stride_lse  = seqlen_q;
     const ck::index_t nhead_stride_o    = (o_perm ? seqlen_q * hdim_v : hdim_v);
     // setup batch_stride_* arguments
     const ck::index_t batch_stride_q    = (nhead * seqlen_q * hdim_q);
     const ck::index_t batch_stride_k    = (nhead_k * seqlen_k * hdim_q);
     const ck::index_t batch_stride_v    = (nhead_k * hdim_v * seqlen_k);
     const ck::index_t batch_stride_bias = (0 * nhead * seqlen_q * seqlen_k);
+    const ck::index_t batch_stride_lse  = (nhead * seqlen_q);
     const ck::index_t batch_stride_o    = (nhead * seqlen_q * hdim_v);
 
     const auto kargs = [&] {
         // create group mode kernel arguments
+        std::cout << std::endl;
+        std::cout << "FmhaKernel_::kIsGroupMode: " << FmhaKernel_::kIsGroupMode << std::endl;
         if constexpr(FmhaKernel_::kIsGroupMode)
         {
-            return FmhaKernel_::MakeKargs(q_ptr,
-                                          k_ptr,
-                                          v_ptr,
-                                          bias_ptr,
-                                          o_ptr,
-                                          seqstart_q_ptr,
-                                          seqstart_k_ptr,
-                                          seqlen_k_ptr,
-                                          hdim_q,
-                                          hdim_v,
-                                          nhead / nhead_k,
-                                          scale,
-                                          stride_q,
-                                          stride_k,
-                                          stride_v,
-                                          stride_bias,
-                                          stride_o,
-                                          nhead_stride_q,
-                                          nhead_stride_k,
-                                          nhead_stride_v,
-                                          nhead_stride_bias,
-                                          nhead_stride_o);
+            if constexpr(!std::is_same<void, typename FmhaKernel_::LSEDataType>::value)
+            {
+                return FmhaKernel_::MakeKargs(q_ptr,
+                                              k_ptr,
+                                              v_ptr,
+                                              bias_ptr,
+                                              lse_ptr,
+                                              o_ptr,
+                                              seqstart_q_ptr,
+                                              seqstart_k_ptr,
+                                              seqlen_k_ptr,
+                                              hdim_q,
+                                              hdim_v,
+                                              nhead / nhead_k,
+                                              scale,
+                                              stride_q,
+                                              stride_k,
+                                              stride_v,
+                                              stride_bias,
+                                              stride_lse,
+                                              stride_o,
+                                              nhead_stride_q,
+                                              nhead_stride_k,
+                                              nhead_stride_v,
+                                              nhead_stride_bias,
+                                              nhead_stride_lse,
+                                              nhead_stride_o);
+            }
+            else
+            {
+                return FmhaKernel_::MakeKargs(q_ptr,
+                                              k_ptr,
+                                              v_ptr,
+                                              bias_ptr,
+                                              o_ptr,
+                                              seqstart_q_ptr,
+                                              seqstart_k_ptr,
+                                              seqlen_k_ptr,
+                                              hdim_q,
+                                              hdim_v,
+                                              nhead / nhead_k,
+                                              scale,
+                                              stride_q,
+                                              stride_k,
+                                              stride_v,
+                                              stride_bias,
+                                              stride_o,
+                                              nhead_stride_q,
+                                              nhead_stride_k,
+                                              nhead_stride_v,
+                                              nhead_stride_bias,
+                                              nhead_stride_o);
+            }
         }
         else
         { // create batch mode kernel arguments
@@ -245,16 +281,19 @@ float invoker_fmha_kernel(const void* q_ptr,
                                               stride_k,
                                               stride_v,
                                               stride_bias,
+                                              stride_lse,
                                               stride_o,
                                               nhead_stride_q,
                                               nhead_stride_k,
                                               nhead_stride_v,
                                               nhead_stride_bias,
+                                              nhead_stride_lse,
                                               nhead_stride_o,
                                               batch_stride_q,
                                               batch_stride_k,
                                               batch_stride_v,
                                               batch_stride_bias,
+                                              batch_stride_lse,
                                               batch_stride_o);
             }
             else
@@ -442,7 +481,7 @@ int main(int argc, char* argv[])
     Tensor<KDataType> bias_host(
         use_bias ? get_lengths(i_perm, 1, 1, shape_seqlen_q, shape_seqlen_k)
                  : std::array<ck::index_t, 4>{1, 1, 1, 1} /* dummy shape for simplifying code */);
-    Tensor<LSEDataType> lse_host(get_lengths(i_perm, shape_batch, nhead, shape_seqlen_q, 1));
+    Tensor<LSEDataType> lse_host(std::array<ck::index_t, 3>{shape_batch, nhead, shape_seqlen_q});
     Tensor<ODataType> o_host(get_lengths(o_perm, shape_batch, nhead, shape_seqlen_q, hdim_v));
 
     if(init_method == 0)
