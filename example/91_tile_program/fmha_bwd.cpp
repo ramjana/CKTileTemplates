@@ -498,6 +498,7 @@ int main(int argc, char* argv[])
     std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s"
               << std::endl;
 
+    bool pass = true;
     if(do_validation)
     {
         Tensor<QDataType> q_host_ref({batch * nhead, seqlen_q, hdim_q}); // q_g_m_k
@@ -687,7 +688,7 @@ int main(int argc, char* argv[])
         auto p_t_lp_host_ref = p_lp_host_ref.Transpose({0, 2, 1}); // p_lp_g_m_n -> p_lp_g_n_m
         auto do_t_host_ref   = do_host_ref.Transpose({0, 2, 1});   // do_g_m_o -> do_g_o_m
         reference_batched_gemm<GemmDataType, OGradDataType, AccDataType, VGradDataType>(
-            p_t_lp_host_ref, do_t_host_ref, dq_host_ref); // dv_g_n_o = p_lp_g_n_m@do_g_o_m
+            p_t_lp_host_ref, do_t_host_ref, dv_host_ref); // dv_g_n_o = p_lp_g_n_m@do_g_o_m
 
         // dQ = scale * dS@K^T
         auto k_t_host_ref = k_host_ref.Transpose({0, 2, 1}); // k_g_n_k -> k_g_k_n
@@ -741,9 +742,15 @@ int main(int argc, char* argv[])
         dq_buf.FromDevice(dq_host.mData.data());
         dk_buf.FromDevice(dk_host.mData.data());
         dv_buf.FromDevice(dv_host.mData.data());
-        return !(ck::utils::check_err(dq_host, dq_host_result_ref, "error", 1e-2, 1e-2) &&
-                 ck::utils::check_err(dk_host, dk_host_result_ref, "error", 1e-2, 1e-2) &&
-                 ck::utils::check_err(dv_host, dv_host_result_ref, "error", 1e-2, 1e-2));
+
+        std::cout << "Checking dq:\n";
+        pass &= ck::utils::check_err(dq_host, dq_host_result_ref, "error", 1e-2, 1e-2);
+        std::cout << "Checking dk:\n";
+        pass &= ck::utils::check_err(dk_host, dk_host_result_ref, "error", 1e-2, 1e-2);
+        std::cout << "Checking dv:\n";
+        pass &= ck::utils::check_err(dv_host, dv_host_result_ref, "error", 1e-2, 1e-2);
+
+        return pass ? ((void)(std::cout << "pass\n"), 0) : ((void)(std::cout << "fail\n"), 1);
     }
     else
     {

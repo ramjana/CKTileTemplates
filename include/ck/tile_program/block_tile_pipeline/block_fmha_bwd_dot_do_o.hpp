@@ -89,7 +89,8 @@ struct BlockFmhaBwdOGradDotO
             constexpr auto i_idx = make_tuple(idx0);
             sweep_tile_span(o_spans[Number<1>{}], [&](auto idx1) {
                 constexpr auto i_j_idx = make_tuple(idx0, idx1);
-                d(i_idx) += (o[i_j_idx] * do_[i_j_idx]);
+                d(i_idx) +=
+                    (type_convert<DDataType>(o[i_j_idx]) * type_convert<DDataType>(do_[i_j_idx]));
             });
         });
 
