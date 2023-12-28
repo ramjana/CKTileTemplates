@@ -1058,7 +1058,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
                                                    Problem::BlockFmhaShape::kN0,
                                                    Problem::BlockFmhaShape::kK0>>;
 
-        using WarpGemm = warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleB<
+        using WarpGemm = warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleA<
             warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
             2>>;
 
@@ -1113,7 +1113,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
                                                    Problem::BlockFmhaShape::kN0,
                                                    Problem::BlockFmhaShape::kK2>>;
 
-        using WarpGemm = warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleB<
+        using WarpGemm = warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleA<
             warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
             2>>;
 
@@ -1139,7 +1139,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
     //                                                Problem::BlockFmhaShape::kN0,
     //                                                Problem::BlockFmhaShape::kK2>>;
     //     using WarpGemm =
-    //         warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleB<
+    //         warp::WarpGemmImpl<warp::WarpGemmAtrributeMfmaIterateK_SwizzleA<
     //             warp::WarpGemmAttributeMfmaImplF16F16F32M32N32K8,
     //             2>>;
 

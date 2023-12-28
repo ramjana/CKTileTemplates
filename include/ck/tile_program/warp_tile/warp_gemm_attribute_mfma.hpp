@@ -372,7 +372,7 @@ struct WarpGemmAtrributeMfmaIterateKAndTransposedCDistribution_SwizzleB
 };
 
 template <typename WarpGemmAttributeMfmaImpl_, index_t kKIter>
-struct WarpGemmAtrributeMfmaIterateK_SwizzleB
+struct WarpGemmAtrributeMfmaIterateK_SwizzleA
 {
     using Impl = remove_cvref_t<WarpGemmAttributeMfmaImpl_>;
 
@@ -390,14 +390,6 @@ struct WarpGemmAtrributeMfmaIterateK_SwizzleB
 
     using AWarpDstrEncoding = StaticTileDistributionEncoding<
         Sequence<>,
-        Tuple<Sequence<Impl::kBNLane>, Sequence<Impl::kABKLane, Impl::kABKPerLane * kKIter>>,
-        Tuple<Sequence<2, 1>>,
-        Tuple<Sequence<0, 0>>,
-        Sequence<2>,
-        Sequence<1>>;
-
-    using BWarpDstrEncoding = StaticTileDistributionEncoding<
-        Sequence<>,
         Tuple<Sequence<Impl::kAMLane / (Impl::kABKPerLane * Impl::kABKLane * 2),
                        Impl::kABKLane,
                        2,
@@ -405,6 +397,14 @@ struct WarpGemmAtrributeMfmaIterateK_SwizzleB
               Sequence<Impl::kABKLane, Impl::kABKPerLane * kKIter>>,
         Tuple<Sequence<2, 1, 1, 1, 1>>,
         Tuple<Sequence<0, 0, 2, 1, 3>>,
+        Sequence<2>,
+        Sequence<1>>;
+
+    using BWarpDstrEncoding = StaticTileDistributionEncoding<
+        Sequence<>,
+        Tuple<Sequence<Impl::kBNLane>, Sequence<Impl::kABKLane, Impl::kABKPerLane * kKIter>>,
+        Tuple<Sequence<2, 1>>,
+        Tuple<Sequence<0, 0>>,
         Sequence<2>,
         Sequence<1>>;
 
