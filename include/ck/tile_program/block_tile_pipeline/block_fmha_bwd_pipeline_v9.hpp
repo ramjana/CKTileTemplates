@@ -535,7 +535,7 @@ struct BlockFmhaBwdPipelineV9
             // QGrad Scale
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, dq_acc);
             const auto dq = tile_elementwise_in(type_convert<QGradDataType, AccDataType>, dq_acc);
-            store_tile(dq_dram_block_window, dq); // TODO: Atomicadd
+            update_tile(dq_dram_block_window, dq);
 
             // move tile windows
             move_tile_window(q_dram_block_window, {kM0, 0});

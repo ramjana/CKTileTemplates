@@ -311,9 +311,9 @@ int main(int argc, char* argv[])
 {
     int do_validation    = 1;
     ck::index_t batch    = 2;
-    ck::index_t nhead    = 8;
-    ck::index_t seqlen_q = 3328;
-    ck::index_t seqlen_k = 4096;
+    ck::index_t nhead    = 3;
+    ck::index_t seqlen_q = 512;
+    ck::index_t seqlen_k = 512;
     ck::index_t hdim_q   = 64;
     ck::index_t hdim_v   = 64;
 
@@ -374,14 +374,21 @@ int main(int argc, char* argv[])
     ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
     ck::utils::FillUniformDistributionIntegerValue<OGradDataType>{-2.f, 2.f}(do_host);
 #else
-    // ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_host);
-    // ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_host);
-    // ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_host);
-    // ck::utils::FillUniformDistribution<OGradDataType>{-.5f, .5f}(do_host);
-    ck::utils::FillConstant<QDataType>{1.f}(q_host);
-    ck::utils::FillConstant<KDataType>{1.f}(k_host);
-    ck::utils::FillConstant<VDataType>{1.f}(v_host);
-    ck::utils::FillConstant<OGradDataType>{1.f}(do_host);
+    ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_host);
+    ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_host);
+    ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_host);
+    ck::utils::FillUniformDistribution<OGradDataType>{-.5f, .5f}(do_host);
+
+    // ck::utils::FillConstant<QDataType>{1.f}(q_host);
+    // ck::utils::FillConstant<KDataType>{2.f}(k_host);
+    // ck::utils::FillConstant<VDataType>{1.f}(v_host);
+    // ck::utils::FillConstant<OGradDataType>{2.f}(do_host);
+
+    // q_host.GenerateTensorValue(GeneratorTensor_Sequential<3>{});
+    // ck::utils::FillConstant<KDataType>{1.f}(k_host);
+    // v_host.GenerateTensorValue(GeneratorTensor_Sequential<2>{});
+    // do_host.GenerateTensorValue(GeneratorTensor_Sequential<2>{});
+
 #endif
 
     DeviceMem q_buf(sizeof(QDataType) * q_host.GetElementSpaceSize());

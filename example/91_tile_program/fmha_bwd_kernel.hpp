@@ -248,12 +248,13 @@ struct FmhaBwdKernel
                                   make_tuple(Sequence<1>{}, Sequence<0>{}),
                                   make_tuple(Sequence<0>{}, Sequence<1>{}));
 
-        const auto dq_dram = make_naive_tensor_view<AddressSpaceEnum::Global>(
-            dq_ptr,
-            make_tuple(kargs.seqlen_q, kargs.hdim_q),
-            make_tuple(kargs.stride_q, 1),
-            Number<32>{},
-            Number<1>{});
+        const auto dq_dram =
+            make_naive_tensor_view<AddressSpaceEnum::Global, InMemoryDataOperationEnum::AtomicAdd>(
+                dq_ptr,
+                make_tuple(kargs.seqlen_q, kargs.hdim_q),
+                make_tuple(kargs.stride_q, 1),
+                Number<32>{},
+                Number<1>{});
 
         auto q_dram_window = make_tile_window(
             q_dram,
