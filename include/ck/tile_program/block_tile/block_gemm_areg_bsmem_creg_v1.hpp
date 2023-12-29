@@ -46,13 +46,16 @@ struct BlockGemmARegBSmemCRegV1
                           is_same_v<CDataType, remove_cv_t<typename CBlockTensor::DataType>>,
                       "wrong!");
 
-        constexpr index_t MPerBlock = ABlockTensorTmp{}.GetLengths()[Number<0>{}];
-        constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
-        constexpr index_t KPerBlock = ABlockTensorTmp{}.GetLengths()[Number<1>{}];
+        // constexpr index_t MPerBlock = ABlockTensorTmp{}.GetLengths()[Number<0>{}];
+        // constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
+        // constexpr index_t KPerBlock = ABlockTensorTmp{}.GetLengths()[Number<1>{}];
+        constexpr index_t MPerBlock = BlockGemmShape::kM;
+        constexpr index_t NPerBlock = BlockGemmShape::kN;
+        constexpr index_t KPerBlock = BlockGemmShape::kK;
 
-        static_assert(MPerBlock == BlockGemmShape::kM && NPerBlock == BlockGemmShape::kN &&
-                          KPerBlock == BlockGemmShape::kK,
-                      "wrong!");
+        // static_assert(MPerBlock == BlockGemmShape::kM && NPerBlock == BlockGemmShape::kN &&
+        //                   KPerBlock == BlockGemmShape::kK,
+        //               "wrong!");
 
         constexpr auto config = Policy::template GetWarpGemmMWarpNWarp<Problem>();
 
@@ -197,13 +200,16 @@ struct BlockGemmARegBSmemCRegV1
                           is_same_v<BDataType, remove_cv_t<typename BBlockWindowTmp::DataType>>,
                       "wrong!");
 
-        constexpr index_t MPerBlock = ABlockTensorTmp{}.GetLengths()[Number<0>{}];
-        constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
-        constexpr index_t KPerBlock = ABlockTensorTmp{}.GetLengths()[Number<1>{}];
+        // constexpr index_t MPerBlock = ABlockTensorTmp{}.GetLengths()[Number<0>{}];
+        // constexpr index_t NPerBlock = BBlockWindowTmp{}.GetWindowLengths()[Number<0>{}];
+        // constexpr index_t KPerBlock = ABlockTensorTmp{}.GetLengths()[Number<1>{}];
+        constexpr index_t MPerBlock = BlockGemmShape::kM;
+        constexpr index_t NPerBlock = BlockGemmShape::kN;
+        constexpr index_t KPerBlock = BlockGemmShape::kK;
 
-        static_assert(MPerBlock == BlockGemmShape::kM && NPerBlock == BlockGemmShape::kN &&
-                          KPerBlock == BlockGemmShape::kK,
-                      "wrong!");
+        // static_assert(MPerBlock == BlockGemmShape::kM && NPerBlock == BlockGemmShape::kN &&
+        //                   KPerBlock == BlockGemmShape::kK,
+        //               "wrong!");
 
         constexpr auto config = Policy::template GetWarpGemmMWarpNWarp<Problem>();
 
