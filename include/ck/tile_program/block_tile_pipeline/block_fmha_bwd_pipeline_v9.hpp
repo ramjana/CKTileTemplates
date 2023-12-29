@@ -540,8 +540,8 @@ struct BlockFmhaBwdPipelineV9
             // move tile windows
             move_tile_window(q_dram_block_window, {kM0, 0});
             move_tile_window(do_dram_block_window, {kM0, 0});
-            move_tile_window(lse_dram_window, {kM0, 0});
-            move_tile_window(d_dram_window, {kM0, 0});
+            move_tile_window(lse_dram_window, {kM0});
+            move_tile_window(d_dram_window, {kM0});
             move_tile_window(ds_lds_window, {0, -kN0});
             move_tile_window(k_lds_window, {0, -kK0 * (k0_loops - 1)});
             move_tile_window(kt_lds_window, {0, -kN0});
