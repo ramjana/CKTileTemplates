@@ -852,27 +852,11 @@ struct FmhaFwdKernel
 
         C0MatrixMask casual_mask{kargs.seqlen_q, kargs.seqlen_k};
 
-        // LSE
-        // const auto lse_dram = [&]() {
-        //     const auto lse_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
-        //         lse_ptr,
-        //         make_tuple(kargs.seqlen_q, 0),
-        //         make_tuple(1, 0),
-        //         Number<1>{},
-        //         Number<1>{});
-
-        //     return pad_tensor_view(q_dram_naive,
-        //                            make_tuple(Number<FmhaPipeline::kM0>{}, Number<0>{}),
-        //                            Sequence<kM0NeedPadding, false>{});
-        // }();
-
-        // ignore = lse_dram;
-        auto o_acc_tile =
+        auto [o_acc_tile, m, l] =
             FmhaPipeline{}(q_dram_window,
                            k_dram_window,
                            v_dram_window,
                            bias_dram_window,
-                           lse_dram_window,
                            casual_mask,
                            kargs.scale,
                            ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0),
@@ -899,5 +883,7 @@ struct FmhaFwdKernel
                              {i_m0, i_n1});
 
         EpiloguePipeline{}(o_dram_window, o_acc_tile);
+
+        ignore = lse_dram_window;
     }
 };
