@@ -191,14 +191,14 @@ float invoker_fmha_kernel(const void* q_ptr,
             return i_perm ? hdim_v * seqlen_k : seqlen_k;
     }();
     const ck::index_t nhead_stride_bias = (i_perm ? 0 * seqlen_q * seqlen_k : 0 * seqlen_k);
-    const ck::index_t nhead_stride_lse  = seqlen_q;
+    const ck::index_t nhead_stride_lse  = seqlen_q * 1;
     const ck::index_t nhead_stride_o    = (o_perm ? seqlen_q * hdim_v : hdim_v);
     // setup batch_stride_* arguments
     const ck::index_t batch_stride_q    = (nhead * seqlen_q * hdim_q);
     const ck::index_t batch_stride_k    = (nhead_k * seqlen_k * hdim_q);
     const ck::index_t batch_stride_v    = (nhead_k * hdim_v * seqlen_k);
     const ck::index_t batch_stride_bias = (0 * nhead * seqlen_q * seqlen_k);
-    const ck::index_t batch_stride_lse  = (nhead * seqlen_q);
+    const ck::index_t batch_stride_lse  = (nhead * seqlen_q * 1);
     const ck::index_t batch_stride_o    = (nhead * seqlen_q * hdim_v);
 
     const auto kargs = [&] {
@@ -481,7 +481,7 @@ int main(int argc, char* argv[])
     Tensor<KDataType> bias_host(
         use_bias ? get_lengths(i_perm, 1, 1, shape_seqlen_q, shape_seqlen_k)
                  : std::array<ck::index_t, 4>{1, 1, 1, 1} /* dummy shape for simplifying code */);
-    Tensor<LSEDataType> lse_host(std::array<ck::index_t, 3>{shape_batch, nhead, shape_seqlen_q});
+    Tensor<LSEDataType> lse_host(std::array<ck::index_t, 4>{shape_batch, nhead, shape_seqlen_q, 1});
     Tensor<ODataType> o_host(get_lengths(o_perm, shape_batch, nhead, shape_seqlen_q, hdim_v));
 
     if(init_method == 0)
