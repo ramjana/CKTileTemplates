@@ -72,10 +72,12 @@ struct BlockFmhaPipelineQRKSVSAsync
               typename KDramBlockWindowTmp,
               typename VDramBlockWindowTmp,
               typename BiasDramBlockWindowTmp,
+              typename LSEDramBlockWindowTmp,
               typename QElementFunction,
               typename KElementFunction,
               typename VElementFunction,
               typename BiasElementFunction,
+              typename LSEElementFunction,
               typename CausalMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
@@ -86,12 +88,16 @@ struct BlockFmhaPipelineQRKSVSAsync
                const VElementFunction& v_element_func,
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
                const BiasElementFunction& bias_element_func,
+               const LSEDramBlockWindowTmp& lse_dram_block_window_tmp, // M0*N0 tile
+               const LSEElementFunction& lse_element_func,
                CausalMask causal_mask,
                float scale,
                index_t num_total_loop,
                index_t /*num_sub_loop_qk*/, // in this pipeline, the 1st gemm loop must be static
                void* smem_ptr) const
     {
+        ignore = lse_dram_block_window_tmp;
+        ignore = lse_element_func;
         static_assert(
             is_same_v<QDataType, remove_cvref_t<typename QDramBlockWindowTmp::DataType>> &&
                 is_same_v<KDataType, remove_cvref_t<typename KDramBlockWindowTmp::DataType>> &&
@@ -513,12 +519,14 @@ struct BlockFmhaPipelineQRKSVSAsync
               typename KDramBlockWindowTmp,
               typename VDramBlockWindowTmp,
               typename BiasDramBlockWindowTmp,
+              typename LSEDramBlockWindowTmp,
               typename CausalMask>
     __host__ __device__ auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
                const KDramBlockWindowTmp& k_dram_block_window_tmp,       // N0*K0 tile
                const VDramBlockWindowTmp& v_dram_block_window_tmp,       // N1*K1 tile
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
+               const LSEDramBlockWindowTmp& lse_dram_block_window_tmp,   // M0*N0 tile
                CausalMask causal_mask,
                float scale,
                index_t num_total_loop,
@@ -532,6 +540,8 @@ struct BlockFmhaPipelineQRKSVSAsync
                           v_dram_block_window_tmp,
                           identity{},
                           bias_dram_block_window_tmp,
+                          identity{},
+                          lse_dram_block_window_tmp,
                           identity{},
                           causal_mask,
                           scale,

@@ -668,8 +668,11 @@ struct FmhaFwdKernel
             {
                 batch_offset_bias = static_cast<long_index_t>(i_batch) * kargs.batch_stride_bias;
             }
-            batch_offset_lse = static_cast<long_index_t>(i_batch) * kargs.batch_stride_lse;
-            batch_offset_o   = static_cast<long_index_t>(i_batch) * kargs.batch_stride_o;
+            if constexpr(std::is_same<void, LSEDataType>::value)
+            {
+                batch_offset_lse = static_cast<long_index_t>(i_batch) * kargs.batch_stride_lse;
+            }
+            batch_offset_o = static_cast<long_index_t>(i_batch) * kargs.batch_stride_o;
         }
 
         // for simplicity, batch stride we just modify the pointer
@@ -687,10 +690,6 @@ struct FmhaFwdKernel
         ODataType* o_ptr = kargs.o_ptr + static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_o +
                            batch_offset_o;
 
-        const LSEDataType* lse_ptr = kargs.lse_ptr +
-                                     static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_lse +
-                                     batch_offset_lse;
-        ignore = lse_ptr;
         // Q/K/V DRAM and DRAM window
         const auto q_dram = [&]() {
             const auto q_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
@@ -822,6 +821,35 @@ struct FmhaFwdKernel
             }
         }();
 
+        // lse ptr desc
+        const auto lse_dram_window = [&, i_nhead_ = i_nhead]() {
+            constexpr auto lse_dram_window_lengths = make_tuple(Number<FmhaPipeline::kM0>{});
+            if constexpr(std::is_same<void, LSEDataType>::value)
+            {
+                const LSEDataType* lse_ptr =
+                    kargs.lse_ptr + static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_lse +
+                    batch_offset_lse;
+
+                const auto lse_dram = [&]() {
+                    const auto lse_dram_naive =
+                        make_naive_tensor_view<AddressSpaceEnum::Global>(lse_ptr,
+                                                                         make_tuple(kargs.seqlen_q),
+                                                                         make_tuple(1),
+                                                                         Number<1>{},
+                                                                         Number<1>{});
+
+                    return pad_tensor_view(
+                        lse_dram_naive, lse_dram_window_lengths, Sequence<kM0NeedPadding>{});
+                }();
+
+                return make_tile_window(lse_dram, lse_dram_window_lengths, {i_m0});
+            }
+            else
+            {
+                return make_null_tile_window(lse_dram_window_lengths);
+            }
+        }();
+
         C0MatrixMask casual_mask{kargs.seqlen_q, kargs.seqlen_k};
 
         // LSE
@@ -844,6 +872,7 @@ struct FmhaFwdKernel
                            k_dram_window,
                            v_dram_window,
                            bias_dram_window,
+                           lse_dram_window,
                            casual_mask,
                            kargs.scale,
                            ck::math::integer_divide_ceil(kargs.seqlen_k, FmhaPipeline::kN0),
