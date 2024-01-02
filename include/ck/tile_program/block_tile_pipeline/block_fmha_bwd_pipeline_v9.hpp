@@ -281,7 +281,12 @@ struct BlockFmhaBwdPipelineV9
                              dot_dram_block_window.GetWindowOrigin(),
                              Policy::template MakeOGradTDramTileDistribution<Problem>());
 
-        index_t i_total_loops = 0;
+        index_t i_total_loops      = 0;
+        constexpr index_t k0_loops = kQKHeaddim / kK0;
+        constexpr index_t k1_loops = kM0 / kK1;
+        constexpr index_t k2_loops = kVHeaddim / kK2;
+        constexpr index_t k3_loops = kM0 / kK3;
+        constexpr index_t k4_loops = kN0 / kK4;
         do
         {
             auto q_dram_window = make_tile_window(
@@ -310,8 +315,6 @@ struct BlockFmhaBwdPipelineV9
                 store_tile(q_lds_window, q_block_tile);  // LDS write 0
                 q_block_tile = load_tile(q_dram_window); // global read 1
             }
-
-            constexpr index_t k0_loops = kQKHeaddim / kK0;
 
             if constexpr(k0_loops > 2)
             {
@@ -372,7 +375,6 @@ struct BlockFmhaBwdPipelineV9
 
             const auto pt_gemm = tile_elementwise_in(type_convert<GemmDataType, AccDataType>, pt);
 
-            constexpr index_t k1_loops = kM0 / kK1;
             if constexpr(k1_loops > 1)
             {
                 static_for<0, k1_loops - 1, 1>{}([&](auto i_k1) {
@@ -415,8 +417,6 @@ struct BlockFmhaBwdPipelineV9
                 store_tile(do_lds_window, do_block_tile);  // LDS write 0
                 do_block_tile = load_tile(do_dram_window); // global read 1
             }
-
-            constexpr index_t k2_loops = kVHeaddim / kK2;
 
             if constexpr(k2_loops > 2)
             {
@@ -481,7 +481,6 @@ struct BlockFmhaBwdPipelineV9
 
             const auto dst_gemm = tile_elementwise_in(type_convert<GemmDataType, AccDataType>, dst);
 
-            constexpr index_t k3_loops = kM0 / kK3;
             if constexpr(k3_loops > 1)
             {
                 static_for<0, k3_loops - 1, 1>{}([&](auto i_k3) {
@@ -516,8 +515,6 @@ struct BlockFmhaBwdPipelineV9
             store_tile(ds_lds_store_window, dst_gemm);
 
             auto dq_acc = QGradBlockTileType{};
-
-            constexpr index_t k4_loops = kN0 / kK4;
 
             tile_elementwise_inout([](auto& c) { c = 0; }, dq_acc); // Initialize QGrad
 
