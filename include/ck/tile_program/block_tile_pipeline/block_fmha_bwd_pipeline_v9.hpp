@@ -214,21 +214,21 @@ struct BlockFmhaBwdPipelineV9
 
         using SPTBlockTileType = decltype(gemm_0(q_lds_window, k_lds_window));
 
-        using SPGradTBlockTileType = decltype(gemm_2(
-            do_lds_window, get_slice_tile(v, Sequence<0, 0>{}, Sequence<kN0, kK2>{})));
+        using SPGradTBlockTileType = decltype(
+            gemm_2(do_lds_window, get_slice_tile(v, Sequence<0, 0>{}, Sequence<kN0, kK2>{})));
 
-        using SPTGemmBlockTileType = decltype(tile_elementwise_in(
-            type_convert<GemmDataType, AccDataType>, SPTBlockTileType{}));
+        using SPTGemmBlockTileType = decltype(
+            tile_elementwise_in(type_convert<GemmDataType, AccDataType>, SPTBlockTileType{}));
 
-        using SPGradTGemmBlockTileType = decltype(tile_elementwise_in(
-            type_convert<GemmDataType, AccDataType>, SPGradTBlockTileType{}));
+        using SPGradTGemmBlockTileType = decltype(
+            tile_elementwise_in(type_convert<GemmDataType, AccDataType>, SPGradTBlockTileType{}));
 
         using QGradBlockTileType = decltype(gemm_4(ds_lds_window, kt_lds_window));
 
         // init VGrad & KGrad
-        auto dv_acc = decltype(gemm_1(
-            get_slice_tile(SPTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK1, kN0>{}),
-            dot_lds_window)){};
+        auto dv_acc = decltype(
+            gemm_1(get_slice_tile(SPTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK1, kN0>{}),
+                   dot_lds_window)){};
 
         auto dk_acc = decltype(gemm_3(
             get_slice_tile(SPGradTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK3, kN0>{}),
@@ -543,8 +543,7 @@ struct BlockFmhaBwdPipelineV9
             move_tile_window(ds_lds_window, {0, -kN0});
             move_tile_window(k_lds_window, {0, -kK0 * (k0_loops - 1)});
             move_tile_window(kt_lds_window, {0, -kN0});
-            i_total_loops++;
-        } while(i_total_loops < num_total_loop);
+        } while(++i_total_loops < num_total_loop);
 
         // KGrad Scale
         tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, dk_acc);

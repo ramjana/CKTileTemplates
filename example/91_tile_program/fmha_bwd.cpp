@@ -16,8 +16,7 @@
 
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_default_policy.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_problem.hpp"
-// #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_dispatcher.hpp"
-#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_v9.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_dispatcher.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_dot_do_o.hpp"
 #include "ck/tile_program/tile/tile_fmha_bwd_shape.hpp"
 
@@ -124,19 +123,10 @@ using FmhaBwdPipelineProblemHDim64 =
                                                          256, // BlockSize
                                                          FmhaShapeHDim64>;
 
-// using BlockFmhaBwdPipeline =
-//     ck::tile_program::block::BlockFmhaBwdPipelineDispatcher<FmhaLoadStrategy::At(Number<0>{}),
-//                                                             FmhaLoadStrategy::At(Number<1>{}),
-//                                                             FmhaLoadStrategy::At(Number<2>{}),
-//                                                             FmhaLoadStrategy::At(Number<3>{}),
-//                                                             FmhaLoadStrategy::At(Number<4>{}),
-//                                                             FmhaLoadStrategy::At(Number<5>{}),
-//                                                             FmhaLoadStrategy::At(Number<6>{})>;
-
-using FmhaBwdPipelineHDim32 =
-    ck::tile_program::block::BlockFmhaBwdPipelineV9<FmhaBwdPipelineProblemHDim32>;
-using FmhaBwdPipelineHDim64 =
-    ck::tile_program::block::BlockFmhaBwdPipelineV9<FmhaBwdPipelineProblemHDim64>;
+using FmhaBwdPipelineHDim32 = ck::tile_program::block::
+    BlockFmhaBwdPipelineDispatcher<FmhaLoadStrategy, FmhaBwdPipelineProblemHDim32>::BlockPipeline;
+using FmhaBwdPipelineHDim64 = ck::tile_program::block::
+    BlockFmhaBwdPipelineDispatcher<FmhaLoadStrategy, FmhaBwdPipelineProblemHDim64>::BlockPipeline;
 
 using FmhaBWDEpilogue =
     FmhaBwdEpilogue<FmhaBwdEpilogueProblem<AccDataType, KGradDataType, VGradDataType>>;
