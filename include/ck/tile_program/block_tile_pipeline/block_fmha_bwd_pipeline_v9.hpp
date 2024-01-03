@@ -206,30 +206,13 @@ struct BlockFmhaBwdPipelineV9
             d_dram_block_window_tmp.GetWindowOrigin(),
             Policy::template MakeLSEDDramTileDistribution<Problem, decltype(gemm_0)>());
 
-        using SPTBlockTileType = decltype(gemm_0(
-            q_lds_window, get_slice_tile(k_lds_window, Sequence<0, 0>{}, Sequence<kN0, kK0>{})));
-
-        using SPGradTBlockTileType = decltype(
-            gemm_2(do_lds_window, get_slice_tile(v, Sequence<0, 0>{}, Sequence<kN0, kK2>{})));
-
-        using SPTGemmBlockTileType = decltype(
-            tile_elementwise_in(type_convert<GemmDataType, AccDataType>, SPTBlockTileType{}));
-
-        using SPGradTGemmBlockTileType = decltype(
-            tile_elementwise_in(type_convert<GemmDataType, AccDataType>, SPGradTBlockTileType{}));
-
-        using QGradBlockTileType = decltype(
-            gemm_4(get_slice_tile(ds_lds_window, Sequence<0, 0>{}, Sequence<kM0, kK4>{}),
-                   get_slice_tile(kt_lds_window, Sequence<0, 0>{}, Sequence<kQKHeaddim, kK4>{})));
+        using SPTBlockTileType     = decltype(gemm_0.MakeCBlockTile());
+        using SPGradTBlockTileType = decltype(gemm_2.MakeCBlockTile());
+        using QGradBlockTileType   = decltype(gemm_4.MakeCBlockTile());
 
         // init VGrad & KGrad
-        auto dv_acc = decltype(
-            gemm_1(get_slice_tile(SPTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK1, kN0>{}),
-                   dot_lds_window)){};
-
-        auto dk_acc = decltype(gemm_3(
-            get_slice_tile(SPGradTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK3, kN0>{}),
-            qt_lds_window)){};
+        auto dv_acc = decltype(gemm_1.MakeCBlockTile()){};
+        auto dk_acc = decltype(gemm_3.MakeCBlockTile()){};
 
         tile_elementwise_inout([](auto& e) { e = 0; }, dv_acc);
         tile_elementwise_inout([](auto& e) { e = 0; }, dk_acc);
