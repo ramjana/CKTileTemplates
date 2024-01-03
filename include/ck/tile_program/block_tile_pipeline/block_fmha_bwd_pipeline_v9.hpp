@@ -315,7 +315,7 @@ struct BlockFmhaBwdPipelineV9
 
             if constexpr(k0_loops > 2)
             {
-                static_for<0, k0_loops - 1, 1>{}([&](auto i_k0) {
+                static_for<0, k0_loops - 2, 1>{}([&](auto i_k0) {
                     block_sync_lds();
                     gemm_0(st_acc,
                            q_lds_window,
