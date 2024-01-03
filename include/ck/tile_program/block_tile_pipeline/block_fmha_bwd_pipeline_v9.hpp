@@ -141,20 +141,16 @@ struct BlockFmhaBwdPipelineV9
         auto k_lds = make_tensor_view<AddressSpaceEnum::Lds>(
             reinterpret_cast<KDataType*>(smem_ptr),
             Policy::template MakeKLdsBlockDescriptor<Problem>());
-        auto k_lds_store_window =
-            make_tile_window(k_lds, make_tuple(Number<kN0>{}, Number<kQKHeaddim>{}), {0, 0});
         auto k_lds_window =
-            make_tile_window(k_lds, make_tuple(Number<kN0>{}, Number<kK0>{}), {0, 0});
+            make_tile_window(k_lds, make_tuple(Number<kN0>{}, Number<kQKHeaddim>{}), {0, 0});
 
         // KT tile in LDS
         KDataType* kt_lds_ptr = static_cast<KDataType*>(static_cast<void*>(
             static_cast<char*>(smem_ptr) + Policy::template GetSmemSizeK<Problem>()));
         auto kt_lds           = make_tensor_view<AddressSpaceEnum::Lds>(
             kt_lds_ptr, Policy::template MakeKTLdsBlockDescriptor<Problem>());
-        auto kt_lds_store_window =
-            make_tile_window(kt_lds, make_tuple(Number<kQKHeaddim>{}, Number<kN0>{}), {0, 0});
         auto kt_lds_window =
-            make_tile_window(kt_lds, make_tuple(Number<kQKHeaddim>{}, Number<kK4>{}), {0, 0});
+            make_tile_window(kt_lds, make_tuple(Number<kQKHeaddim>{}, Number<kN0>{}), {0, 0});
 
         // OGrad tile in LDS
         OGradDataType* do_lds_ptr = static_cast<OGradDataType*>(static_cast<void*>(
@@ -212,23 +208,26 @@ struct BlockFmhaBwdPipelineV9
             d_dram_block_window_tmp.GetWindowOrigin(),
             Policy::template MakeLSEDDramTileDistribution<Problem, decltype(gemm_0)>());
 
-        using SPTBlockTileType = decltype(gemm_0(q_lds_window, k_lds_window));
+        using SPTBlockTileType = decltype(gemm_0(
+            q_lds_window, get_slice_tile(k_lds_window, Sequence<0, 0>{}, Sequence<kN0, kK0>{})));
 
-        using SPGradTBlockTileType = decltype(gemm_2(
-            do_lds_window, get_slice_tile(v, Sequence<0, 0>{}, Sequence<kN0, kK2>{})));
+        using SPGradTBlockTileType = decltype(
+            gemm_2(do_lds_window, get_slice_tile(v, Sequence<0, 0>{}, Sequence<kN0, kK2>{})));
 
-        using SPTGemmBlockTileType = decltype(tile_elementwise_in(
-            type_convert<GemmDataType, AccDataType>, SPTBlockTileType{}));
+        using SPTGemmBlockTileType = decltype(
+            tile_elementwise_in(type_convert<GemmDataType, AccDataType>, SPTBlockTileType{}));
 
-        using SPGradTGemmBlockTileType = decltype(tile_elementwise_in(
-            type_convert<GemmDataType, AccDataType>, SPGradTBlockTileType{}));
+        using SPGradTGemmBlockTileType = decltype(
+            tile_elementwise_in(type_convert<GemmDataType, AccDataType>, SPGradTBlockTileType{}));
 
-        using QGradBlockTileType = decltype(gemm_4(ds_lds_window, kt_lds_window));
+        using QGradBlockTileType = decltype(
+            gemm_4(ds_lds_window,
+                   get_slice_tile(kt_lds_window, Sequence<0, 0>{}, Sequence<kQKHeaddim, kK4>{})));
 
         // init VGrad & KGrad
-        auto dv_acc = decltype(gemm_1(
-            get_slice_tile(SPTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK1, kN0>{}),
-            dot_lds_window)){};
+        auto dv_acc = decltype(
+            gemm_1(get_slice_tile(SPTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK1, kN0>{}),
+                   dot_lds_window)){};
 
         auto dk_acc = decltype(gemm_3(
             get_slice_tile(SPGradTGemmBlockTileType{}, Sequence<0, 0>{}, Sequence<kK3, kN0>{}),
@@ -248,7 +247,7 @@ struct BlockFmhaBwdPipelineV9
 
         auto k_block_tile = load_tile(k_dram_window);
 
-        store_tile(k_lds_store_window, k_block_tile); // // persistent K in LDS
+        store_tile(k_lds_window, k_block_tile); // // persistent K in LDS
 
         auto kt_dram_block_window = kt_dram_block_window_tmp;
 
@@ -261,7 +260,7 @@ struct BlockFmhaBwdPipelineV9
 
         auto kt_block_tile = load_tile(kt_dram_window);
 
-        store_tile(kt_lds_store_window, kt_block_tile); // persistent K^T in LDS
+        store_tile(kt_lds_window, kt_block_tile); // persistent K^T in LDS
 
         auto q_dram_block_window   = q_dram_block_window_tmp;
         auto qt_dram_block_window  = qt_dram_block_window_tmp;
@@ -318,33 +317,41 @@ struct BlockFmhaBwdPipelineV9
 
             if constexpr(k0_loops > 2)
             {
-                index_t i_k0 = 0;
-                do
-                {
+                static_for<0, k0_loops - 2, 1>{}([&](auto i_k0) {
                     block_sync_lds();
-                    gemm_0(st_acc, q_lds_window, k_lds_window);
+                    gemm_0(st_acc,
+                           q_lds_window,
+                           get_slice_tile(k_lds_window,
+                                          Sequence<0, i_k0 * kK0>{},
+                                          Sequence<kN0, (i_k0 + 1) * kK0>{}));
                     block_sync_lds();
                     move_tile_window(q_dram_window, {0, kK0});
-                    move_tile_window(k_lds_window, {0, kK0});
 
                     store_tile(q_lds_window,
                                q_block_tile);                // LDS write i + 1
                     q_block_tile = load_tile(q_dram_window); // global read i + 2
                     ++i_k0;
-                } while(i_k0 < (k0_loops - 2));
+                });
             }
 
             const auto dot_prefetch = load_tile(dot_dram_window); // prefetch load OGrad^T tile
             {                                                     // tail
                 block_sync_lds();
-                gemm_0(st_acc, q_lds_window, k_lds_window);
+                gemm_0(st_acc,
+                       q_lds_window,
+                       get_slice_tile(k_lds_window,
+                                      Sequence<0, (k0_loops - 2) * kK0>{},
+                                      Sequence<kN0, (k0_loops - 1) * kK0>{}));
                 block_sync_lds();
 
-                move_tile_window(k_lds_window, {0, kK0});
                 store_tile(q_lds_window, q_block_tile);
                 block_sync_lds();
 
-                gemm_0(st_acc, q_lds_window, k_lds_window);
+                gemm_0(st_acc,
+                       q_lds_window,
+                       get_slice_tile(k_lds_window,
+                                      Sequence<0, (k0_loops - 1) * kK0>{},
+                                      Sequence<kN0, k0_loops * kK0>{}));
             }
 
             // STAGE 2, Scale & Softmax
@@ -518,16 +525,16 @@ struct BlockFmhaBwdPipelineV9
 
             tile_elementwise_inout([](auto& c) { c = 0; }, dq_acc); // Initialize QGrad
 
-            index_t i_k4 = 0;
-            do
-            {
+            static_for<0, k4_loops, 1>{}([&](auto i_k4) {
                 block_sync_lds();
-                gemm_4(dq_acc, ds_lds_window, kt_lds_window);
+                gemm_4(dq_acc,
+                       ds_lds_window,
+                       get_slice_tile(kt_lds_window,
+                                      Sequence<0, i_k4 * kK4>{},
+                                      Sequence<kQKHeaddim, (i_k4 + 1) * kK4>{}));
                 block_sync_lds();
                 move_tile_window(ds_lds_window, {0, kK4});
-                move_tile_window(kt_lds_window, {0, kK4});
-                ++i_k4;
-            } while(i_k4 < k4_loops);
+            });
 
             // QGrad Scale
             tile_elementwise_inout([&scale](auto& x) { x = x * scale; }, dq_acc);
@@ -541,8 +548,6 @@ struct BlockFmhaBwdPipelineV9
             move_tile_window(lse_dram_window, {kM0});
             move_tile_window(d_dram_window, {kM0});
             move_tile_window(ds_lds_window, {0, -kN0});
-            move_tile_window(k_lds_window, {0, -kK0 * (k0_loops - 1)});
-            move_tile_window(kt_lds_window, {0, -kN0});
         } while(++i_total_loops < num_total_loop);
 
         // KGrad Scale
