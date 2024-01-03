@@ -176,10 +176,8 @@ struct BlockFmhaBwdPipelineV9
             Policy::template GetSmemSizeKT<Problem>()));
         auto ds_lds              = make_tensor_view<AddressSpaceEnum::Lds>(
             ds_lds_ptr, Policy::template MakeSGradLdsBlockDescriptor<Problem>());
-        auto ds_lds_store_window =
-            make_tile_window(ds_lds, make_tuple(Number<kM0>{}, Number<kN0>{}), {0, 0});
         auto ds_lds_window =
-            make_tile_window(ds_lds, make_tuple(Number<kM0>{}, Number<kK4>{}), {0, 0});
+            make_tile_window(ds_lds, make_tuple(Number<kM0>{}, Number<kN0>{}), {0, 0});
 
         // Block GEMM
         constexpr auto gemm_0 = Policy::template GetQKBlockGemm<Problem>();
@@ -221,7 +219,7 @@ struct BlockFmhaBwdPipelineV9
             tile_elementwise_in(type_convert<GemmDataType, AccDataType>, SPGradTBlockTileType{}));
 
         using QGradBlockTileType = decltype(
-            gemm_4(ds_lds_window,
+            gemm_4(get_slice_tile(ds_lds_window, Sequence<0, 0>{}, Sequence<kM0, kK4>{}),
                    get_slice_tile(kt_lds_window, Sequence<0, 0>{}, Sequence<kQKHeaddim, kK4>{})));
 
         // init VGrad & KGrad
@@ -519,7 +517,7 @@ struct BlockFmhaBwdPipelineV9
             }
 
             // STAGE 7, SGrad@K^T Gemm4
-            store_tile(ds_lds_store_window, dst_gemm);
+            store_tile(ds_lds_window, dst_gemm);
 
             auto dq_acc = QGradBlockTileType{};
 
@@ -528,12 +526,13 @@ struct BlockFmhaBwdPipelineV9
             static_for<0, k4_loops, 1>{}([&](auto i_k4) {
                 block_sync_lds();
                 gemm_4(dq_acc,
-                       ds_lds_window,
+                       get_slice_tile(ds_lds_window,
+                                      Sequence<0, i_k4 * kK4>{},
+                                      Sequence<kM0, (i_k4 + 1) * kK4>{}),
                        get_slice_tile(kt_lds_window,
                                       Sequence<0, i_k4 * kK4>{},
                                       Sequence<kQKHeaddim, (i_k4 + 1) * kK4>{}));
                 block_sync_lds();
-                move_tile_window(ds_lds_window, {0, kK4});
             });
 
             // QGrad Scale
@@ -547,7 +546,6 @@ struct BlockFmhaBwdPipelineV9
             move_tile_window(do_dram_block_window, {kM0, 0});
             move_tile_window(lse_dram_window, {kM0});
             move_tile_window(d_dram_window, {kM0});
-            move_tile_window(ds_lds_window, {0, -kN0});
         } while(++i_total_loops < num_total_loop);
 
         // KGrad Scale
