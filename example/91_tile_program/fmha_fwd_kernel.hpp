@@ -858,27 +858,26 @@ struct FmhaFwdKernel
         // lse ptr desc
         if constexpr(!std::is_same<void, LSEDataType>::value)
         {
-            const auto lse_dram_window = [&, i_nhead_ = i_nhead]() {
-                constexpr auto lse_dram_window_lengths =
-                    make_tuple(Number<FmhaPipeline::kM0>{}, Number<1>{});
+            auto lse_dram_window = [&, i_nhead_ = i_nhead]() {
+                constexpr auto lse_dram_window_lengths = make_tuple(Number<FmhaPipeline::kM0>{});
 
-                const LSEDataType* lse_ptr =
+                LSEDataType* lse_ptr =
                     kargs.lse_ptr + static_cast<long_index_t>(i_nhead_) * kargs.nhead_stride_lse +
                     batch_offset_lse;
 
                 const auto lse_dram = [&]() {
-                    const auto lse_dram_naive = make_naive_tensor_view<AddressSpaceEnum::Global>(
-                        lse_ptr,
-                        make_tuple(kargs.seqlen_q, 1),
-                        make_tuple(1, 1),
-                        Number<1>{},
-                        Number<1>{});
+                    const auto lse_dram_naive =
+                        make_naive_tensor_view<AddressSpaceEnum::Global>(lse_ptr,
+                                                                         make_tuple(kargs.seqlen_q),
+                                                                         make_tuple(1),
+                                                                         Number<1>{},
+                                                                         Number<1>{});
 
                     return pad_tensor_view(
-                        lse_dram_naive, lse_dram_window_lengths, Sequence<kM0NeedPadding, false>{});
+                        lse_dram_naive, lse_dram_window_lengths, Sequence<kM0NeedPadding>{});
                 }();
 
-                return make_tile_window(lse_dram, lse_dram_window_lengths, {i_m0, 0});
+                return make_tile_window(lse_dram, lse_dram_window_lengths, {i_m0});
             }();
 
             auto lse = make_static_distributed_tensor<LSEDataType>(m.GetTileDistribution());
@@ -888,9 +887,8 @@ struct FmhaFwdKernel
                 constexpr auto i_idx = make_tuple(idx0);
                 lse(i_idx)           = m_[i_idx] + math::log(l_[i_idx]);
             });
-            ignore = lse_dram_window;
-            ignore = lse;
-            // store_tile(lse_dram_window, lse);
+
+            store_tile(lse_dram_window, lse);
         }
     }
 };
