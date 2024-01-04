@@ -355,13 +355,13 @@ auto create_args(int argc, char* argv[])
     ArgParser arg_parser;
     arg_parser.insert("v", "1", "weather do cpu validation or not")
         .insert("mode", "0", "kernel mode. 0:batch, 1:group")
-        .insert("b", "2", "batch size")
-        .insert("h", "8", "num of head, for q")
+        .insert("b", "1", "batch size")
+        .insert("h", "1", "num of head, for q")
         .insert("h_k",
                 "0",
                 "num of head, for k/v, 0 means equal to h\n"
                 "if not equal to h, then this is GQA/MQA case")
-        .insert("s", "3328", "seqlen_q")
+        .insert("s", "128", "seqlen_q")
         .insert("s_k", "0", "seqlen_k, 0 means equal to s")
         .insert("d", "128", "head dim for q, k")
         .insert("d_v", "0", "head dim for v, 0 means equal to d")
@@ -609,6 +609,7 @@ int main(int argc, char* argv[])
     if(do_validation)
     {
         o_buf.FromDevice(o_host.data());
+        lse_buf.FromDevice(lse_host.data());
 
         for(ck::index_t wb = 0; wb < batch; ++wb)
         {
@@ -634,6 +635,7 @@ int main(int argc, char* argv[])
 
             Tensor<SMPLComputeDataType> s_host_ref({nhead, real_seqlen_q, real_seqlen_k});
             Tensor<PDataType> p_host_ref({nhead, real_seqlen_q, real_seqlen_k});
+            Tensor<SMPLComputeDataType> lse_host_ref({nhead, real_seqlen_q, 1});
 
             ck::index_t nr = nhead / nhead_k;
 
@@ -676,7 +678,7 @@ int main(int argc, char* argv[])
             }
 
             reference_batched_masking<SaccDataType, FmhaMask>(s_host_ref);
-            reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, p_host_ref);
+            reference_batched_softmax<SMPLComputeDataType, SMPLComputeDataType, PDataType>(s_host_ref, p_host_ref, &lse_host_ref);
             reference_batched_gemm<PDataType, VDataType, OaccDataType, ODataType>(p_host_ref, v_host_ref, o_host_ref);
             
             Tensor<ODataType> o_host_result({nhead, real_seqlen_q, hdim_v});
@@ -694,6 +696,19 @@ int main(int argc, char* argv[])
                           << "\tseqstart_k: " << seqstart_k_host << std::endl;
 
                 return -1;
+            }
+            Tensor<SMPLComputeDataType> lse_host_result({nhead, real_seqlen_q, 1});
+            lse_host_result.ForEach([&](auto& self, auto idx) {
+                self(idx) = lse_host(b, idx[0], idx[1] + query_offset, idx[2]);
+            });
+            std::cout << "lse : ";
+            if(ck::utils::check_err(lse_host_result, lse_host_ref))
+            {
+                std::cout << "pass" << std::endl;
+            }
+            else
+            {
+                std::cout << "fail" << std::endl;
             }
         }
     }

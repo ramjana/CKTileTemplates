@@ -668,7 +668,7 @@ struct FmhaFwdKernel
             {
                 batch_offset_bias = static_cast<long_index_t>(i_batch) * kargs.batch_stride_bias;
             }
-            if constexpr(std::is_same<void, LSEDataType>::value)
+            if constexpr(!std::is_same<void, LSEDataType>::value)
             {
                 batch_offset_lse = static_cast<long_index_t>(i_batch) * kargs.batch_stride_lse;
             }
@@ -856,13 +856,14 @@ struct FmhaFwdKernel
         EpiloguePipeline{}(o_dram_window, o_acc_tile);
 
         // lse ptr desc
-        if constexpr(std::is_same<void, LSEDataType>::value)
+        if constexpr(!std::is_same<void, LSEDataType>::value)
         {
             const auto lse_dram_window = [&, i_nhead_ = i_nhead]() {
-                constexpr auto lse_dram_window_lengths = make_tuple(Number<FmhaPipeline::kM0>{});
+                constexpr auto lse_dram_window_lengths =
+                    make_tuple(Number<FmhaPipeline::kM0>{}, Number<1>{});
 
                 const LSEDataType* lse_ptr =
-                    kargs.lse_ptr + static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_lse +
+                    kargs.lse_ptr + static_cast<long_index_t>(i_nhead_) * kargs.nhead_stride_lse +
                     batch_offset_lse;
 
                 const auto lse_dram = [&]() {
@@ -883,12 +884,13 @@ struct FmhaFwdKernel
             auto lse = make_static_distributed_tensor<LSEDataType>(m.GetTileDistribution());
 
             constexpr auto lse_spans = decltype(lse)::GetDistributedSpans();
-            sweep_tile_span(lse_spans[Number<0>{}], [&](auto idx0) {
+            sweep_tile_span(lse_spans[Number<0>{}], [&, m_ = m, l_ = l](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
-                lse[i_idx]           = m[i_idx] + math::log(l[i_idx]);
+                lse(i_idx)           = m_[i_idx] + math::log(l_[i_idx]);
             });
-
-            store_tile(lse_dram_window, lse);
+            ignore = lse_dram_window;
+            ignore = lse;
+            // store_tile(lse_dram_window, lse);
         }
     }
 };
