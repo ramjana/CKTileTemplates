@@ -575,49 +575,21 @@ struct BlockFmhaBwdPipelineDefaultPolicy
 
         index_t smem_size = 0;
 
-        if constexpr(Problem::BlockFmhaShape::kQLoadOnce && Problem::BlockFmhaShape::kQTLoadOnce &&
-                     Problem::BlockFmhaShape::kOGradLoadOnce &&
-                     Problem::BlockFmhaShape::kOGradTLoadOnce)
-            smem_size +=
-                smem_size_q + smem_size_qt + smem_size_do + smem_size_dot + smem_size_ds; // 1
-        else if(Problem::BlockFmhaShape::kQLoadOnce && Problem::BlockFmhaShape::kQTLoadOnce &&
-                Problem::BlockFmhaShape::kOGradLoadOnce &&
-                !Problem::BlockFmhaShape::kOGradTLoadOnce)
-            smem_size += smem_size_q + smem_size_qt + smem_size_do + smem_size_ds; // 2
-        else if(Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
-                Problem::BlockFmhaShape::kOGradLoadOnce && Problem::BlockFmhaShape::kOGradTLoadOnce)
-            smem_size += smem_size_q + smem_size_do + smem_size_dot + smem_size_ds; // 3
-        else if(Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
-                Problem::BlockFmhaShape::kOGradLoadOnce &&
-                !Problem::BlockFmhaShape::kOGradTLoadOnce)
-            smem_size += smem_size_q + smem_size_do + smem_size_ds; // 4/10
-        else if(Problem::BlockFmhaShape::kQLoadOnce && Problem::BlockFmhaShape::kQTLoadOnce &&
-                !Problem::BlockFmhaShape::kOGradLoadOnce &&
+        if constexpr(Problem::BlockFmhaShape::kQLoadOnce && Problem::BlockFmhaShape::kOGradLoadOnce)
+            smem_size += smem_size_q + smem_size_qt + smem_size_do + smem_size_dot +
+                         smem_size_ds; // 1~4 & 10
+        else if(Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kOGradLoadOnce &&
                 !Problem::BlockFmhaShape::kOGradTLoadOnce)
             smem_size += smem_size_q + smem_size_qt +
                          math::max(smem_size_do,
                                    smem_size_dot,
-                                   smem_size_ds); // 5 TODO: Multiple buffers strategy
+                                   smem_size_ds); // 5/7/11 TODO: Multiple buffers strategy
         else if(!Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
-                Problem::BlockFmhaShape::kOGradLoadOnce && Problem::BlockFmhaShape::kOGradTLoadOnce)
+                Problem::BlockFmhaShape::kOGradLoadOnce)
             smem_size += smem_size_do + smem_size_dot +
                          math::max(smem_size_q,
                                    smem_size_qt,
-                                   smem_size_ds); // 6 TODO: Multiple buffers strategy
-        else if(Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
-                !Problem::BlockFmhaShape::kOGradLoadOnce &&
-                !Problem::BlockFmhaShape::kOGradTLoadOnce)
-            smem_size +=
-                smem_size_q + math::max(smem_size_do,
-                                        smem_size_dot,
-                                        smem_size_ds); // 7/11 TODO: Multiple buffers strategy
-        else if(!Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
-                Problem::BlockFmhaShape::kOGradLoadOnce &&
-                !Problem::BlockFmhaShape::kOGradTLoadOnce)
-            smem_size +=
-                smem_size_do + math::max(smem_size_q,
-                                         smem_size_qt,
-                                         smem_size_ds); // 8/12 TODO: Multiple buffers strategy
+                                   smem_size_ds); // 6/8/12 TODO: Multiple buffers strategy
         else if(!Problem::BlockFmhaShape::kQLoadOnce && !Problem::BlockFmhaShape::kQTLoadOnce &&
                 !Problem::BlockFmhaShape::kOGradLoadOnce &&
                 !Problem::BlockFmhaShape::kOGradTLoadOnce)
@@ -627,6 +599,7 @@ struct BlockFmhaBwdPipelineDefaultPolicy
                                    smem_size_dot,
                                    smem_size_ds); // 9/13 TODO: Multiple buffers strategy
 
+        // 14/15 needs to be adjusted
         if constexpr(Problem::BlockFmhaShape::kKLoadOnce)
             smem_size += (smem_size_k + smem_size_kt); // 1~13
         else
