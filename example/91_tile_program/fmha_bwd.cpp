@@ -52,8 +52,9 @@ using FmhaBlockTileHdim32  = ck::Sequence< 128, 128,  32,  32,  32,  32,  32,   
 using FmhaBlockTileHdim64  = ck::Sequence<  64, 128,  32,  32,  32,  32,  32,   64,   64>;
 using FmhaBlockTileHdim128 = ck::Sequence<  64, 128,  32,  32,  32,  32,  32,  128,  128>;
 // ###################################| QLoadOnce| QTLoadOnce| KLoadOnce| KTLoadOnce| VLoadOnce| OGradLoadOnce| OGradTLoadOnce|
-// using FmhaLoadStrategy  = ck::Sequence<     false,      false,      true,       true,      true,         false,          false>;
-using FmhaLoadStrategy  = ck::Sequence<      true,      false,      true,      false,      true,          true,          false>;
+// using FmhaLoadStrategy  = ck::Sequence<     false,      false,      true,       true,      true,         false,          false>; // 9
+// using FmhaLoadStrategy  = ck::Sequence<      true,      false,      true,      false,      true,          true,          false>; // 10
+using FmhaLoadStrategy  = ck::Sequence<     false,      false,      true,      false,      true,         false,          false>; // 13
 // clang-format on
 using FmhaBlockWarps0 = ck::Sequence<1, 4, 1>;
 using FmhaBlockWarps1 = ck::Sequence<4, 1, 1>;
@@ -64,7 +65,7 @@ using FmhaWarpTile1   = ck::Sequence<16, 16, 16>;
 //       G0&G2 -> GSdP
 //       G1&G3 -> GdKV
 //       G4    -> GdQ
-using FmhaShapeHDim32 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim32,
+using FmhaShapeHDim32  = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim32,
                                                            FmhaLoadStrategy,
                                                            FmhaBlockWarps0,
                                                            FmhaWarpTile0,
@@ -76,7 +77,7 @@ using FmhaShapeHDim32 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim32,
                                                            FmhaWarpTile0,
                                                            FmhaBlockWarps1,
                                                            FmhaWarpTile0>;
-using FmhaShapeHDim64 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim64,
+using FmhaShapeHDim64  = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim64,
                                                            FmhaLoadStrategy,
                                                            FmhaBlockWarps0,
                                                            FmhaWarpTile0,
@@ -88,9 +89,23 @@ using FmhaShapeHDim64 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim64,
                                                            FmhaWarpTile0,
                                                            FmhaBlockWarps2,
                                                            FmhaWarpTile0>;
+using FmhaShapeHDim128 = ck::tile_program::TileFmhaBwdShape<FmhaBlockTileHdim128,
+                                                            FmhaLoadStrategy,
+                                                            FmhaBlockWarps0,
+                                                            FmhaWarpTile0,
+                                                            FmhaBlockWarps1,
+                                                            FmhaWarpTile0,
+                                                            FmhaBlockWarps0,
+                                                            FmhaWarpTile0,
+                                                            FmhaBlockWarps1,
+                                                            FmhaWarpTile0,
+                                                            FmhaBlockWarps2,
+                                                            FmhaWarpTile0>;
 
-using FmhaBwdTilePartitionerHDim32 = FmhaBwdTilePartitioner<FmhaShapeHDim32>;
-using FmhaBwdTilePartitionerHDim64 = FmhaBwdTilePartitioner<FmhaShapeHDim64>;
+using FmhaBwdTilePartitionerHDim32  = FmhaBwdTilePartitioner<FmhaShapeHDim32>;
+using FmhaBwdTilePartitionerHDim64  = FmhaBwdTilePartitioner<FmhaShapeHDim64>;
+using FmhaBwdTilePartitionerHDim128 = FmhaBwdTilePartitioner<FmhaShapeHDim128>;
+
 using FmhaBwdPipelineProblemHDim32 =
     ck::tile_program::block::BlockFmhaBwdPipelineProblem<QDataType,
                                                          KDataType,
@@ -123,11 +138,29 @@ using FmhaBwdPipelineProblemHDim64 =
                                                          VGradDataType,
                                                          256, // BlockSize
                                                          FmhaShapeHDim64>;
+using FmhaBwdPipelineProblemHDim128 =
+    ck::tile_program::block::BlockFmhaBwdPipelineProblem<QDataType,
+                                                         KDataType,
+                                                         VDataType,
+                                                         GemmDataType,
+                                                         LSEDataType,
+                                                         AccDataType,
+                                                         DDataType,
+                                                         ZDataType,
+                                                         ODataType,
+                                                         OGradDataType,
+                                                         QGradDataType,
+                                                         KGradDataType,
+                                                         VGradDataType,
+                                                         256, // BlockSize
+                                                         FmhaShapeHDim128>;
 
 using FmhaBwdPipelineHDim32 = ck::tile_program::block::
     BlockFmhaBwdPipelineDispatcher<FmhaLoadStrategy, FmhaBwdPipelineProblemHDim32>::BlockPipeline;
 using FmhaBwdPipelineHDim64 = ck::tile_program::block::
     BlockFmhaBwdPipelineDispatcher<FmhaLoadStrategy, FmhaBwdPipelineProblemHDim64>::BlockPipeline;
+using FmhaBwdPipelineHDim128 = ck::tile_program::block::
+    BlockFmhaBwdPipelineDispatcher<FmhaLoadStrategy, FmhaBwdPipelineProblemHDim128>::BlockPipeline;
 
 using FmhaBWDEpilogue =
     FmhaBwdEpilogue<FmhaBwdEpilogueProblem<AccDataType, KGradDataType, VGradDataType>>;
@@ -135,16 +168,23 @@ using FmhaBwdKernelHDim32 =
     FmhaBwdKernel<FmhaBwdTilePartitionerHDim32, FmhaBwdPipelineHDim32, FmhaBWDEpilogue>;
 using FmhaBwdKernelHDim64 =
     FmhaBwdKernel<FmhaBwdTilePartitionerHDim64, FmhaBwdPipelineHDim64, FmhaBWDEpilogue>;
+using FmhaBwdKernelHDim128 =
+    FmhaBwdKernel<FmhaBwdTilePartitionerHDim128, FmhaBwdPipelineHDim128, FmhaBWDEpilogue>;
 
 using FmhaBwdOGradDotOTilePartitionerHDimX = FmhaBwdOGradDotOTilePartitioner<256>;
 using FmhaBwdOGradDotOHDim32 =
     ck::tile_program::block::BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim32>;
 using FmhaBwdOGradDotOHDim64 =
     ck::tile_program::block::BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim64>;
+using FmhaBwdOGradDotOHDim128 =
+    ck::tile_program::block::BlockFmhaBwdOGradDotO<FmhaBwdPipelineProblemHDim128>;
+
 using FmhaBwdOGradDotOKernelHDim32 =
     FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX, FmhaBwdOGradDotOHDim32>;
 using FmhaBwdOGradDotOKernelHDim64 =
     FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX, FmhaBwdOGradDotOHDim64>;
+using FmhaBwdOGradDotOKernelHDim128 =
+    FmhaBwdOGradDotOKernel<FmhaBwdOGradDotOTilePartitionerHDimX, FmhaBwdOGradDotOHDim128>;
 
 template <typename FmhaBwdOGradDotOKernel>
 float invoker_fmha_bwd_dot_do_o_kernel(const void* o_ptr,
@@ -468,6 +508,37 @@ int main(int argc, char* argv[])
                                                                  i_perm,
                                                                  o_perm);
     }
+    else if(hdim_q == hdim_v && hdim_q == 128)
+    {
+        ave_time = invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim128>(
+            o_buf.GetDeviceBuffer(),
+            do_buf.GetDeviceBuffer(),
+            d_buf.GetDeviceBuffer(),
+            batch,
+            nhead,
+            seqlen_q,
+            hdim_v,
+            o_perm);
+        ave_time += invoker_fmha_bwd_kernel<FmhaBwdKernelHDim128>(q_buf.GetDeviceBuffer(),
+                                                                  k_buf.GetDeviceBuffer(),
+                                                                  v_buf.GetDeviceBuffer(),
+                                                                  lse_buf.GetDeviceBuffer(),
+                                                                  do_buf.GetDeviceBuffer(),
+                                                                  d_buf.GetDeviceBuffer(),
+                                                                  // z_buf.GetDeviceBuffer(),
+                                                                  dq_buf.GetDeviceBuffer(),
+                                                                  dk_buf.GetDeviceBuffer(),
+                                                                  dv_buf.GetDeviceBuffer(),
+                                                                  batch,
+                                                                  nhead,
+                                                                  seqlen_q,
+                                                                  seqlen_k,
+                                                                  hdim_q,
+                                                                  hdim_v,
+                                                                  scale,
+                                                                  i_perm,
+                                                                  o_perm);
+    }
     else
     {
         std::cout << "not support hdim, will not run" << std::endl;
@@ -657,6 +728,39 @@ int main(int argc, char* argv[])
                                                          i_perm,
                                                          o_perm,
                                                          false);
+        }
+        else if(hdim_q == hdim_v && hdim_q == 128)
+        {
+            invoker_fmha_bwd_dot_do_o_kernel<FmhaBwdOGradDotOKernelHDim128>(
+                o_buf.GetDeviceBuffer(),
+                do_buf.GetDeviceBuffer(),
+                d_buf.GetDeviceBuffer(),
+                batch,
+                nhead,
+                seqlen_q,
+                hdim_v,
+                o_perm,
+                false);
+            invoker_fmha_bwd_kernel<FmhaBwdKernelHDim128>(q_buf.GetDeviceBuffer(),
+                                                          k_buf.GetDeviceBuffer(),
+                                                          v_buf.GetDeviceBuffer(),
+                                                          lse_buf.GetDeviceBuffer(),
+                                                          do_buf.GetDeviceBuffer(),
+                                                          d_buf.GetDeviceBuffer(),
+                                                          // z_buf.GetDeviceBuffer(),
+                                                          dq_buf.GetDeviceBuffer(),
+                                                          dk_buf.GetDeviceBuffer(),
+                                                          dv_buf.GetDeviceBuffer(),
+                                                          batch,
+                                                          nhead,
+                                                          seqlen_q,
+                                                          seqlen_k,
+                                                          hdim_q,
+                                                          hdim_v,
+                                                          scale,
+                                                          i_perm,
+                                                          o_perm,
+                                                          false);
         }
 
         // dP_dropout = dO@V
