@@ -5,6 +5,7 @@
 
 #include "ck/utility/common_header.hpp"
 #include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_v9.hpp"
+#include "ck/tile_program/block_tile_pipeline/block_fmha_bwd_pipeline_v10.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -51,7 +52,7 @@ struct BlockFmhaBwdPipelineDispatcher
     // template<> struct BlockPipelineDispatcher<      true,      false,      true,       true,      true,         false,          false> { using Type = BlockFmhaBwdPipelineV7<Problem>; };
     // template<> struct BlockPipelineDispatcher<     false,      false,      true,       true,      true,          true,          false> { using Type = BlockFmhaBwdPipelineV8<Problem>; };
     template<> struct BlockPipelineDispatcher<     false,      false,      true,       true,      true,         false,          false> { using Type = BlockFmhaBwdPipelineV9<Problem>; };
-    // template<> struct BlockPipelineDispatcher<      true,      false,      true,      false,      true,          true,          false> { using Type = BlockFmhaBwdPipelineV10<Problem>; };
+    template<> struct BlockPipelineDispatcher<      true,      false,      true,      false,      true,          true,          false> { using Type = BlockFmhaBwdPipelineV10<Problem>; };
     // template<> struct BlockPipelineDispatcher<      true,      false,      true,      false,      true,         false,          false> { using Type = BlockFmhaBwdPipelineV11<Problem>; };
     // template<> struct BlockPipelineDispatcher<     false,      false,      true,      false,      true,          true,          false> { using Type = BlockFmhaBwdPipelineV12<Problem>; };
     // template<> struct BlockPipelineDispatcher<     false,      false,      true,      false,      true,         false,          false> { using Type = BlockFmhaBwdPipelineV13<Problem>; };

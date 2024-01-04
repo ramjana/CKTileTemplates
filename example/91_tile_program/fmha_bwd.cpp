@@ -52,7 +52,8 @@ using FmhaBlockTileHdim32  = ck::Sequence< 128, 128,  32,  32,  32,  32,  32,   
 using FmhaBlockTileHdim64  = ck::Sequence<  64, 128,  32,  32,  32,  32,  32,   64,   64>;
 using FmhaBlockTileHdim128 = ck::Sequence<  64, 128,  32,  32,  32,  32,  32,  128,  128>;
 // ###################################| QLoadOnce| QTLoadOnce| KLoadOnce| KTLoadOnce| VLoadOnce| OGradLoadOnce| OGradTLoadOnce|
-using FmhaLoadStrategy  = ck::Sequence<     false,      false,      true,       true,      true,         false,          false>;
+// using FmhaLoadStrategy  = ck::Sequence<     false,      false,      true,       true,      true,         false,          false>;
+using FmhaLoadStrategy  = ck::Sequence<      true,      false,      true,      false,      true,          true,          false>;
 // clang-format on
 using FmhaBlockWarps0 = ck::Sequence<1, 4, 1>;
 using FmhaBlockWarps1 = ck::Sequence<4, 1, 1>;
