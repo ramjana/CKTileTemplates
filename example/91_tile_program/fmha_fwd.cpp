@@ -357,13 +357,13 @@ auto create_args(int argc, char* argv[])
     ArgParser arg_parser;
     arg_parser.insert("v", "1", "weather do cpu validation or not")
         .insert("mode", "0", "kernel mode. 0:batch, 1:group")
-        .insert("b", "1", "batch size")
-        .insert("h", "1", "num of head, for q")
+        .insert("b", "2", "batch size")
+        .insert("h", "8", "num of head, for q")
         .insert("h_k",
                 "0",
                 "num of head, for k/v, 0 means equal to h\n"
                 "if not equal to h, then this is GQA/MQA case")
-        .insert("s", "128", "seqlen_q")
+        .insert("s", "3328", "seqlen_q")
         .insert("s_k", "0", "seqlen_k, 0 means equal to s")
         .insert("d", "128", "head dim for q, k")
         .insert("d_v", "0", "head dim for v, 0 means equal to d")
