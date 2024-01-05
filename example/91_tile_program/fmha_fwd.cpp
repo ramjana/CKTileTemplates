@@ -101,6 +101,7 @@ using FmhaMask = ck::tile_program::block::MaskDisabledPredicate;
 
 inline constexpr bool kM0NeedPadding   = false;
 inline constexpr bool kN0K1NeedPadding = false;
+inline constexpr bool kStoreLSE        = true;
 template <ck::index_t HDim, bool kHasBias>
 using FmhaTraits = ck::tile_program::TileFmhaTraits<kM0NeedPadding,
                                                     kN0K1NeedPadding,
@@ -137,7 +138,8 @@ using FmhaEpilogue = FmhaFwdEpilogue<FmhaFwdEpilogueProblem<OaccDataType, ODataT
 template <ck::index_t HDim, bool kIsGroupMode, bool kHasBias>
 using FmhaKernel = FmhaFwdKernel<FmhaTilePartitioner<HDim>,
                                  FmhaPipeline<HDim, kIsGroupMode, kHasBias>,
-                                 FmhaEpilogue>;
+                                 FmhaEpilogue,
+                                 kStoreLSE>;
 
 template <typename FmhaKernel_>
 float invoker_fmha_kernel(const void* q_ptr,
@@ -713,6 +715,6 @@ int main(int argc, char* argv[])
             }
         }
     }
-    
+
     return res;
 }
