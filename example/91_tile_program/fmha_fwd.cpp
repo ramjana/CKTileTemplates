@@ -605,7 +605,7 @@ int main(int argc, char* argv[])
     std::cout << std::fixed << ", " << std::setprecision(3) << ave_time << " ms, "
               << std::setprecision(2) << tflops << " TFlops, " << std::setprecision(2) << gb_per_sec
               << " GB/s" << std::flush << std::endl;
-
+    int res = 0;
     if(do_validation)
     {
         o_buf.FromDevice(o_host.data());
@@ -695,7 +695,7 @@ int main(int argc, char* argv[])
                           << "\tseqstart_q: " << seqstart_q_host << std::endl
                           << "\tseqstart_k: " << seqstart_k_host << std::endl;
 
-                return -1;
+                res = -1;
             }
             Tensor<SMPLComputeDataType> lse_host_result({nhead, real_seqlen_q, 1});
             lse_host_result.ForEach([&](auto& self, auto idx) {
@@ -709,11 +709,10 @@ int main(int argc, char* argv[])
             else
             {
                 std::cout << "fail" << std::endl;
+                res = -1;
             }
         }
     }
-    else
-    {
-        return 0;
-    }
+    
+    return res;
 }

@@ -885,7 +885,18 @@ struct FmhaFwdKernel
             constexpr auto lse_spans = decltype(lse)::GetDistributedSpans();
             sweep_tile_span(lse_spans[Number<0>{}], [&, m_ = m, l_ = l](auto idx0) {
                 constexpr auto i_idx = make_tuple(idx0);
-                lse(i_idx)           = m_[i_idx] + math::log(l_[i_idx]);
+#if CK_FMHA_FWD_FAST_EXP2
+                if constexpr(is_null_tile_window(bias_dram_window))
+                {
+                    lse(i_idx) = m_[i_idx] * kargs.scale / C_LOG2E + math::log(l_[i_idx]);
+                }
+                else
+                {
+                    lse(i_idx) = m_[i_idx] / C_LOG2E + math::log(l_[i_idx]);
+                }
+#else
+                lse(i_idx) = m_[i_idx] + math::log(l_[i_idx]);
+#endif
             });
 
             store_tile(lse_dram_window, lse);
