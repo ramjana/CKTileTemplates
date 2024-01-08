@@ -639,6 +639,11 @@ struct FmhaFwdKernel
             }
             batch_offset_o = query_start * kargs.stride_o;
 
+            if constexpr(kStroeLSE)
+            {
+                batch_offset_lse = query_start * kargs.stride_lse;
+            }
+
             // get real # queries & # keys under group mode
             const auto adjusted_seqstart_q_ptr = kargs.seqstart_q_ptr + i_batch;
             kargs.seqlen_q = adjusted_seqstart_q_ptr[1] - adjusted_seqstart_q_ptr[0];

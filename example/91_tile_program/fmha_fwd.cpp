@@ -329,7 +329,7 @@ float invoker_fmha_kernel(const void* q_ptr,
             }
         }
     }();
-
+    std::cout << "batch: " << batch << std::endl;
     const dim3 kGridSize      = FmhaKernel_::GridSize(batch, nhead, max_seqlen_q, hdim_v);
     constexpr dim3 kBlockSize = FmhaKernel_::BlockSize();
 
@@ -703,8 +703,10 @@ int main(int argc, char* argv[])
             lse_host_result.ForEach([&](auto& self, auto idx) {
                 self(idx) = lse_host(b, idx[0], idx[1] + query_offset, idx[2]);
             });
-            std::cout << "lse : ";
-            if(ck::utils::check_err(lse_host_result, lse_host_ref))
+
+            std::cout << "batch: " << wb << " lse : ";
+            if(ck::utils::check_err(
+                   lse_host_result, lse_host_ref, "Error: Incorrect results!", 1e-3f, 1e-6f))
             {
                 std::cout << "pass" << std::endl;
             }
