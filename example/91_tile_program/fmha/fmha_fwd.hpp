@@ -135,13 +135,16 @@ struct FmhaShape</* HDim = */ 256>
 {
 };
 
+template <ck::index_t HDim>
+inline constexpr ck::index_t FmhaOccupancy = (HDim == 64 ? 3 : (HDim == 256 ? 1 : 2));
+
 template <ck::index_t HDim, bool kHasBias, bool kStoreLSE>
 using FmhaTraits = ck::tile_program::TileFmhaTraits<kM0NeedPadding,
                                                     kN0K1NeedPadding,
                                                     kK0N1NeedPadding,
                                                     kHasBias,
                                                     kStoreLSE,
-                                                    HDim == 64 ? /* occupancy = */ 3 : 2>;
+                                                    FmhaOccupancy<HDim>>;
 
 template <ck::index_t HDim,
           typename DataType,
