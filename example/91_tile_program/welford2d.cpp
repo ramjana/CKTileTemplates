@@ -128,5 +128,8 @@ int main(int argc, char* argv[])
 
     std::cout << "Perf: " << ave_time << " ms, " << gb_per_sec << " GB/s" << std::endl;
 
-    return !ck::utils::check_err(mean_host_dev, mean_host_ref);
+    bool pass = ck::utils::check_err(mean_host_dev, mean_host_ref) &&
+                ck::utils::check_err(var_host_dev, var_host_dev);
+
+    return !pass;
 }
