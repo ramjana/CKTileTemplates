@@ -102,6 +102,7 @@ struct Welford2d
 
         auto mean_block_window = make_tile_window(mean_m, make_tuple(Number<kMPerBlock>{}), {iM});
 
+        // TODO: only 1D of thread need to global write
         store_tile(mean_block_window, mean_block_tensor);
 
         // variance
@@ -114,6 +115,7 @@ struct Welford2d
 
         auto var_block_window = make_tile_window(var_m, make_tuple(Number<kMPerBlock>{}), {iM});
 
+        // TODO: only 1D of thread need to global write
         store_tile(var_block_window, var_block_tensor);
     }
 };
