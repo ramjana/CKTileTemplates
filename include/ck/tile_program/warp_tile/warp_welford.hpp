@@ -52,11 +52,13 @@ struct WarpMergeWelford
         constexpr index_t thread_buf_size = MeanDistributedTensor_::GetThreadBufferSize();
         static_assert(thread_buf_size == VarDistributedTensor_::GetThreadBufferSize());
 
+        const int original_count = count;
+
         // loop over thread data
         static_for<0, thread_buf_size, 1>{}([&](auto i) {
             auto v_local_mean  = mean_tensor.GetThreadBuffer()[i];
             auto v_local_var   = var_tensor.GetThreadBuffer()[i];
-            auto v_local_count = count;
+            auto v_local_count = original_count;
 
             // cross-lane reduce for replication
             // only reduce on R dimension correspond to lane
@@ -123,9 +125,9 @@ struct WarpMergeWelford
                         constexpr index_t lid_delta = lid_over_rid_derivative * (1 << istage);
 
                         // pull data from remote lane
-                        const auto v_remote_mean  = warp_shuffle_down(v_local_mean, lid_delta);
-                        const auto v_remote_var   = warp_shuffle_down(v_local_var, lid_delta);
-                        const auto v_remote_count = warp_shuffle_down(v_local_count, lid_delta);
+                        const auto v_remote_mean  = warp_shuffle_up(v_local_mean, lid_delta);
+                        const auto v_remote_var   = warp_shuffle_up(v_local_var, lid_delta);
+                        const auto v_remote_count = warp_shuffle_up(v_local_count, lid_delta);
 
                         // decide whether to update local data with remote data
                         v_local_mean  = do_i_hold_reduced_data ? v_local_mean : v_remote_mean;
