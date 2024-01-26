@@ -15,6 +15,7 @@
 #include "ck/tile_program/tile/tile_elementwise.hpp"
 #include "ck/tile_program/thread_tile/thread_welford.hpp"
 #include "ck/tile_program/warp_tile/warp_welford.hpp"
+#include "ck/utility/functional2.hpp"
 
 template <typename XDataType,
           typename ComputeDataType,
@@ -40,6 +41,21 @@ struct Welford2d
                                            Sequence<0, 0, 2, 4>>{});
     }
 
+    template <class Dstr>
+    __device__ static constexpr auto GetWelford2dNPerThread(Dstr)
+    {
+        constexpr auto nDstrSpan = Dstr::GetDistributedSpans().template At<1>();
+
+        using Lengths = decltype(nDstrSpan.impl_);
+
+        ck::index_t ret = 1;
+
+        ck::static_for<0, Lengths::Size(), 1>{}(
+            [&](auto idx) { ret *= Lengths::template At(idx); });
+
+        return ret;
+    }
+
     __device__ void operator()(const XDataType* p_x,
                                MeanDataType* p_mean,
                                VarDataType* p_var,
@@ -56,14 +72,14 @@ struct Welford2d
 
         const auto iM = get_block_id() * kMPerBlock;
 
-        auto x_block_window =
-            make_tile_window(x_m_n,
-                             make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}),
-                             {iM, 0},
-                             MakeXBlockTileDistribution());
+        constexpr auto xDstr = MakeXBlockTileDistribution();
+
+        auto x_block_window = make_tile_window(
+            x_m_n, make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}), {iM, 0}, xDstr);
 
         // TODO: padding - handle max_count if N % kNPerBlock != 0
-        ThreadWelford<ComputeDataType, XDataType> thread_welford{4 * N / kNPerBlock};
+        constexpr auto NPerThread = GetWelford2dNPerThread(xDstr);
+        ThreadWelford<ComputeDataType, XDataType> thread_welford{NPerThread * N / kNPerBlock};
 
         auto mean_var_compute_block_tensor_tuple =
             decltype(thread_welford(load_tile(x_block_window))){};
@@ -89,7 +105,7 @@ struct Welford2d
         } while(iN < N);
 
         // TODO: support cross warp reduction
-        WarpMergeWelford<ComputeDataType>{}(
+        WarpMergeWelford<ComputeDataType, false>{}(
             mean_compute_block_tensor, var_compute_block_tensor, thread_welford.cur_count_);
 
         // mean
@@ -102,8 +118,9 @@ struct Welford2d
 
         auto mean_block_window = make_tile_window(mean_m, make_tuple(Number<kMPerBlock>{}), {iM});
 
-        // TODO: only 1D of thread need to global write
-        store_tile(mean_block_window, mean_block_tensor);
+        // TODO: Parse 32 from distribution
+        if(get_lane_id() % 32 == 0)
+            store_tile(mean_block_window, mean_block_tensor);
 
         // variance
         const auto var_block_tensor =
@@ -115,7 +132,8 @@ struct Welford2d
 
         auto var_block_window = make_tile_window(var_m, make_tuple(Number<kMPerBlock>{}), {iM});
 
-        // TODO: only 1D of thread need to global write
-        store_tile(var_block_window, var_block_tensor);
+        // TODO: Parse 32 from distribution
+        if(get_lane_id() % 32 == 0)
+            store_tile(var_block_window, var_block_tensor);
     }
 };

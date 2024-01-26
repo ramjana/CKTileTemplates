@@ -13,7 +13,7 @@ namespace ck {
 namespace tile_program {
 namespace warp {
 
-template <typename ComputeDataType_, bool GetActualVariance = true>
+template <typename ComputeDataType_, bool broadcastLane = true, bool GetActualVariance = true>
 struct WarpMergeWelford
 {
     using ComputeDataType = remove_cvref_t<ComputeDataType_>;
@@ -101,41 +101,44 @@ struct WarpMergeWelford
             // cross-lane broadcast for replication
             // only broadcast on R dimension correspond to lane
             // (lane id maps to this R dimension)
-            static_for<0, NDimR, 1>{}([&](auto idim_r) {
-                // FIXME: nasty to use does_p_own_r_
-                if constexpr(DstrEncodeDetail::does_p_own_r_[idim_p_lane][idim_r])
-                {
-                    const index_t r_id = rs_idx[idim_r];
+            if constexpr(broadcastLane)
+            {
+                static_for<0, NDimR, 1>{}([&](auto idim_r) {
+                    // FIXME: nasty to use does_p_own_r_
+                    if constexpr(DstrEncodeDetail::does_p_own_r_[idim_p_lane][idim_r])
+                    {
+                        const index_t r_id = rs_idx[idim_r];
 
-                    constexpr index_t r_length = DstrEncode::rs_lengths_[idim_r];
+                        constexpr index_t r_length = DstrEncode::rs_lengths_[idim_r];
 
-                    constexpr index_t lid_over_rid_derivative =
-                        DstrEncodeDetail::ps_over_rs_derivative_[NDimP - 1][idim_r];
+                        constexpr index_t lid_over_rid_derivative =
+                            DstrEncodeDetail::ps_over_rs_derivative_[NDimP - 1][idim_r];
 
-                    static_assert(math::is_power_of_two_integer(r_length),
-                                  "wrong! only support power of 2 reduction");
+                        static_assert(math::is_power_of_two_integer(r_length),
+                                      "wrong! only support power of 2 reduction");
 
-                    constexpr index_t nstage = math::integer_log2_floor(r_length);
+                        constexpr index_t nstage = math::integer_log2_floor(r_length);
 
-                    // broadcast sweep backward
-                    static_for<0, nstage, 1>{}([&](auto istage) {
-                        // do I hold reduced data?
-                        const bool do_i_hold_reduced_data = r_id < (1 << istage);
+                        // broadcast sweep backward
+                        static_for<0, nstage, 1>{}([&](auto istage) {
+                            // do I hold reduced data?
+                            const bool do_i_hold_reduced_data = r_id < (1 << istage);
 
-                        constexpr index_t lid_delta = lid_over_rid_derivative * (1 << istage);
+                            constexpr index_t lid_delta = lid_over_rid_derivative * (1 << istage);
 
-                        // pull data from remote lane
-                        const auto v_remote_mean  = warp_shuffle_up(v_local_mean, lid_delta);
-                        const auto v_remote_var   = warp_shuffle_up(v_local_var, lid_delta);
-                        const auto v_remote_count = warp_shuffle_up(v_local_count, lid_delta);
+                            // pull data from remote lane
+                            const auto v_remote_mean  = warp_shuffle_up(v_local_mean, lid_delta);
+                            const auto v_remote_var   = warp_shuffle_up(v_local_var, lid_delta);
+                            const auto v_remote_count = warp_shuffle_up(v_local_count, lid_delta);
 
-                        // decide whether to update local data with remote data
-                        v_local_mean  = do_i_hold_reduced_data ? v_local_mean : v_remote_mean;
-                        v_local_var   = do_i_hold_reduced_data ? v_local_var : v_remote_var;
-                        v_local_count = do_i_hold_reduced_data ? v_local_count : v_remote_count;
-                    });
-                }
-            });
+                            // decide whether to update local data with remote data
+                            v_local_mean  = do_i_hold_reduced_data ? v_local_mean : v_remote_mean;
+                            v_local_var   = do_i_hold_reduced_data ? v_local_var : v_remote_var;
+                            v_local_count = do_i_hold_reduced_data ? v_local_count : v_remote_count;
+                        });
+                    }
+                });
+            }
 
             mean_tensor.GetThreadBuffer()(i) = v_local_mean;
 
