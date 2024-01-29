@@ -342,8 +342,8 @@ def get_blobs() -> Tuple[FmhaFwdApiPool, List[FmhaFwdKernel]]:
             if dtype in ['fp8', 'bf8'] and lse == "t":
                 continue
             k = FmhaFwdKernel(direction=direction, F_idx=0, F_hdim=hdim, F_dtype=dtype, F_tile=tile, F_vlayout=get_vlayout(dtype, hdim),
-                                F_spad='t', F_skpad='t', F_dpad='t',
-                                F_dvpad='t', F_bias=bias, F_lse=lse, F_mask=mask, F_mode=mode,
+                                F_spad='t', F_skpad='t', F_dpad='f',
+                                F_dvpad='f', F_bias=bias, F_lse=lse, F_mask=mask, F_mode=mode,
                                 F_pipeline=get_pipeline(dtype, hdim))
             api_pool.register_traits(k.api_trait())
             gen.append(k)
