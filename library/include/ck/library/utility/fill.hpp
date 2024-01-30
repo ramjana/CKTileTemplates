@@ -41,6 +41,32 @@ struct FillUniformDistribution
     }
 };
 
+template <typename T>
+struct FillNormalDistribution
+{
+    float mean_{0.f};
+    float variance_{1.f};
+    uint32_t seed_{11939};
+
+    template <typename ForwardIter>
+    void operator()(ForwardIter first, ForwardIter last) const
+    {
+        std::mt19937 gen(seed_);
+        std::normal_distribution<float> dis(mean_, std::sqrt(variance_));
+        std::generate(first, last, [&dis, &gen]() { return ck::type_convert<T>(dis(gen)); });
+    }
+
+    template <typename ForwardRange>
+    auto operator()(ForwardRange&& range) const
+        -> std::void_t<decltype(std::declval<const FillNormalDistribution&>()(
+            std::begin(std::forward<ForwardRange>(range)),
+            std::end(std::forward<ForwardRange>(range))))>
+    {
+        (*this)(std::begin(std::forward<ForwardRange>(range)),
+                std::end(std::forward<ForwardRange>(range)));
+    }
+};
+
 // Normally FillUniformDistributionIntegerValue should use std::uniform_int_distribution as below.
 // However this produces segfaults in std::mt19937 which look like inifite loop.
 //      template <typename T>
@@ -79,6 +105,33 @@ struct FillUniformDistributionIntegerValue
     template <typename ForwardRange>
     auto operator()(ForwardRange&& range) const
         -> std::void_t<decltype(std::declval<const FillUniformDistributionIntegerValue&>()(
+            std::begin(std::forward<ForwardRange>(range)),
+            std::end(std::forward<ForwardRange>(range))))>
+    {
+        (*this)(std::begin(std::forward<ForwardRange>(range)),
+                std::end(std::forward<ForwardRange>(range)));
+    }
+};
+
+template <typename T>
+struct FillNormalDistributionIntegerValue
+{
+    float mean_{0.f};
+    float variance_{1.f};
+    uint32_t seed_{11939};
+
+    template <typename ForwardIter>
+    void operator()(ForwardIter first, ForwardIter last) const
+    {
+        std::mt19937 gen(seed_);
+        std::normal_distribution<float> dis(mean_, std::sqrt(variance_));
+        std::generate(
+            first, last, [&dis, &gen]() { return ck::type_convert<T>(std::round(dis(gen))); });
+    }
+
+    template <typename ForwardRange>
+    auto operator()(ForwardRange&& range) const
+        -> std::void_t<decltype(std::declval<const FillNormalDistributionIntegerValue&>()(
             std::begin(std::forward<ForwardRange>(range)),
             std::end(std::forward<ForwardRange>(range))))>
     {
