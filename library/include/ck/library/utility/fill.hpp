@@ -20,11 +20,12 @@ struct FillUniformDistribution
 {
     float a_{-5.f};
     float b_{5.f};
+    uint32_t seed_{11939};
 
     template <typename ForwardIter>
     void operator()(ForwardIter first, ForwardIter last) const
     {
-        std::mt19937 gen(11939);
+        std::mt19937 gen(seed_);
         std::uniform_real_distribution<float> dis(a_, b_);
         std::generate(first, last, [&dis, &gen]() { return ck::type_convert<T>(dis(gen)); });
     }
@@ -64,11 +65,12 @@ struct FillUniformDistributionIntegerValue
 {
     float a_{-5.f};
     float b_{5.f};
+    uint32_t seed_{11939};
 
     template <typename ForwardIter>
     void operator()(ForwardIter first, ForwardIter last) const
     {
-        std::mt19937 gen(11939);
+        std::mt19937 gen(seed_);
         std::uniform_real_distribution<float> dis(a_, b_);
         std::generate(
             first, last, [&dis, &gen]() { return ck::type_convert<T>(std::round(dis(gen))); });
