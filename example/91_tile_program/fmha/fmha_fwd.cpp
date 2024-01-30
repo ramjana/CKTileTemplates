@@ -68,7 +68,8 @@ auto create_args(int argc, char* argv[])
                 "'g:y,x', generic attention mask coordinate with y/x size\n")
         .insert("vlayout", "r", "r for row-major(seqlen*hdim), c for col-major(hdim*seqlen)")
         .insert("lse", "0", "0 not store lse, 1 store lse")
-        .insert("init", "1", "init method. 0:random int, 1:random float, 2:trig float");
+        .insert("init", "1", "init method. 0:random int, 1:random float, 2:trig float")
+        .insert("seed", "0", "random seed used for initializing input tensors");
 
     bool result = arg_parser.parse(argc, argv);
     return std::make_tuple(result, arg_parser);
@@ -145,6 +146,8 @@ bool run(const ArgParser& arg_parser)
     mask_info mask = mask_info::decode(arg_parser.get_str("mask"), seqlen_q, seqlen_k);
 
     int init_method = arg_parser.get_int("init");
+
+    auto seed = arg_parser.get_uint32("seed");
 
     int stream_warmup = env_get_int("CK_WARMUP", 5);
     int stream_repeat = env_get_int("CK_REPEAT", 20);
@@ -234,17 +237,17 @@ bool run(const ArgParser& arg_parser)
 
     if(init_method == 0)
     {
-        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f}(q_host);
-        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f}(k_host);
-        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f}(v_host);
-        ck::utils::FillUniformDistributionIntegerValue<BiasDataType>{-2.f, 2.f}(bias_host);
+        ck::utils::FillUniformDistributionIntegerValue<QDataType>{-2.f, 2.f, seed}(q_host);
+        ck::utils::FillUniformDistributionIntegerValue<KDataType>{-2.f, 2.f, seed}(k_host);
+        ck::utils::FillUniformDistributionIntegerValue<VDataType>{-2.f, 2.f, seed}(v_host);
+        ck::utils::FillUniformDistributionIntegerValue<BiasDataType>{-2.f, 2.f, seed}(bias_host);
     }
     else if(init_method == 1)
     {
-        ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f}(q_host);
-        ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f}(k_host);
-        ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f}(v_host);
-        ck::utils::FillUniformDistribution<BiasDataType>{0.f, 1.f}(bias_host);
+        ck::utils::FillUniformDistribution<QDataType>{0.f, 1.f, seed}(q_host);
+        ck::utils::FillUniformDistribution<KDataType>{0.f, 1.f, seed}(k_host);
+        ck::utils::FillUniformDistribution<VDataType>{-.5f, .5f, seed}(v_host);
+        ck::utils::FillUniformDistribution<BiasDataType>{0.f, 1.f, seed}(bias_host);
     }
     else if(init_method == 2)
     {
