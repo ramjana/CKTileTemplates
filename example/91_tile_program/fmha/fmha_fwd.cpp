@@ -69,7 +69,10 @@ auto create_args(int argc, char* argv[])
         .insert("vlayout", "r", "r for row-major(seqlen*hdim), c for col-major(hdim*seqlen)")
         .insert("lse", "0", "0 not store lse, 1 store lse")
         .insert("init", "1", "init method. 0:random int, 1:random float, 2:trig float")
-        .insert("seed", "0", "random seed used for initializing input tensors");
+        .insert("seed",
+                "0",
+                "random seed used for initializing input tensors. 0 to use "
+                "non-deterministic random number as seed");
 
     bool result = arg_parser.parse(argc, argv);
     return std::make_tuple(result, arg_parser);
@@ -145,8 +148,12 @@ bool run(const ArgParser& arg_parser)
 
     mask_info mask = mask_info::decode(arg_parser.get_str("mask"), seqlen_q, seqlen_k);
 
-    int init_method = arg_parser.get_int("init");
-    uint32_t seed = arg_parser.get_uint32("seed");
+    int init_method              = arg_parser.get_int("init");
+    std::optional<uint32_t> seed = arg_parser.get_uint32("seed");
+    if(*seed == 0)
+    {
+        seed.reset();
+    }
 
     int stream_warmup = env_get_int("CK_WARMUP", 5);
     int stream_repeat = env_get_int("CK_REPEAT", 20);
