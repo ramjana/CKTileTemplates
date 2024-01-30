@@ -321,7 +321,7 @@ struct BlockFmhaPipelineQRKSVSFp8
                 s.GetTileDistribution()); // Pcompute{j}
 
             static const auto get_validated_m = [](SMPLComputeDataType raw_m) {
-                if constexpr(FmhaMask::IsMasking)
+                if constexpr(kHasBias || FmhaMask::IsMasking)
                 {
                     return raw_m == -NumericLimits<SMPLComputeDataType>::Infinity()
                                ? type_convert<SMPLComputeDataType>(0.f)

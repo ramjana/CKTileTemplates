@@ -396,7 +396,7 @@ struct BlockFmhaPipelineQRKSVSAsync
             __builtin_amdgcn_sched_barrier(0);
 
             static const auto get_validated_m = [](SMPLComputeDataType raw_m) {
-                if constexpr(FmhaMask::IsMasking)
+                if constexpr(kHasBias || FmhaMask::IsMasking)
                 {
                     return raw_m == -NumericLimits<SMPLComputeDataType>::Infinity()
                                ? type_convert<SMPLComputeDataType>(0.f)
