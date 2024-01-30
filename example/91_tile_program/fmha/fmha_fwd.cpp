@@ -147,7 +147,7 @@ bool run(const ArgParser& arg_parser)
 
     int init_method = arg_parser.get_int("init");
 
-    auto seed = arg_parser.get_uint32("seed");
+    uint32_t seed = arg_parser.get_uint32("seed");
 
     int stream_warmup = env_get_int("CK_WARMUP", 5);
     int stream_repeat = env_get_int("CK_REPEAT", 20);
