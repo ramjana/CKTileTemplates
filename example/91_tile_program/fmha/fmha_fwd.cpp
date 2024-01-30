@@ -146,7 +146,6 @@ bool run(const ArgParser& arg_parser)
     mask_info mask = mask_info::decode(arg_parser.get_str("mask"), seqlen_q, seqlen_k);
 
     int init_method = arg_parser.get_int("init");
-
     uint32_t seed = arg_parser.get_uint32("seed");
 
     int stream_warmup = env_get_int("CK_WARMUP", 5);
