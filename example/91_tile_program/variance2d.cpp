@@ -13,7 +13,7 @@
 #include "ck/library/utility/host_tensor.hpp"
 #include "ck/library/utility/host_tensor_generator.hpp"
 
-#include "welford2d.hpp"
+#include "variance2d.hpp"
 
 template <typename XDataType, typename ComputeDataType, typename MeanDataType, typename VarDataType>
 void reference_variance(const Tensor<XDataType>& x_m_n,
@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
 
     std::cout << "grid size " << kGridSize << std::endl;
 
-    const auto kernel = Welford2d<XDataType,
+    const auto kernel = Variance2d<XDataType,
                                   ComputeDataType,
                                   MeanDataType,
                                   VarDataType,

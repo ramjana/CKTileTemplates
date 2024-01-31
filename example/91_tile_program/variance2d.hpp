@@ -17,6 +17,7 @@
 #include "ck/tile_program/warp_tile/warp_welford.hpp"
 #include "ck/utility/functional2.hpp"
 
+// Welford algorithm
 template <typename XDataType,
           typename ComputeDataType,
           typename MeanDataType,
@@ -24,7 +25,7 @@ template <typename XDataType,
           ck::index_t kBlockSize,
           ck::index_t kMPerBlock,
           ck::index_t kNPerBlock>
-struct Welford2d
+struct Variance2d
 {
     __device__ static constexpr auto MakeXBlockTileDistribution()
     {
@@ -42,7 +43,7 @@ struct Welford2d
     }
 
     template <class Dstr>
-    __device__ static constexpr auto GetWelford2dNPerThread(Dstr)
+    __device__ static constexpr auto GetVariance2dNPerThread(Dstr)
     {
         constexpr auto nDstrSpan = Dstr::GetDistributedSpans().template At<1>();
 
@@ -78,7 +79,7 @@ struct Welford2d
             x_m_n, make_tuple(Number<kMPerBlock>{}, Number<kNPerBlock>{}), {iM, 0}, xDstr);
 
         // TODO: padding - handle max_count if N % kNPerBlock != 0
-        constexpr auto NPerThread = GetWelford2dNPerThread(xDstr);
+        constexpr auto NPerThread = GetVariance2dNPerThread(xDstr);
         ThreadWelford<ComputeDataType, XDataType> thread_welford{NPerThread * N / kNPerBlock};
 
         auto mean_var_compute_block_tensor_tuple =
