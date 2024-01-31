@@ -101,12 +101,12 @@ int main(int argc, char* argv[])
     std::cout << "grid size " << kGridSize << std::endl;
 
     const auto kernel = Variance2d<XDataType,
-                                  ComputeDataType,
-                                  MeanDataType,
-                                  VarDataType,
-                                  kBlockSize,
-                                  kMPerBlock,
-                                  kNPerBlock>{};
+                                   ComputeDataType,
+                                   MeanDataType,
+                                   VarDataType,
+                                   kBlockSize,
+                                   kMPerBlock,
+                                   kNPerBlock>{};
 
     float ave_time = launch_kernel(StreamConfig{nullptr, true},
                                    kernel,
