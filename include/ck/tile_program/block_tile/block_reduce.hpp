@@ -27,7 +27,7 @@ __device__ void block_tile_reduce_sync(AccDistributedTensor_& acc_tensor,
 
     constexpr index_t idim_p_lane = NDimP - 1;
 
-    const auto ps_idx = make_array<index_t>(get_block_id(), get_lane_id());
+    const auto ps_idx = make_array<index_t>(get_warp_id(), get_lane_id());
     const auto rs_idx = acc_tensor.GetTileDistribution().CalculateRsIndexFromPsIndex(ps_idx);
 
     constexpr index_t thread_buf_size = AccDistributedTensor_::GetThreadBufferSize();
