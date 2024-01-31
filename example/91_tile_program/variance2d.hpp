@@ -110,9 +110,14 @@ struct Variance2d
             mean_compute_block_tensor, var_compute_block_tensor, thread_welford.cur_count_);
 
         // mean
-        const auto mean_block_tensor =
-            tile_elementwise_in([](const auto& mean) { return type_convert<MeanDataType>(mean); },
-                                mean_compute_block_tensor);
+        const auto mean_block_tensor = [&]() {
+            if constexpr(is_same_v<MeanDataType, ComputeDataType>)
+                return mean_compute_block_tensor;
+            else
+                return tile_elementwise_in(
+                    [](const auto& mean) { return type_convert<MeanDataType>(mean); },
+                    mean_compute_block_tensor);
+        }();
 
         const auto mean_m = make_naive_tensor_view_packed<AddressSpaceEnum::Global>(
             p_mean, make_tuple(M), Number<32>{});
@@ -124,9 +129,14 @@ struct Variance2d
             store_tile(mean_block_window, mean_block_tensor);
 
         // variance
-        const auto var_block_tensor =
-            tile_elementwise_in([](const auto& var) { return type_convert<VarDataType>(var); },
-                                var_compute_block_tensor);
+        const auto var_block_tensor = [&]() {
+            if constexpr(is_same_v<VarDataType, ComputeDataType>)
+                return var_compute_block_tensor;
+            else
+                return tile_elementwise_in(
+                    [](const auto& mean) { return type_convert<MeanDataType>(mean); },
+                    var_compute_block_tensor);
+        }();
 
         const auto var_m = make_naive_tensor_view_packed<AddressSpaceEnum::Global>(
             p_var, make_tuple(M), Number<32>{});
