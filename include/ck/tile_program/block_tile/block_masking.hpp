@@ -158,7 +158,11 @@ struct GenericAttentionMask
             // check top-right corner > x or left-borrom corner < x
             bool top_right_edge   = (i_x + XTile) > (x + i_y);
             bool bottom_left_edge = (i_y + YTile) > (y + i_x);
-            return top_right_edge || bottom_left_edge;
+
+            index_t x_end                = math::min(i_y + x, x_total);
+            bool is_partial_out_of_bound = (i_x < x_end && x_end < i_x + XTile);
+
+            return top_right_edge || bottom_left_edge || is_partial_out_of_bound;
         }
         else
         {
