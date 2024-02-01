@@ -162,7 +162,7 @@ struct GenericAttentionMask
 
             bool top_right_edge          = tile_right > (x + tile_top);
             bool bottom_left_edge        = tile_bottom > (y + tile_left);
-            bool is_partial_out_of_bound = (tile_left < x_end && x_end < tile_right);
+            bool is_partial_out_of_bound = tile_right > x_end; // only consider right-pad for now
 
             return top_right_edge || bottom_left_edge || is_partial_out_of_bound;
         }
