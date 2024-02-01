@@ -149,15 +149,15 @@ struct GenericAttentionMask
     // otherwise no need to check per-pixel
     // Attention! assume the idex passed in this function is with in range of GetTileRangeAlongX()
     // can be used as a fast-path to decide if do per-pixel check or not
-    template <index_t YTile, index_t XTile>
+    template <index_t TileHeight, index_t TileWidth>
     __host__ __device__ constexpr auto
-    IsEdgeTile(index_t tile_top, index_t tile_left, Number<YTile>, Number<XTile>) const
+    IsEdgeTile(index_t tile_top, index_t tile_left, Number<TileHeight>, Number<TileWidth>) const
     {
         if constexpr(IsLocal)
         {
             // check top-right corner > x or left-borrom corner < x
-            index_t tile_right  = tile_left + XTile;
-            index_t tile_bottom = tile_top + YTile;
+            index_t tile_right  = tile_left + TileWidth;
+            index_t tile_bottom = tile_top + TileHeight;
             index_t x_end       = math::min(x + tile_top, x_total);
 
             bool top_right_edge          = tile_right > (x + tile_top);
@@ -169,7 +169,7 @@ struct GenericAttentionMask
         else
         {
             // only need to check top-right corner > x
-            index_t tile_right = i_x + XTile;
+            index_t tile_right = tile_left + TileWidth;
             index_t x_end      = math::min(x + tile_top, x_total);
 
             bool top_right_edge = tile_right > x_end;
