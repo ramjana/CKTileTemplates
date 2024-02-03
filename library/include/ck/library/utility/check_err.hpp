@@ -31,9 +31,9 @@ typename std::enable_if<
     bool>::type
 check_err(const Range& out,
           const RefRange& ref,
-          const std::string& msg = "Error: Incorrect results!",
-          double rtol            = 1e-5,
-          double atol            = 3e-6,
+          const std::string& msg  = "Error: Incorrect results!",
+          double rtol             = 1e-5,
+          double atol             = 3e-6,
           bool allow_infinity_ref = false)
 {
     if(out.size() != ref.size())
@@ -43,11 +43,11 @@ check_err(const Range& out,
         return false;
     }
 
-    const auto is_infinity_error = [=] (auto o, auto r) {
-        const bool either_not_finite = !std::isfinite(o) || !std::isfinite(r);
-        const bool both_same_and_infinite = std::isinf(o) && std::isinf(r) && (o == r);
+    const auto is_infinity_error = [=](auto o, auto r) {
+        const bool either_not_finite      = !std::isfinite(o) || !std::isfinite(r);
+        const bool both_infinite_and_same = std::isinf(o) && std::isinf(r) && (o == r);
 
-        return either_not_finite && !(allow_infinity_ref && both_same_and_infinite);
+        return either_not_finite && !(allow_infinity_ref && both_infinite_and_same);
     };
 
     bool res{true};
@@ -89,9 +89,9 @@ typename std::enable_if<
     bool>::type
 check_err(const Range& out,
           const RefRange& ref,
-          const std::string& msg = "Error: Incorrect results!",
-          double rtol            = 1e-3,
-          double atol            = 1e-3,
+          const std::string& msg  = "Error: Incorrect results!",
+          double rtol             = 1e-3,
+          double atol             = 1e-3,
           bool allow_infinity_ref = false)
 {
     if(out.size() != ref.size())
@@ -101,11 +101,11 @@ check_err(const Range& out,
         return false;
     }
 
-    const auto is_infinity_error = [=] (auto o, auto r) {
-        const bool either_not_finite = !std::isfinite(o) || !std::isfinite(r);
-        const bool both_same_and_infinite = std::isinf(o) && std::isinf(r) && (o == r);
+    const auto is_infinity_error = [=](auto o, auto r) {
+        const bool either_not_finite      = !std::isfinite(o) || !std::isfinite(r);
+        const bool both_infinite_and_same = std::isinf(o) && std::isinf(r) && (o == r);
 
-        return either_not_finite && !(allow_infinity_ref && both_same_and_infinite);
+        return either_not_finite && !(allow_infinity_ref && both_infinite_and_same);
     };
 
     bool res{true};
@@ -148,9 +148,9 @@ typename std::enable_if<
     bool>::type
 check_err(const Range& out,
           const RefRange& ref,
-          const std::string& msg = "Error: Incorrect results!",
-          double rtol            = 1e-3,
-          double atol            = 1e-3,
+          const std::string& msg  = "Error: Incorrect results!",
+          double rtol             = 1e-3,
+          double atol             = 1e-3,
           bool allow_infinity_ref = false)
 {
     if(out.size() != ref.size())
@@ -160,11 +160,11 @@ check_err(const Range& out,
         return false;
     }
 
-    const auto is_infinity_error = [=] (auto o, auto r) {
-        const bool either_not_finite = !std::isfinite(o) || !std::isfinite(r);
-        const bool both_same_and_infinite = std::isinf(o) && std::isinf(r) && (o == r);
+    const auto is_infinity_error = [=](auto o, auto r) {
+        const bool either_not_finite      = !std::isfinite(o) || !std::isfinite(r);
+        const bool both_infinite_and_same = std::isinf(o) && std::isinf(r) && (o == r);
 
-        return either_not_finite && !(allow_infinity_ref && both_same_and_infinite);
+        return either_not_finite && !(allow_infinity_ref && both_infinite_and_same);
     };
 
     bool res{true};
@@ -260,9 +260,9 @@ std::enable_if_t<(std::is_same_v<ranges::range_value_t<Range>, ranges::range_val
                  bool>
 check_err(const Range& out,
           const RefRange& ref,
-          const std::string& msg = "Error: Incorrect results!",
-          double rtol            = 1e-3,
-          double atol            = 1e-3,
+          const std::string& msg  = "Error: Incorrect results!",
+          double rtol             = 1e-3,
+          double atol             = 1e-3,
           bool allow_infinity_ref = false)
 {
     if(out.size() != ref.size())
@@ -272,11 +272,11 @@ check_err(const Range& out,
         return false;
     }
 
-    const auto is_infinity_error = [=] (auto o, auto r) {
-        const bool either_not_finite = !std::isfinite(o) || !std::isfinite(r);
-        const bool both_same_and_infinite = std::isinf(o) && std::isinf(r) && (o == r);
+    const auto is_infinity_error = [=](auto o, auto r) {
+        const bool either_not_finite      = !std::isfinite(o) || !std::isfinite(r);
+        const bool both_infinite_and_same = std::isinf(o) && std::isinf(r) && (o == r);
 
-        return either_not_finite && !(allow_infinity_ref && both_same_and_infinite);
+        return either_not_finite && !(allow_infinity_ref && both_infinite_and_same);
     };
 
     bool res{true};
@@ -313,9 +313,9 @@ std::enable_if_t<(std::is_same_v<ranges::range_value_t<Range>, ranges::range_val
                  bool>
 check_err(const Range& out,
           const RefRange& ref,
-          const std::string& msg = "Error: Incorrect results!",
-          double rtol            = 1e-3,
-          double atol            = 1e-3,
+          const std::string& msg  = "Error: Incorrect results!",
+          double rtol             = 1e-3,
+          double atol             = 1e-3,
           bool allow_infinity_ref = false)
 {
     if(out.size() != ref.size())
@@ -325,11 +325,11 @@ check_err(const Range& out,
         return false;
     }
 
-    const auto is_infinity_error = [=] (auto o, auto r) {
-        const bool either_not_finite = !std::isfinite(o) || !std::isfinite(r);
-        const bool both_same_and_infinite = std::isinf(o) && std::isinf(r) && (o == r);
+    const auto is_infinity_error = [=](auto o, auto r) {
+        const bool either_not_finite      = !std::isfinite(o) || !std::isfinite(r);
+        const bool both_infinite_and_same = std::isinf(o) && std::isinf(r) && (o == r);
 
-        return either_not_finite && !(allow_infinity_ref && both_same_and_infinite);
+        return either_not_finite && !(allow_infinity_ref && both_infinite_and_same);
     };
 
     bool res{true};
