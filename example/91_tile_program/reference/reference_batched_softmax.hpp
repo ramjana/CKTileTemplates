@@ -16,7 +16,7 @@ void reference_batched_softmax(
     const int N = a_b_m_n.mDesc.GetLengths()[2];
 
     auto f = [&](auto batch, auto m) {
-        CompDataType v_max = ck::NumericLimits<CompDataType>::Lowest();
+        CompDataType v_max = -ck::NumericLimits<CompDataType>::Infinity();
 
         // max
         for(int n = 0; n < N; ++n)
@@ -27,6 +27,11 @@ void reference_batched_softmax(
         }
 
         CompDataType v_exp_sum = 0;
+        // validate v_max if all the elements within a row are -INF
+        if(v_max == -ck::NumericLimits<CompDataType>::Infinity())
+        {
+            v_max = ck::type_convert<CompDataType>(0.f);
+        }
 
         // sum
         for(int n = 0; n < N; ++n)
