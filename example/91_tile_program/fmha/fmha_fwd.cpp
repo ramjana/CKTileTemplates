@@ -160,9 +160,8 @@ bool run(const ArgParser& arg_parser)
 
     StreamConfig stream_config{nullptr, true, 0, stream_warmup, stream_repeat};
 
-    const auto [seqlens_q, seqstart_q_host] = generate_seqlens_seqstarts_q(mode, batch, seqlen_q);
-    const std::vector<int32_t> seqstart_k_host =
-        generate_seqstarts_k(mode, batch, seqlen_k, seqlens_q, seqlen_q);
+    const auto seqstart_q_host = generate_seqstarts(mode, batch, seqlen_q);
+    const auto seqstart_k_host = generate_seqstarts(mode, batch, seqlen_k);
 
     using TypeConfig = FmhaFwdTypeConfig<DataType>;
 
