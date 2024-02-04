@@ -275,8 +275,6 @@ bool run(const ArgParser& arg_parser)
     k_buf.ToDevice(k_host.data());
     v_buf.ToDevice(v_host.data());
     bias_buf.ToDevice(bias_host.data());
-    lse_buf.SetZero();
-    o_buf.SetZero();
     seqstart_q.ToDevice(seqstart_q_host.data());
     seqstart_k.ToDevice(seqstart_k_host.data());
 
