@@ -3,7 +3,10 @@
 
 #pragma once
 
+#include <cmath>
+#include <limits>
 #include <optional>
+
 #include "ck/utility/common_header.hpp"
 #include "ck/library/utility/host_tensor.hpp"
 
@@ -28,7 +31,7 @@ void reference_batched_softmax(
 
         CompDataType v_exp_sum = 0;
         // validate v_max if all the elements within a row are -INF
-        if(v_max == -ck::NumericLimits<CompDataType>::Infinity())
+        if(std::isinf(v_max) && v_max < 0)
         {
             v_max = ck::type_convert<CompDataType>(0.f);
         }
