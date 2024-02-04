@@ -45,7 +45,7 @@ void reference_batched_softmax(
         }
 
         // if sum is zero(masked), or nan/inf(other computation error), don't do divide
-        CompDataType inv_sum = (v_exp_sum == 0.f || v_exp_sum != v_exp_sum) ? 1.f : 1.f / v_exp_sum;
+        CompDataType inv_sum = (v_exp_sum == 0.f ? 1.f : 1.f / v_exp_sum);
 
         // elementwise
         for(int n = 0; n < N; ++n)
