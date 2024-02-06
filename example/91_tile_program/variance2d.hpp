@@ -134,7 +134,7 @@ struct Variance2d
                 return var_compute_block_tensor;
             else
                 return tile_elementwise_in(
-                    [](const auto& mean) { return type_convert<MeanDataType>(mean); },
+                    [](const auto& var) { return type_convert<VarDataType>(var); },
                     var_compute_block_tensor);
         }();
 
