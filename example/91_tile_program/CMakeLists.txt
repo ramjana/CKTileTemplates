@@ -1,8 +1,12 @@
-add_example_executable(example_im2col im2col.cpp)
-add_example_executable(example_gemm gemm.cpp)
-add_example_executable(example_gemm_gemm gemm_gemm.cpp)
-add_example_executable(example_reduce reduce.cpp)
-add_example_executable(example_softmax softmax.cpp)
-add_example_executable(example_gemm_softmax_gemm gemm_softmax_gemm.cpp)
-add_example_executable(example_batched_gemm_softmax_gemm batched_gemm_softmax_gemm.cpp)
-add_example_executable(example_fmha_fwd fmha_fwd.cpp)
+include_directories(AFTER
+  ${CMAKE_CURRENT_LIST_DIR}
+)
+
+add_subdirectory(batched_gemm_softmax_gemm)
+add_subdirectory(fmha)
+add_subdirectory(gemm)
+add_subdirectory(gemm_gemm)
+add_subdirectory(gemm_softmax_gemm)
+add_subdirectory(im2col)
+add_subdirectory(reduce)
+add_subdirectory(softmax)

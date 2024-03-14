@@ -5,6 +5,8 @@
 
 #include "ck/ck.hpp"
 #include "ck/tensor_operation/gpu/device/tensor_layout.hpp"
+#include "ck/utility/sequence.hpp"
+#include "ck/utility/math.hpp"
 
 namespace ck {
 namespace tile_program {
@@ -14,7 +16,7 @@ template <typename BlockTile_, // Sequence<...
           typename Gemm0WarpTile_,
           typename Gemm1BlockWarps_,
           typename Gemm1WarpTile_,
-          typename VLayout_ = ck::tensor_layout::gemm::RowMajor>
+          bool IsVLayoutRowMajor_>
 struct TileFmhaShape
 {
     using BlockTile       = remove_cvref_t<BlockTile_>;
@@ -22,6 +24,12 @@ struct TileFmhaShape
     using Gemm0WarpTile   = remove_cvref_t<Gemm0WarpTile_>;
     using Gemm1BlockWarps = remove_cvref_t<Gemm1BlockWarps_>;
     using Gemm1WarpTile   = remove_cvref_t<Gemm1WarpTile_>;
+
+    static constexpr index_t NumWarps =
+        reduce_on_sequence(Gemm0BlockWarps{}, math::multiplies{}, Number<1>{});
+
+    static_assert(NumWarps ==
+                  reduce_on_sequence(Gemm1BlockWarps{}, math::multiplies{}, Number<1>{}));
 
     static constexpr index_t kM0 = BlockTile::At(Number<0>{}); // tile size along q seqlen
     static constexpr index_t kN0 = BlockTile::At(Number<1>{}); // tile size along k seqlen
@@ -31,8 +39,13 @@ struct TileFmhaShape
     static constexpr index_t kK0BlockLength =
         BlockTile::At(Number<5>{}); // total length of K0, used for pipeline that need load Q at
                                     // once (or repeately load Q as a whole tile)
+    static_assert(kK0BlockLength % kK0 == 0, "kK0BlockLength should be divisible by kK0");
 
-    using VLayout = remove_cvref_t<VLayout_>; // rowmajor : seqlen*hdim, colmajor : hdim*seqlen
+    // v, rowmajor : seqlen*hdim, colmajor : hdim*seqlen
+    static constexpr bool IsVLayoutRowMajor = IsVLayoutRowMajor_;
+    using VLayout                           = std::conditional_t<IsVLayoutRowMajor,
+                                       ck::tensor_layout::gemm::RowMajor,
+                                       ck::tensor_layout::gemm::ColumnMajor>;
 };
 
 } // namespace tile_program

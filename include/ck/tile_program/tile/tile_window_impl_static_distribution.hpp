@@ -261,7 +261,10 @@ struct TileWindowWithStaticDistribution
                           get_container_subset(window_adaptor_ps_ys_vector_strides, y_dims));
     }
 
-    __device__ auto Load() const
+    __device__ constexpr auto GetNumAccess() const { return LoadStoreTraits::NumAccess; }
+
+    template <bool use_inline_asm = false>
+    __device__ auto Load(bool_constant<use_inline_asm> = {}) const
     {
         using Traits = LoadStoreTraits;
 
@@ -288,7 +291,7 @@ struct TileWindowWithStaticDistribution
                 // read from bottom tensor
                 const vector_t vec_value =
                     GetBottomTensorView().template GetVectorizedElements<vector_t>(
-                        bottom_tensor_thread_coord);
+                        bottom_tensor_thread_coord, bool_constant<use_inline_asm>{});
 
                 const vector_type_t vec{vec_value};
 
@@ -322,6 +325,76 @@ struct TileWindowWithStaticDistribution
         });
 
         return dst_tensor;
+    }
+
+    // TODO: currently async load only implemented in inline asm
+    template <typename LdsTileWindow_, bool use_inline_asm = true>
+    __device__ auto AsyncLoad(LdsTileWindow_&& lds_tile, bool_constant<use_inline_asm> = {}) const
+    {
+        using LdsTileWindow = remove_cvref_t<LdsTileWindow_>;
+        // using LdsTensorView = typename LdsTileWindow::BottomTensorView;
+        using LdsDataType = typename LdsTileWindow::DataType;
+        // using LdsDescriptor = typename LdsTileWindow::BottomTensorDesc;
+
+        // issues * warps * lanes
+        static_assert(LdsTileWindow::GetNumOfDimension() == 3); // TODO: hard coded
+
+        const index_t size_per_buf =
+            lds_tile.GetBottomTensorView().GetTensorDescriptor().CalculateOffset(
+                make_tuple(Number<0>{}, Number<0>{}, Number<0>{})) *
+            sizeof(LdsDataType);
+
+        const index_t size_per_wave =
+            lds_tile.GetBottomTensorView().GetTensorDescriptor().CalculateOffset(
+                make_tuple(Number<0>{}, Number<1>{}, Number<0>{})) *
+                sizeof(LdsDataType) -
+            size_per_buf;
+
+        const index_t size_per_issue =
+            lds_tile.GetBottomTensorView().GetTensorDescriptor().CalculateOffset(
+                make_tuple(Number<1>{}, Number<0>{}, Number<0>{})) *
+                sizeof(LdsDataType) -
+            size_per_buf;
+
+        const index_t m0_init_value = size_per_buf + size_per_wave * get_warp_id();
+        m0_set_with_memory(m0_init_value); // This should be wave independent
+
+        using Traits = LoadStoreTraits;
+
+        using vector_type_t = typename Traits::vector_type_t;
+        using vector_t      = typename vector_type_t::type;
+        using SFC_Ys        = typename Traits::SFC_Ys;
+
+        LdsDataType* smem = lds_tile.GetBottomTensorView().GetBufferView().p_data_;
+
+        // loop over thread tensor space [y0, y1, ...]
+        static_for<0, NumCoord, 1>{}([&](auto iCoord) {
+            // TODO: use structure binding (to be captured later) if compiled in C++20
+            auto window_adaptor_thread_coord = pre_computed_coords_[iCoord][I0];
+            auto bottom_tensor_thread_coord  = pre_computed_coords_[iCoord][I1];
+
+            static_for<0, NumAccessPerCoord, 1>{}([&](auto iCoordAccess) {
+                constexpr auto iAccess = Number<iCoord * NumAccessPerCoord + iCoordAccess>{};
+
+                // read from bottom tensor
+                GetBottomTensorView().template AsyncGetVectorizedElements<vector_t>(
+                    smem, bottom_tensor_thread_coord);
+
+                // move thread coordinate
+                if constexpr(iCoordAccess != (NumAccessPerCoord - 1))
+                {
+                    constexpr auto idx_diff_ys = SFC_Ys::GetForwardStep(iAccess);
+
+                    constexpr auto idx_diff_ps_ys =
+                        container_concat(Array<index_t, NDimP>{0}, idx_diff_ys);
+
+                    MoveWindowAdaptorAndBottomTensorThreadCoordinate(
+                        window_adaptor_thread_coord, bottom_tensor_thread_coord, idx_diff_ps_ys);
+
+                    m0_inc_with_memory(size_per_issue);
+                }
+            });
+        });
     }
 
     __device__ void Store(const StaticDistributedTensor<DataType, TileDstr>& dstr_tensor) const

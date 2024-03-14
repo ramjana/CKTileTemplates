@@ -11,6 +11,7 @@
 
 #include "ck/tile_program/tile/tile_distribution.hpp"
 #include "ck/tile_program/tile/tile_window.hpp"
+#include "ck/tile_program/tile/null_tensor.hpp"
 #include "ck/tile_program/tile/static_distributed_tensor.hpp"
 
 namespace ck {
@@ -26,6 +27,44 @@ __device__ auto load_tile(const TileWindowWithStaticDistribution<BottomTensorVie
                                                                  NumCoord>& tile_window)
 {
     return tile_window.Load();
+}
+
+// This version use inline asm to do loading.
+template <typename BottomTensorView_,
+          typename WindowLengths_,
+          typename TileDistribution_,
+          index_t NumCoord>
+__device__ auto load_tile_raw(const TileWindowWithStaticDistribution<BottomTensorView_,
+                                                                     WindowLengths_,
+                                                                     TileDistribution_,
+                                                                     NumCoord>& tile_window)
+{
+    return tile_window.Load(bool_constant<true>{});
+}
+
+template <typename LdsTileWindow_,
+          typename BottomTensorView_,
+          typename WindowLengths_,
+          typename TileDistribution_,
+          index_t NumCoord>
+__device__ auto async_load_tile_raw(LdsTileWindow_&& lds_tile,
+                                    const TileWindowWithStaticDistribution<BottomTensorView_,
+                                                                           WindowLengths_,
+                                                                           TileDistribution_,
+                                                                           NumCoord>& tile_window)
+{
+    return tile_window.AsyncLoad(lds_tile);
+}
+
+__device__ auto async_load_fence(index_t cnt = 0)
+{
+    asm volatile("s_waitcnt vmcnt(%0)" : : "n"(cnt) : "memory");
+}
+
+template <typename WindowLengths>
+__device__ auto load_tile(const NullTileWindow<WindowLengths>&)
+{
+    return NullTensor{};
 }
 
 } // namespace tile_program

@@ -49,6 +49,117 @@ __device__ int32x4_t make_wave_buffer_resource_with_default_range(T* p_wave)
     return wave_buffer_resource.content;
 }
 
+// TODO: glc/slc/...
+template <index_t bytes>
+struct buffer_load;
+
+template <>
+struct buffer_load<16>
+{
+    template <typename T>
+    __device__ void operator()(T& value,
+                               int32x4_t res /*buffer resource*/,
+                               index_t v_offset,
+                               index_t s_offset,
+                               index_t i_offset /*max 0xFFF*/,
+                               index_t /*flag*/ = 0)
+    {
+        static_assert(sizeof(T) == 16);
+        // using dummy_vector = vector_type<float, 4>;
+        // using dummy_vector = StaticallyIndexedArray<float, 4>;
+        asm volatile("buffer_load_dwordx4 %0, %1, %2, %3 offen offset:%4"
+                     // : "+v"(reinterpret_cast<dummy_vector&>(value))
+                     : "+v"(value)
+                     : "v"(v_offset), "s"(res), "s"(s_offset), "n"(i_offset)
+                     : "memory");
+    }
+};
+
+template <>
+struct buffer_load<8>
+{
+    template <typename T>
+    __device__ void operator()(T& value,
+                               int32x4_t res /*buffer resource*/,
+                               index_t v_offset,
+                               index_t s_offset,
+                               index_t i_offset /*max 0xFFF*/,
+                               index_t /*flag*/ = 0)
+    {
+        static_assert(sizeof(T) == 8);
+        // using dummy_vector = vector_type<float, 2>;
+        using dummy_vector = float __attribute__((ext_vector_type(2)));
+        asm volatile("buffer_load_dwordx2 %0, %1, %2, %3 offen offset:%4"
+                     : "+v"(reinterpret_cast<dummy_vector&>(value))
+                     : "v"(v_offset), "s"(res), "s"(s_offset), "n"(i_offset)
+                     : "memory");
+    }
+};
+
+template <>
+struct buffer_load<4>
+{
+    template <typename T>
+    __device__ void operator()(T& value,
+                               int32x4_t res /*buffer resource*/,
+                               index_t v_offset,
+                               index_t s_offset,
+                               index_t i_offset /*max 0xFFF*/,
+                               index_t /*flag*/ = 0)
+    {
+        static_assert(sizeof(T) == 4);
+        // using dummy_vector = vector_type<float, 1>;
+        using dummy_vector = float __attribute__((ext_vector_type(1)));
+        asm volatile("buffer_load_dword %0, %1, %2, %3 offen offset:%4"
+                     : "+v"(reinterpret_cast<dummy_vector&>(value))
+                     : "v"(v_offset), "s"(res), "s"(s_offset), "n"(i_offset)
+                     : "memory");
+    }
+};
+
+template <>
+struct buffer_load<2>
+{
+    template <typename T>
+    __device__ void operator()(T& value,
+                               int32x4_t res /*buffer resource*/,
+                               index_t v_offset,
+                               index_t s_offset,
+                               index_t i_offset /*max 0xFFF*/,
+                               index_t /*flag*/ = 0)
+    {
+        static_assert(sizeof(T) == 2);
+        asm volatile("buffer_load_ushort %0, %1, %2, %3 offen offset:%4"
+                     : "+v"(value)
+                     : "v"(v_offset), "s"(res), "s"(s_offset), "n"(i_offset)
+                     : "memory");
+    }
+};
+
+template <>
+struct buffer_load<1>
+{
+    template <typename T>
+    __device__ void operator()(T& value,
+                               int32x4_t res /*buffer resource*/,
+                               index_t v_offset,
+                               index_t s_offset,
+                               index_t i_offset /*max 0xFFF*/,
+                               index_t /*flag*/ = 0)
+    {
+        static_assert(sizeof(T) == 1);
+        asm volatile("buffer_load_ubyte %0, %1, %2, %3 offen offset:%4"
+                     : "+v"(value)
+                     : "v"(v_offset), "s"(res), "s"(s_offset), "n"(i_offset)
+                     : "memory");
+    }
+};
+
+__device__ void buffer_load_fence(index_t cnt = 0)
+{
+    asm volatile("s_waitcnt vmcnt(%0)" : : "n"(cnt) : "memory");
+}
+
 // buffer load i8
 __device__ int8_t
 llvm_amdgcn_raw_buffer_load_i8(int32x4_t srsrc,
@@ -286,6 +397,24 @@ llvm_amdgcn_raw_buffer_atomic_max_fp64(double vdata,
                                        int soffset,    // dst_wave_addr_offset
                                        int glc_slc) __asm("llvm.amdgcn.raw.buffer.atomic.fmax.f64");
 
+__device__ void async_buffer_load_dword(void* smem,
+                                        int32x4_t rsrc,
+                                        index_t voffset,
+                                        index_t soffset,
+                                        index_t ioffset /*max 0xFFF*/,
+                                        index_t /*flag*/ = 0)
+{
+    asm volatile("buffer_load_dword %1, %2, %3 offen offset:%4 lds"
+                 : "=r"(smem) /*dummy dependency for smem*/
+                 : "v"(voffset), "s"(rsrc), "s"(soffset), "n"(ioffset)
+                 : "memory");
+}
+
+__device__ void async_buffer_load_fence(index_t cnt = 0)
+{
+    asm volatile("s_waitcnt vmcnt(%0)" : : "n"(cnt) : "memory");
+}
+
 // memory coherency bit for buffer store/load instruction
 // check ISA manual for each GFX target
 // e.g. for
@@ -402,9 +531,14 @@ amd_buffer_load_impl_raw(int32x4_t src_wave_buffer_resource,
     }
 }
 
+#ifndef BUFFER_LOAD_USE_INLINEASM
+#define BUFFER_LOAD_USE_INLINEASM 0
+#endif
+
 template <typename T,
           index_t N,
-          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence>
+          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence,
+          bool use_inline_asm              = false>
 __device__ typename vector_type<T, N>::type amd_buffer_load_impl(int32x4_t src_wave_buffer_resource,
                                                                  index_t src_thread_addr_offset,
                                                                  index_t src_wave_addr_offset)
@@ -420,7 +554,15 @@ __device__ typename vector_type<T, N>::type amd_buffer_load_impl(int32x4_t src_w
             (is_same<T, int8_t>::value && (N == 1 || N == 2 || N == 4 || N == 8 || N == 16)),
         "wrong! not implemented");
 
-    if constexpr(is_same<T, float>::value) // fp32
+    if constexpr(use_inline_asm)
+    {
+        using type = typename vector_type<T, N>::type;
+        type tmp;
+        buffer_load<sizeof(type)>{}(
+            tmp, src_wave_buffer_resource, src_thread_addr_offset, src_wave_addr_offset, 0);
+        return tmp;
+    }
+    else if constexpr(is_same<T, float>::value) // fp32
     {
         if constexpr(N == 1)
         {
@@ -460,6 +602,36 @@ __device__ typename vector_type<T, N>::type amd_buffer_load_impl(int32x4_t src_w
                                                    static_cast<index_t>(coherence));
 
             return tmp.AsType<float8_t>()(Number<0>{});
+        }
+        else if constexpr(N == 16)
+        {
+            vector_type<float, 16> tmp;
+
+            tmp.AsType<float4_t>()(Number<0>{}) =
+                llvm_amdgcn_raw_buffer_load_fp32x4(src_wave_buffer_resource,
+                                                   src_thread_addr_offset,
+                                                   src_wave_addr_offset,
+                                                   static_cast<index_t>(coherence));
+
+            tmp.AsType<float4_t>()(Number<1>{}) =
+                llvm_amdgcn_raw_buffer_load_fp32x4(src_wave_buffer_resource,
+                                                   src_thread_addr_offset,
+                                                   src_wave_addr_offset + 4 * sizeof(float),
+                                                   static_cast<index_t>(coherence));
+
+            tmp.AsType<float4_t>()(Number<2>{}) =
+                llvm_amdgcn_raw_buffer_load_fp32x4(src_wave_buffer_resource,
+                                                   src_thread_addr_offset,
+                                                   src_wave_addr_offset + 8 * sizeof(float),
+                                                   static_cast<index_t>(coherence));
+
+            tmp.AsType<float4_t>()(Number<3>{}) =
+                llvm_amdgcn_raw_buffer_load_fp32x4(src_wave_buffer_resource,
+                                                   src_thread_addr_offset,
+                                                   src_wave_addr_offset + 12 * sizeof(float),
+                                                   static_cast<index_t>(coherence));
+
+            return tmp.AsType<float16_t>()(Number<0>{});
         }
     }
     else if constexpr(is_same<T, half_t>::value) // fp16
@@ -538,6 +710,52 @@ __device__ typename vector_type<T, N>::type amd_buffer_load_impl(int32x4_t src_w
 
         return bit_cast<r_t>(raw_data);
     }
+}
+
+template <typename T,
+          index_t N,
+          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence>
+__device__ void amd_buffer_load_raw_impl(typename vector_type<T, N>::type& dst,
+                                         int32x4_t src_wave_buffer_resource,
+                                         index_t src_thread_addr_offset,
+                                         index_t src_wave_addr_offset)
+{
+    static_assert(
+        (is_same<T, double>::value && (N == 1 || N == 2 || N == 4)) ||
+            (is_same<T, float>::value && (N == 1 || N == 2 || N == 4 || N == 8)) ||
+            (is_same<T, half_t>::value && (N == 1 || N == 2 || N == 4 || N == 8)) ||
+            (is_same<T, bhalf_t>::value && (N == 1 || N == 2 || N == 4 || N == 8)) ||
+            (is_same<T, int32_t>::value && (N == 1 || N == 2 || N == 4 || N == 8)) ||
+            (is_same<T, int8_t>::value && (N == 1 || N == 2 || N == 4 || N == 8 || N == 16)),
+        "wrong! not implemented");
+#if BUFFER_LOAD_USE_INLINEASM
+    using type = typename vector_type<T, N>::type;
+    buffer_load<sizeof(type)>{}(
+        dst, src_wave_buffer_resource, src_thread_addr_offset, src_wave_addr_offset, 0);
+#else
+    (void)dst;
+    (void)src_wave_buffer_resource;
+    (void)src_thread_addr_offset;
+    (void)src_wave_addr_offset;
+#endif
+}
+
+template <typename T,
+          index_t N,
+          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence>
+__device__ void amd_async_buffer_load_impl(T* smem,
+                                           int32x4_t src_wave_buffer_resource,
+                                           index_t src_thread_addr_offset,
+                                           index_t src_wave_addr_offset,
+                                           index_t src_immediate_addr_offset = 0)
+{
+    static_assert(sizeof(T) * N == 4, "wrong! not implemented vector size");
+
+    async_buffer_load_dword(smem,
+                            src_wave_buffer_resource,
+                            src_thread_addr_offset,
+                            src_wave_addr_offset,
+                            src_immediate_addr_offset);
 }
 
 template <index_t N, AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence>
@@ -1031,7 +1249,8 @@ __device__ void amd_buffer_atomic_max_impl(const typename vector_type<T, N>::typ
 // It is user's responsibility to make sure that is true.
 template <typename T,
           index_t N,
-          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence>
+          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence,
+          bool use_inline_asm              = false>
 __device__ typename vector_type_maker<T, N>::type::type
 amd_buffer_load_invalid_element_return_zero(const T* p_src_wave,
                                             index_t src_thread_element_offset,
@@ -1050,12 +1269,12 @@ amd_buffer_load_invalid_element_return_zero(const T* p_src_wave,
 
 #if CK_EXPERIMENTAL_USE_BUFFER_LOAD_OOB_CHECK_OFFSET_TRICK
     uint32_t src_addr_shift = src_thread_element_valid ? 0 : 0x80000000;
-    return amd_buffer_load_impl<scalar_t, vector_size, coherence>(
+    return amd_buffer_load_impl<scalar_t, vector_size, coherence, use_inline_asm>(
         src_wave_buffer_resource, src_addr_shift + src_thread_addr_offset, 0);
 
 #else
 
-    vector_t tmp = amd_buffer_load_impl<scalar_t, vector_size, coherence>(
+    vector_t tmp = amd_buffer_load_impl<scalar_t, vector_size, coherence, use_inline_asm>(
         src_wave_buffer_resource, src_thread_addr_offset, 0);
     return src_thread_element_valid ? tmp : vector_t(0);
 #endif
@@ -1067,7 +1286,8 @@ amd_buffer_load_invalid_element_return_zero(const T* p_src_wave,
 // It is user's responsibility to make sure that is true.
 template <typename T,
           index_t N,
-          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence>
+          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence,
+          bool use_inline_asm>
 __device__ typename vector_type_maker<T, N>::type::type
 amd_buffer_load_invalid_element_return_customized_value(const T* p_src_wave,
                                                         index_t src_thread_element_offset,
@@ -1085,10 +1305,53 @@ amd_buffer_load_invalid_element_return_customized_value(const T* p_src_wave,
 
     constexpr index_t vector_size = scalar_type<vector_t>::vector_size;
 
-    vector_t tmp = amd_buffer_load_impl<scalar_t, vector_size, coherence>(
+    vector_t tmp = amd_buffer_load_impl<scalar_t, vector_size, coherence, use_inline_asm>(
         src_wave_buffer_resource, src_thread_addr_offset, 0);
 
     return src_thread_element_valid ? tmp : vector_t(customized_value);
+}
+
+template <typename T,
+          index_t N,
+          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence>
+__device__ void amd_buffer_load_raw(typename vector_type_maker<T, N>::type::type& dst,
+                                    const T* p_src_wave,
+                                    index_t src_thread_element_offset,
+                                    index_t src_element_space_size)
+{
+    const int32x4_t src_wave_buffer_resource =
+        make_wave_buffer_resource(p_src_wave, src_element_space_size);
+
+    index_t src_thread_addr_offset = src_thread_element_offset * sizeof(T);
+
+    using vector_t = typename vector_type_maker<T, N>::type::type;
+    using scalar_t = typename scalar_type<vector_t>::type;
+
+    constexpr index_t vector_size = scalar_type<vector_t>::vector_size;
+
+    amd_buffer_load_raw_impl<scalar_t, vector_size, coherence>(
+        dst, src_wave_buffer_resource, src_thread_addr_offset, 0);
+}
+
+// unfortunately async copy can not make sure invalid data is zero inside LDS
+// ... unless people manually write zero to LDS at the proper address.
+// so not support invalid_element check for now.
+// buffer_load OOB still working.
+template <typename T,
+          index_t N,
+          AmdBufferCoherenceEnum coherence = AmdBufferCoherenceEnum::DefaultCoherence>
+__device__ void amd_async_buffer_load_with_oob(T* smem,
+                                               const T* p_src_wave,
+                                               index_t src_thread_element_offset,
+                                               index_t src_element_space_size)
+{
+    const int32x4_t src_wave_buffer_resource =
+        make_wave_buffer_resource(p_src_wave, src_element_space_size);
+
+    index_t src_thread_addr_offset = src_thread_element_offset * sizeof(T);
+
+    amd_async_buffer_load_impl<T, N, coherence>(
+        smem, src_wave_buffer_resource, src_thread_addr_offset, 0, 0);
 }
 
 // buffer_store requires:
