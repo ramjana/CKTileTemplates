@@ -38,5 +38,41 @@ __device__ void s_nop()
     __builtin_amdgcn_sched_barrier(0);
 #endif
 }
+__device__ void wg_sync()
+{
+        asm volatile("\
+        s_barrier \n \
+        " ::);
+}
+
+__device__ void raise_priority()
+{
+        asm volatile("\
+        s_setprio(3) \n \
+        "
+          :: );
+}
+
+__device__ void lower_priority()
+{
+        asm volatile("\
+        s_setprio(0) \n \
+        "
+          :: );
+}
+
+__device__ void vm_waitcnt(const uint32_t cnt)
+{
+    asm volatile("\
+    s_waitcnt vmcnt(%0) \n \
+    "::"n"(cnt) : "memory");
+}
+
+__device__ void lds_waitcnt(const uint32_t cnt)
+{
+    asm volatile("\
+    s_waitcnt lgkmcnt(%0) \n \
+    "::"n"(cnt) : "memory");
+}
 
 } // namespace ck

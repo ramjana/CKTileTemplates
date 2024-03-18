@@ -299,7 +299,7 @@ def get_fmha_fwd_tile_dict_from_dtype(direction : str, dtype : str) -> Optional[
             }
         elif dtype == 'fp8' or dtype == 'bf8':
             return {
-                '128' : FmhaFwdTileSize(128, 128, 32, 128, 32, 128,  4, 1, 1, 32, 32, 32, 2)
+                '128' : FmhaFwdTileSize(128, 128, 128, 128, 128, 128,  4, 1, 1, 32, 32, 16, 2)
             }
         else:
             return None

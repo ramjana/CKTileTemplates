@@ -17,6 +17,8 @@
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v1_custom_policy.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v2.hpp"
 #include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v2_custom_policy.hpp"
+#include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v3.hpp"
+#include "ck/tile_program/block_tile/block_gemm_areg_bsmem_creg_v3_custom_policy.hpp"
 #include "ck/tile_program/block_tile/block_gemm_asmem_bsmem_creg_v1.hpp"
 #include "ck/tile_program/block_tile/block_gemm_asmem_bsmem_creg_v1_custom_policy.hpp"
 #include "ck/tensor_operation/gpu/device/tensor_layout.hpp"
@@ -108,13 +110,13 @@ struct BlockFmhaPipelineQXCustomPolicy</* QLoadOnce = */ true>
         }();
 
         using BlockGemmPolicy =
-            BlockGemmARegBSmemCRegV2CustomPolicy<typename Problem::QDataType,
+            BlockGemmARegBSmemCRegV3CustomPolicy<typename Problem::QDataType,
                                                  typename Problem::KDataType,
                                                  typename Problem::SaccDataType,
                                                  typename Problem::BlockFmhaShape::Gemm0BlockWarps,
                                                  decltype(warp_gemm)>;
 
-        return BlockGemmARegBSmemCRegV2<BlockGemmProblem, BlockGemmPolicy>{};
+        return BlockGemmARegBSmemCRegV3<BlockGemmProblem, BlockGemmPolicy>{};
     }
 };
 
@@ -902,12 +904,12 @@ struct BlockFmhaPipelineQXKSVSCustomPolicy : BlockFmhaPipelineQXCustomPolicy<QLo
         using WarpGemm = remove_cvref_t<decltype(warp_gemm)>;
 
         using BlockGemmPolicy =
-            BlockGemmARegBSmemCRegV2CustomPolicy<typename Problem::PDataType,
+            BlockGemmARegBSmemCRegV3CustomPolicy<typename Problem::PDataType,
                                                  typename Problem::VDataType,
                                                  typename Problem::OaccDataType,
                                                  typename Problem::BlockFmhaShape::Gemm1BlockWarps,
                                                  WarpGemm>;
-        return BlockGemmARegBSmemCRegV2<BlockGemmProblem, BlockGemmPolicy>{};
+        return BlockGemmARegBSmemCRegV3<BlockGemmProblem, BlockGemmPolicy>{};
     }
 };
 
